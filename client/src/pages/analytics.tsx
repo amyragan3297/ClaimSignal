@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { LayoutDashboard, TrendingUp, TrendingDown, Users, FileText, Building2, Clock, AlertTriangle, CheckCircle, BarChart3, FileCheck, RefreshCw, ArrowUpRight, Loader2, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { fetchAdjusters, fetchClaims } from "@/lib/api";
+import { fetchAdjusters, fetchClaims, authFetch } from "@/lib/api";
 
 interface PerformanceSummary {
   supplementSuccessRate: number | null;
@@ -32,7 +32,7 @@ export default function Analytics() {
   const { data: performanceSummary, isLoading: loadingPerformance } = useQuery<PerformanceSummary>({
     queryKey: ['performance-summary'],
     queryFn: async () => {
-      const res = await fetch('/api/analytics/performance-summary', { credentials: 'include' });
+      const res = await authFetch('/api/analytics/performance-summary');
       if (!res.ok) throw new Error('Failed to fetch performance summary');
       return res.json();
     },

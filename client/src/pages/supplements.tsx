@@ -14,6 +14,7 @@ import { Plus, DollarSign, FileText, Loader2, AlertCircle, TrendingUp, Clock, Pe
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import type { Supplement, Claim } from "@shared/schema";
+import { authFetch } from "@/lib/api";
 
 const SCOPE_DRIVERS = [
   "Shingle quantity",
@@ -114,7 +115,7 @@ export default function SupplementsPage() {
   const { data: supplementsData, isLoading } = useQuery({
     queryKey: ["/api/supplements"],
     queryFn: async () => {
-      const res = await fetch("/api/supplements", { credentials: "include" });
+      const res = await authFetch("/api/supplements");
       if (!res.ok) throw new Error("Failed to load supplements");
       return res.json();
     },
@@ -123,7 +124,7 @@ export default function SupplementsPage() {
   const { data: claimsData } = useQuery({
     queryKey: ["/api/claims"],
     queryFn: async () => {
-      const res = await fetch("/api/claims", { credentials: "include" });
+      const res = await authFetch("/api/claims");
       if (!res.ok) throw new Error("Failed to load claims");
       return res.json();
     },
@@ -131,10 +132,9 @@ export default function SupplementsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: SupplementFormData) => {
-      const res = await fetch("/api/supplements", {
+      const res = await authFetch("/api/supplements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to create supplement");
@@ -153,10 +153,9 @@ export default function SupplementsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Supplement> }) => {
-      const res = await fetch(`/api/supplements/${id}`, {
+      const res = await authFetch(`/api/supplements/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to update supplement");
@@ -174,9 +173,8 @@ export default function SupplementsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/supplements/${id}`, {
+      const res = await authFetch(`/api/supplements/${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to delete supplement");
       return res.json();

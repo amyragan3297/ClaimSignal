@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bot, Lightbulb, AlertTriangle, CheckCircle, Loader2, Zap, Target, Shield, MessageSquare, Plus, Trash2, Save, Users } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchAdjusters, fetchClaims } from "@/lib/api";
+import { fetchAdjusters, fetchClaims, authFetch } from "@/lib/api";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth";
 
@@ -62,7 +62,7 @@ export default function TacticalAdvisor() {
       const params = new URLSearchParams();
       if (claimId) params.append('claimId', claimId);
       if (adjusterId) params.append('adjusterId', adjusterId);
-      const res = await fetch(`/api/tactical-notes?${params.toString()}`);
+      const res = await authFetch(`/api/tactical-notes?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch notes');
       return res.json();
     },
@@ -71,7 +71,7 @@ export default function TacticalAdvisor() {
 
   const getAdviceMutation = useMutation({
     mutationFn: async ({ adjusterId, claimId, situation, autoGenerate }: { adjusterId?: string; claimId?: string; situation?: string; autoGenerate?: boolean }) => {
-      const res = await fetch('/api/tactical-advice', {
+      const res = await authFetch('/api/tactical-advice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adjusterId, claimId, situation, autoGenerate }),
@@ -89,7 +89,7 @@ export default function TacticalAdvisor() {
 
   const createNoteMutation = useMutation({
     mutationFn: async (noteData: { claimId?: string; adjusterId?: string; content: string; author?: string; isAiGenerated?: boolean }) => {
-      const res = await fetch('/api/tactical-notes', {
+      const res = await authFetch('/api/tactical-notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(noteData),
@@ -105,7 +105,7 @@ export default function TacticalAdvisor() {
 
   const deleteNoteMutation = useMutation({
     mutationFn: async (noteId: string) => {
-      const res = await fetch(`/api/tactical-notes/${noteId}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/tactical-notes/${noteId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete note');
       return res.json();
     },

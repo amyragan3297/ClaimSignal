@@ -2,7 +2,7 @@ import { Layout } from "@/components/layout";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchClaims, fetchAdjusters, createClaim, linkAdjusterToClaim } from "@/lib/api";
+import { fetchClaims, fetchAdjusters, createClaim, linkAdjusterToClaim, authFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -302,7 +302,7 @@ export default function Claims() {
                                   continue;
                                 }
                                 
-                                const response = await fetch('/api/analyze-and-save', {
+                                const response = await authFetch('/api/analyze-and-save', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({

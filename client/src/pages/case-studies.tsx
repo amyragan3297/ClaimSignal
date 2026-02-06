@@ -13,6 +13,7 @@ import { Plus, BookOpen, Loader2, AlertTriangle, CheckCircle, TrendingUp, Lightb
 import { useToast } from "@/hooks/use-toast";
 import type { CaseStudy, Claim } from "@shared/schema";
 import { useAuth } from "@/lib/auth";
+import { authFetch } from "@/lib/api";
 
 function formatCurrency(cents: number | null | undefined): string {
   if (!cents) return "$0";
@@ -55,7 +56,7 @@ export default function CaseStudiesPage() {
   const { data: studiesData, isLoading } = useQuery({
     queryKey: ["/api/case-studies"],
     queryFn: async () => {
-      const res = await fetch("/api/case-studies", { credentials: "include" });
+      const res = await authFetch("/api/case-studies");
       if (!res.ok) throw new Error("Failed to load case studies");
       return res.json();
     },
@@ -64,7 +65,7 @@ export default function CaseStudiesPage() {
   const { data: claimsData } = useQuery({
     queryKey: ["/api/claims"],
     queryFn: async () => {
-      const res = await fetch("/api/claims", { credentials: "include" });
+      const res = await authFetch("/api/claims");
       if (!res.ok) throw new Error("Failed to load claims");
       return res.json();
     },
@@ -72,10 +73,9 @@ export default function CaseStudiesPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof newStudy) => {
-      const res = await fetch("/api/case-studies", {
+      const res = await authFetch("/api/case-studies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to create case study");
@@ -96,9 +96,8 @@ export default function CaseStudiesPage() {
 
   const generateMutation = useMutation({
     mutationFn: async (claimId: string) => {
-      const res = await fetch(`/api/case-studies/generate-from-claim/${claimId}`, {
+      const res = await authFetch(`/api/case-studies/generate-from-claim/${claimId}`, {
         method: "POST",
-        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to generate case study");
       return res.json();
@@ -114,9 +113,8 @@ export default function CaseStudiesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/case-studies/${id}`, {
+      const res = await authFetch(`/api/case-studies/${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to delete");
       return res.json();

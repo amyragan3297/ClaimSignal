@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Loader2, ShieldAlert, Gift, Star, AlertCircle } from "lucide-react";
+import { authFetch } from "@/lib/api";
 
 interface Price {
   id: string;
@@ -45,7 +46,7 @@ export default function Pricing() {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('session_id');
     if (sessionId) {
-      fetch(`/api/stripe/verify-subscription?session_id=${sessionId}`, { credentials: 'include' })
+      authFetch(`/api/stripe/verify-subscription?session_id=${sessionId}`)
         .then(res => res.json())
         .then(data => {
           if (data.success) {
@@ -71,11 +72,10 @@ export default function Pricing() {
 
     setCheckoutLoading(priceId);
     try {
-      const res = await fetch('/api/stripe/checkout', {
+      const res = await authFetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceId }),
-        credentials: 'include',
       });
 
       const data = await res.json();

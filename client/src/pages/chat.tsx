@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { authFetch } from "@/lib/api";
 
 type Message = {
   id: number;
@@ -105,11 +106,10 @@ export default function Chat() {
     setStreamingContent("");
 
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+      const response = await authFetch(`/api/conversations/${conversationId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: userMessage.content }),
-        credentials: "include",
       });
 
       if (!response.ok) {

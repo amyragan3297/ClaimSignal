@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Download, Calendar, Building2, Users, Loader2, FileSpreadsheet, FileJson, Printer } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchAdjusters, fetchClaims } from "@/lib/api";
+import { fetchAdjusters, fetchClaims, authFetch } from "@/lib/api";
 import { format } from "date-fns";
 
 type ReportType = 'claims-summary' | 'adjuster-profiles' | 'carrier-analysis' | 'interaction-history';
@@ -121,7 +121,7 @@ export default function Reports() {
         case 'interaction-history':
           const interactions: any[] = [];
           for (const adj of adjusters) {
-            const res = await fetch(`/api/adjusters/${adj.id}`);
+            const res = await authFetch(`/api/adjusters/${adj.id}`);
             const fullAdj = await res.json();
             if (fullAdj.interactions) {
               for (const int of fullAdj.interactions) {

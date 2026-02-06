@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { authFetch } from "@/lib/api";
 
 interface Invoice {
   id: string;
@@ -73,9 +74,9 @@ export default function Billing() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/stripe/subscription', { credentials: 'include' }).then(r => r.json()),
-      fetch('/api/stripe/invoices', { credentials: 'include' }).then(r => r.json()),
-      fetch('/api/stripe/addons', { credentials: 'include' }).then(r => r.json()),
+      authFetch('/api/stripe/subscription').then(r => r.json()),
+      authFetch('/api/stripe/invoices').then(r => r.json()),
+      authFetch('/api/stripe/addons').then(r => r.json()),
     ]).then(([subData, invData, addonData]) => {
       setSubscription(subData.subscription);
       setInvoices(invData.invoices || []);
@@ -90,9 +91,8 @@ export default function Billing() {
   const handleManageSubscription = async () => {
     setPortalLoading(true);
     try {
-      const res = await fetch('/api/stripe/portal', {
+      const res = await authFetch('/api/stripe/portal', {
         method: 'POST',
-        credentials: 'include',
       });
       const data = await res.json();
       if (data.url) {
@@ -109,11 +109,10 @@ export default function Billing() {
   const handlePurchaseAddon = async (priceId: string) => {
     setCheckoutLoading(priceId);
     try {
-      const res = await fetch('/api/stripe/one-time-checkout', {
+      const res = await authFetch('/api/stripe/one-time-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceId }),
-        credentials: 'include',
       });
       const data = await res.json();
       if (data.url) {

@@ -6,6 +6,7 @@ import { Package, CheckCircle, Clock, XCircle, DollarSign, Mail, User, FileText,
 import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { authFetch } from "@/lib/api";
 
 interface AddonPurchase {
   id: string;
@@ -35,7 +36,7 @@ export default function AdminAddons() {
       const url = filter === 'all' 
         ? '/api/admin/addon-purchases' 
         : `/api/admin/addon-purchases?status=${filter}`;
-      const res = await fetch(url, { credentials: 'include' });
+      const res = await authFetch(url);
       if (!res.ok) throw new Error('Failed to fetch');
       return res.json();
     },
@@ -43,10 +44,9 @@ export default function AdminAddons() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
-      const res = await fetch(`/api/admin/addon-purchases/${id}`, {
+      const res = await authFetch(`/api/admin/addon-purchases/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ status, notes }),
       });
       if (!res.ok) throw new Error('Failed to update');

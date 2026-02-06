@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, Loader2, ArrowRight, ShieldAlert } from "lucide-react";
+import { authFetch } from "@/lib/api";
 
 export default function SubscriptionSuccess() {
   const [, setLocation] = useLocation();
@@ -22,9 +23,7 @@ export default function SubscriptionSuccess() {
       return;
     }
 
-    fetch(`/api/stripe/verify-subscription?session_id=${sessionId}`, { 
-      credentials: 'include' 
-    })
+    authFetch(`/api/stripe/verify-subscription?session_id=${sessionId}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {

@@ -14,7 +14,7 @@ import { User, Plus, MapPin, Calendar, FileText, ClipboardList, Phone, Mail, Cam
 import { useState } from "react";
 import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchAdjuster, createInteraction, updateAdjuster, fetchClaims, fetchAdjusterIntelligence } from "@/lib/api";
+import { fetchAdjuster, createInteraction, updateAdjuster, fetchClaims, fetchAdjusterIntelligence, authFetch } from "@/lib/api";
 import { useUpload } from "@/hooks/use-upload";
 import { useToast } from "@/hooks/use-toast";
 import { AudioTranscribe } from "@/components/audio-transcribe";
@@ -105,7 +105,7 @@ export default function AdjusterProfile() {
 
   const deleteAdjusterMutation = useMutation({
     mutationFn: (adjusterId: string) =>
-      fetch(`/api/adjusters/${adjusterId}`, { method: 'DELETE' }).then(res => {
+      authFetch(`/api/adjusters/${adjusterId}`, { method: 'DELETE' }).then(res => {
         if (!res.ok) throw new Error('Failed to delete');
         return res.json();
       }),
@@ -122,7 +122,7 @@ export default function AdjusterProfile() {
   const { uploadFile, isUploading } = useUpload({
     onSuccess: async (response) => {
       if (adjuster) {
-        await fetch(`/api/adjusters/${adjuster.id}/documents`, {
+        await authFetch(`/api/adjusters/${adjuster.id}/documents`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -143,7 +143,7 @@ export default function AdjusterProfile() {
 
   const deleteDocumentMutation = useMutation({
     mutationFn: (docId: string) =>
-      fetch(`/api/documents/${docId}`, { method: 'DELETE' }).then(res => res.json()),
+      authFetch(`/api/documents/${docId}`, { method: 'DELETE' }).then(res => res.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adjuster', id] });
       toast({ title: "Deleted", description: "Document removed" });
@@ -154,7 +154,7 @@ export default function AdjusterProfile() {
 
   const analyzeDocumentMutation = useMutation({
     mutationFn: async ({ documentUrl, documentName, adjusterId }: { documentUrl: string; documentName: string; adjusterId: string }) => {
-      const res = await fetch('/api/analyze-and-save', {
+      const res = await authFetch('/api/analyze-and-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documentUrl, documentName, adjusterId }),

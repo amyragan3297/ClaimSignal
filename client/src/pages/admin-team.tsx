@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Plus, Shield } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { authFetch } from "@/lib/api";
 import { Redirect } from "wouter";
 
 interface TeamCredential {
@@ -21,17 +22,16 @@ interface TeamCredential {
 }
 
 async function fetchTeamCredentials(): Promise<TeamCredential[]> {
-  const res = await fetch('/api/admin/team-credentials', { credentials: 'include' });
+  const res = await authFetch('/api/admin/team-credentials');
   if (!res.ok) throw new Error('Failed to fetch team credentials');
   return res.json();
 }
 
 async function createTeamCredential(data: { username: string; password: string; accessLevel: string }) {
-  const res = await fetch('/api/admin/team-credentials', {
+  const res = await authFetch('/api/admin/team-credentials', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
-    credentials: 'include',
   });
   if (!res.ok) {
     const error = await res.json();
@@ -41,11 +41,10 @@ async function createTeamCredential(data: { username: string; password: string; 
 }
 
 async function updateAccessLevel(id: string, accessLevel: string) {
-  const res = await fetch(`/api/admin/team-credentials/${id}/access-level`, {
+  const res = await authFetch(`/api/admin/team-credentials/${id}/access-level`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ accessLevel }),
-    credentials: 'include',
   });
   if (!res.ok) {
     const error = await res.json();

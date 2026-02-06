@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Mic, Upload, Loader2, FileAudio } from "lucide-react";
+import { authFetch } from "@/lib/api";
 
 interface AudioTranscribeProps {
   onTranscript: (text: string) => void;
@@ -33,10 +34,9 @@ export function AudioTranscribe({ onTranscript }: AudioTranscribeProps) {
 
       const ext = file.name.split(".").pop()?.toLowerCase() || "wav";
       
-      const res = await fetch("/api/transcribe", {
+      const res = await authFetch("/api/transcribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ audio: base64, format: ext }),
       });
 

@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Settings, Mail, Users, Shield, Save, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { authFetch } from "@/lib/api";
 
 interface SettingsData {
   contact_email?: string;
@@ -29,7 +30,7 @@ export default function SettingsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["/api/settings"],
     queryFn: async () => {
-      const res = await fetch("/api/settings", { credentials: "include" });
+      const res = await authFetch("/api/settings");
       if (!res.ok) throw new Error("Failed to load settings");
       return res.json();
     },
@@ -43,10 +44,9 @@ export default function SettingsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (settings: SettingsData) => {
-      const res = await fetch("/api/settings/bulk", {
+      const res = await authFetch("/api/settings/bulk", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ settings }),
       });
       if (!res.ok) throw new Error("Failed to save settings");
