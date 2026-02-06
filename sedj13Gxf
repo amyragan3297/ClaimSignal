@@ -1,0 +1,63 @@
+modules = ["nodejs-20", "web", "postgresql-16"]
+run = "npm run dev"
+hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["graphicsmagick", "ghostscript", "unzip", "poppler_utils", "tesseract", "imagemagick", "python3", "tmux"]
+
+[[ports]]
+localPort = 5000
+
+[env]
+PORT = "5000"
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["npm", "run", "build"]
+publicDir = "dist/public"
+run = ["node", "./dist/index.cjs"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+
+[[workflows.workflow.tasks]]
+
+[agent]
+mockupState = "FULLSTACK"
+integrations = [
+  "javascript_object_storage:2.0.0",
+  "javascript_openai_ai_integrations:2.0.0",
+  "stripe:2.0.0",
+]
+
+[objectStorage]
+defaultBucketID = "replit-objstore-337677f3-f2cd-41e7-a083-f7b283ad52ce"
+
+[userenv]
+
+[userenv.shared]
+
+[userenv.development]
+CONTACT_EMAIL = "support@claimsignal.com"
+
+[userenv.production]
+CONTACT_EMAIL = "support@claimsignal.com"
