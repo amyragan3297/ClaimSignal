@@ -35,17 +35,12 @@ name = "Start application"
 author = "agent"
 mode = "parallel"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
+
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
 
 [agent]
 mockupState = "FULLSTACK"
