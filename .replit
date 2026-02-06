@@ -19,7 +19,6 @@ publicDir = "dist/public"
 run = ["node", "./dist/index.cjs"]
 
 [workflows]
-runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
@@ -33,13 +32,11 @@ args = "Start application"
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
-mode = "parallel"
-
-
+mode = "sequential"
 
 [[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python main.py"
+task = "workflow.run"
+args = "Start application"
 
 
 [agent]
