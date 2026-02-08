@@ -4,7 +4,16 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["graphicsmagick", "ghostscript", "unzip", "poppler_utils", "tesseract", "imagemagick", "python3", "tmux"]
+packages = [
+  "graphicsmagick",
+  "ghostscript",
+  "unzip",
+  "poppler_utils",
+  "tesseract",
+  "imagemagick",
+  "python3",
+  "tmux",
+]
 
 [[ports]]
 localPort = 5000
