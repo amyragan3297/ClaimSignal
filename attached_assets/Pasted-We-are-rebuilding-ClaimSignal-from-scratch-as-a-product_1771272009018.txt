@@ -1,0 +1,196 @@
+We are rebuilding ClaimSignal from scratch as a production-ready SaaS.
+
+This build must include:
+
+1. Investor-level homepage positioning
+2. Multi-tier Stripe billing
+3. Founder cap (3 total)
+4. Founder 14-day trial
+5. Legal agreement gating for founders
+6. Server-enforced masking for non-founder tiers
+7. Claims core system
+8. Clean multi-tenant architecture
+9. Launch-ready in 3 days
+
+Do not scaffold gradually. Build complete structured MVP.
+
+--------------------------------------------------
+STACK
+--------------------------------------------------
+
+Monorepo:
+- client: React + Vite + TypeScript + Tailwind + React Query
+- server: Node + TypeScript + Express
+- Database: Postgres + Drizzle ORM
+- Auth: cookie-based session auth
+- Billing: Stripe Checkout + Webhooks
+- Multi-tenant: org-based isolation
+- Ports:
+  - client 5173 strictPort
+  - server 5050
+  - /api proxy to 5050
+- Add GET /api/health returning { ok: true }
+
+--------------------------------------------------
+PUBLIC WEBSITE STRUCTURE
+--------------------------------------------------
+
+Homepage must be investor-forward.
+
+SECTION 1 – Hero:
+Title: ClaimSignal
+Subtitle: Operational Intelligence for Property Claims
+Subtext: Structured behavioral analytics, escalation modeling, and audit-ready claim infrastructure.
+Primary CTA: Start 14-Day Trial
+Secondary CTA: View Enterprise Architecture
+
+SECTION 2 – Core Intelligence Layers:
+- Friction Scoring Engine
+- Repairability Intelligence
+- Depreciation Recovery Modeling
+- Predictive Approval Engine
+- Escalation Readiness Modeling
+- DOI Documentation Assistant
+
+SECTION 3 – Infrastructure:
+- Tenant Isolation
+- Immutable Audit Logs
+- Role-Based Enforcement
+- Encrypted Backups
+- Built for Scale
+
+SECTION 4 – Contractor Outcome Layer:
+Headline: Measured Performance. Not Guesswork.
+Bullet outcomes:
+- Reduce denial cycle time
+- Increase supplement recovery
+- Identify adjuster risk patterns
+- Standardize repairability documentation
+- Protect gross margin
+
+SECTION 5 – Pricing Tiers:
+Founder
+Pro
+Team
+Enterprise
+
+Footer must include:
+Enterprise
+Investor Inquiry
+Security
+Terms
+
+Investor page must exist but not be in main nav.
+
+--------------------------------------------------
+TIERS AND BILLING
+--------------------------------------------------
+
+Stripe products:
+- founder
+- pro
+- team
+- enterprise
+
+FOUNDER RULES:
+- Max 3 subscriptions total (global cap)
+- 14-day free trial
+- Full unmasked access
+- Must sign founder agreement before unmasking enabled
+- If founder_count >= 3 → founder option unavailable
+
+Database tables:
+- users
+- orgs (type individual | team)
+- org_members (owner | admin | analyst | member)
+- subscriptions (org_id, tier, status, stripe ids, seat_limit)
+- founder_agreements (org_id, user_id, signed_at, ip, version, agreement_hash)
+- carriers
+- adjusters
+- claims
+
+--------------------------------------------------
+MASKING LOGIC (SERVER ENFORCED)
+--------------------------------------------------
+
+If tier != founder OR founder agreement not signed:
+Mask:
+- claim_number (show last 4 only)
+- insured_name (first letter + asterisks)
+- address (city/state only)
+- adjuster email partial
+- phone last 4 only
+
+Founder tier + signed agreement:
+Full unmasked access.
+
+Masking must happen in API response layer, not UI only.
+
+--------------------------------------------------
+CORE MVP MODULES
+--------------------------------------------------
+
+Auth:
+- register
+- login
+- logout
+- me
+
+Claims:
+- full CRUD
+- scoped by org_id
+
+Carriers:
+- CRUD scoped by org_id
+
+Adjusters:
+- CRUD scoped by org_id
+
+Billing:
+- create checkout session
+- webhook handler
+- billing status endpoint
+
+Founder Legal:
+- GET agreement
+- POST sign agreement
+
+--------------------------------------------------
+UI REQUIREMENTS
+--------------------------------------------------
+
+Dark theme tokens:
+bg #0F172A
+surface #1E293B
+accent #2563EB
+accent2 #14B8A6
+warn #F59E0B
+danger #DC2626
+text #F8FAFC
+textMuted #94A3B8
+
+App routes:
+- /
+- /login
+- /dashboard
+- /claims
+- /claims/:id
+- /billing
+- /legal/founder
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+- npm install works
+- npm run dev boots client and server
+- /api/health returns ok
+- Can register and create org
+- Founder tier enforces 3-user cap
+- Stripe trial works
+- Founder must sign agreement to see unmasked data
+- Non-founder tiers always see masked data
+- Claims CRUD works
+- Homepage shows investor-level positioning
+
+Stop when full MVP is complete and stable.
