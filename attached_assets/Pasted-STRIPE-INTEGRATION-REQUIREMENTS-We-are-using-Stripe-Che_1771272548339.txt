@@ -1,0 +1,126 @@
+STRIPE INTEGRATION REQUIREMENTS
+
+We are using Stripe Checkout + Webhooks for subscription management.
+
+Implement the following:
+
+--------------------------------------------------
+ENV VARIABLES (SERVER)
+--------------------------------------------------
+
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_FOUNDER=
+STRIPE_PRICE_PRO=
+STRIPE_PRICE_TEAM=
+STRIPE_PRICE_ENTERPRISE=
+APP_URL=http://localhost:5173
+
+--------------------------------------------------
+SERVER SETUP
+--------------------------------------------------
+
+1. Install Stripe SDK.
+2. Initialize Stripe using STRIPE_SECRET_KEY.
+3. Create endpoint:
+
+POST /api/billing/checkout-session
+
+Body:
+{
+  tier: "founder" | "pro" | "team" | "enterprise"
+}
+
+Server logic:
+- Verify authenticated user and org
+- If tier == founder:
+    - Query subscriptions table where tier == founder AND status == active or trialing
+    - If count >= 3 → return error "Founder tier unavailable"
+- Create Stripe Checkout Session:
+    - mode: subscription
+    - line_items: price id based on tier
+    - subscription_data:
+        - trial_period_days: 14 (only for founder)
+    - success_url: APP_URL + "/dashboard?success=true"
+    - cancel_url: APP_URL + "/billing?canceled=true"
+    - metadata:
+        org_id
+        tier
+
+Return session.url.
+
+--------------------------------------------------
+WEBHOOK ENDPOINT
+--------------------------------------------------
+
+POST /api/billing/webhook
+
+- Use raw body parser
+- Verify signature with STRIPE_WEBHOOK_SECRET
+- Handle events:
+    - checkout.session.completed
+    - customer.subscription.created
+    - customer.subscription.updated
+    - customer.subscription.deleted
+
+On subscription events:
+- Upsert into subscriptions table:
+    org_id from metadata
+    stripe_customer_id
+    stripe_subscription_id
+    tier
+    status
+    current_period_end
+
+If subscription.status in:
+    active
+    trialing
+Then org has access.
+
+If canceled or unpaid:
+    downgrade to free tier.
+
+--------------------------------------------------
+BILLING STATUS ENDPOINT
+--------------------------------------------------
+
+GET /api/billing/status
+
+Return:
+{
+  tier,
+  status,
+  trial_end,
+  seat_limit
+}
+
+--------------------------------------------------
+FOUNDER CAP ENFORCEMENT
+--------------------------------------------------
+
+Founder count must be calculated from database subscriptions table,
+NOT from Stripe dashboard.
+
+Enforce cap before creating checkout session.
+
+--------------------------------------------------
+FOUNDER AGREEMENT ENFORCEMENT
+--------------------------------------------------
+
+Founder unmasking requires:
+- subscription tier == founder
+- status active or trialing
+- founder_agreements record exists
+
+Mask data if either condition fails.
+
+--------------------------------------------------
+SECURITY
+--------------------------------------------------
+
+- Do NOT trust client tier input.
+- All tier logic enforced server-side.
+- Webhook endpoint must verify Stripe signature.
+- Use express.raw for webhook route only.
+
+Complete Stripe integration with clean modular billing service.
