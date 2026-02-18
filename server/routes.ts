@@ -5,6 +5,7 @@ import session from "express-session";
 import bcrypt from "bcryptjs";
 import { registerSchema, loginSchema, insertClaimSchema } from "@shared/schema";
 import { shouldMask, maskClaim, maskClaims } from "./masking";
+import { createCheckoutSession, handleWebhookEvent, isStripeConfigured } from "./billing";
 import { createHash } from "crypto";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
@@ -267,36 +268,43 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/billing/checkout", requireAuth, async (req, res) => {
+  app.post("/api/billing/checkout-session", requireAuth, async (req, res) => {
     try {
       const orgId = req.session.orgId!;
+      const userId = req.session.userId!;
       const { tier } = req.body;
 
-      if (!["founder", "pro", "team", "enterprise"].includes(tier)) {
-        return res.status(400).json({ message: "Invalid tier" });
-      }
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ message: "User not found" });
 
-      if (tier === "founder") {
-        const founderCount = await storage.getFounderCount();
-        if (founderCount >= 3) {
-          return res.status(400).json({ message: "Founder tier is at capacity (3/3). Please select another plan." });
+      const result = await createCheckoutSession(orgId, userId, tier, user.email);
+
+      if ("error" in result) {
+        if (result.error.includes("not configured") || result.error.includes("development")) {
+          return res.json({ message: result.error, tier, fallback: true });
         }
+        return res.status(400).json({ message: result.error });
       }
 
-      const existing = await storage.getSubscriptionByOrg(orgId);
-      if (existing) {
-        const trialEnd = tier === "founder" ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) : null;
-        const seatLimit = tier === "team" ? 10 : tier === "enterprise" ? 999 : 1;
-        const status = tier === "founder" ? "trialing" : "active";
-        await storage.updateSubscription(existing.id, {
-          tier: tier as any,
-          status: status as any,
-          seatLimit,
-          trialEnd,
-        });
+      res.json({ url: result.url });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/billing/webhook", async (req, res) => {
+    try {
+      const signature = req.headers["stripe-signature"] as string;
+      if (!signature) {
+        return res.status(400).json({ message: "Missing stripe-signature header" });
       }
 
-      res.json({ message: "Subscription updated", tier });
+      const result = await handleWebhookEvent(req.body, signature);
+      if (!result.received) {
+        return res.status(400).json({ message: result.error });
+      }
+
+      res.json({ received: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

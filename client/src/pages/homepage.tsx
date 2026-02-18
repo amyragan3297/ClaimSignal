@@ -82,12 +82,12 @@ const tiers = [
     features: [
       "Full unmasked data access",
       "All intelligence modules",
-      "14-day free trial",
+      "12-day free trial",
       "Priority support",
       "Founder advisory input",
       "Early feature access",
     ],
-    cta: "Start 14-Day Trial",
+    cta: "Start Free Trial",
     highlight: true,
   },
   {
@@ -292,7 +292,7 @@ export default function Homepage() {
               Choose Your Tier
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Start with a 14-day trial on the Founder tier. Scale as your operations grow.
+              Start with a 12-day free trial on the Founder tier. Scale as your operations grow.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">

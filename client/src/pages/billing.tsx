@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Check, CreditCard, Shield, Zap, Users, Building2 } from "lucide-react";
+import { Check, Shield, Zap, Users, Building2, Loader2 } from "lucide-react";
 
 const tiers = [
   {
@@ -18,7 +18,7 @@ const tiers = [
     features: [
       "Full unmasked data access",
       "All intelligence modules",
-      "14-day free trial",
+      "12-day free trial",
       "Priority support",
       "Founder advisory input",
     ],
@@ -77,11 +77,18 @@ export default function BillingPage() {
 
   const upgradeMutation = useMutation({
     mutationFn: async (tier: string) => {
-      await apiRequest("POST", "/api/billing/checkout", { tier });
+      const res = await apiRequest("POST", "/api/billing/checkout-session", { tier });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      if (data.fallback) {
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+        refetch();
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      refetch();
       toast({ title: "Subscription updated" });
     },
     onError: (err: Error) => {
@@ -157,10 +164,13 @@ export default function BillingPage() {
                 <Button
                   className="w-full"
                   variant={isCurrent ? "secondary" : "outline"}
-                  disabled={isCurrent || tier.id === "enterprise"}
+                  disabled={isCurrent || tier.id === "enterprise" || upgradeMutation.isPending}
                   onClick={() => upgradeMutation.mutate(tier.id)}
                   data-testid={`button-select-tier-${tier.id}`}
                 >
+                  {upgradeMutation.isPending && upgradeMutation.variables === tier.id && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
                   {isCurrent ? "Current Plan" : tier.id === "enterprise" ? "Contact Sales" : "Select Plan"}
                 </Button>
               </CardContent>
