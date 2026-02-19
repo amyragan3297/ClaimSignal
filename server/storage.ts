@@ -7,10 +7,13 @@ import {
   type Carrier, type InsertCarrier,
   type Adjuster, type InsertAdjuster,
   type Claim, type InsertClaim,
+  type AuditLog,
+  type ImpersonationSession,
   users, orgs, orgMembers, subscriptions, founderAgreements, carriers, adjusters, claims,
+  auditLogs, impersonationSessions,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, count, sql } from "drizzle-orm";
+import { eq, and, count, sql, desc, gt } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -54,7 +57,17 @@ export interface IStorage {
   getAllClaims(): Promise<Claim[]>;
   getTotalClaimCount(): Promise<number>;
   setUserAdmin(userId: string, isAdmin: boolean): Promise<User | undefined>;
+  setPlatformOwner(userId: string, isOwner: boolean): Promise<User | undefined>;
   updateUserTier(orgId: string, tier: string): Promise<Subscription | undefined>;
+
+  createAuditLog(adminUserId: string, targetUserId: string, actionType: "IMPERSONATION_START" | "IMPERSONATION_END", ipAddress: string, metadata?: string): Promise<AuditLog>;
+  getAuditLogs(): Promise<AuditLog[]>;
+
+  createImpersonationSession(adminUserId: string, targetUserId: string, targetOrgId: string, token: string, expiresAt: Date): Promise<ImpersonationSession>;
+  getActiveImpersonationSession(token: string): Promise<ImpersonationSession | undefined>;
+  getActiveSessionByAdmin(adminUserId: string): Promise<ImpersonationSession | undefined>;
+  deactivateImpersonationSession(id: string): Promise<void>;
+  deactivateAllAdminSessions(adminUserId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -230,6 +243,73 @@ export class DatabaseStorage implements IStorage {
   async updateUserTier(orgId: string, tier: string): Promise<Subscription | undefined> {
     const [updated] = await db.update(subscriptions).set({ tier: tier as any }).where(eq(subscriptions.orgId, orgId)).returning();
     return updated;
+  }
+
+  async setPlatformOwner(userId: string, isOwner: boolean): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ isPlatformOwner: isOwner }).where(eq(users.id, userId)).returning();
+    return updated;
+  }
+
+  async createAuditLog(adminUserId: string, targetUserId: string, actionType: "IMPERSONATION_START" | "IMPERSONATION_END", ipAddress: string, metadata?: string): Promise<AuditLog> {
+    const [created] = await db.insert(auditLogs).values({
+      adminUserId,
+      targetUserId,
+      actionType,
+      ipAddress,
+      metadata,
+    }).returning();
+    return created;
+  }
+
+  async getAuditLogs(): Promise<AuditLog[]> {
+    return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt));
+  }
+
+  async createImpersonationSession(adminUserId: string, targetUserId: string, targetOrgId: string, token: string, expiresAt: Date): Promise<ImpersonationSession> {
+    const [created] = await db.insert(impersonationSessions).values({
+      adminUserId,
+      targetUserId,
+      targetOrgId,
+      token,
+      expiresAt,
+      active: true,
+    }).returning();
+    return created;
+  }
+
+  async getActiveImpersonationSession(token: string): Promise<ImpersonationSession | undefined> {
+    const [session] = await db.select().from(impersonationSessions).where(
+      and(
+        eq(impersonationSessions.token, token),
+        eq(impersonationSessions.active, true),
+        gt(impersonationSessions.expiresAt, new Date())
+      )
+    );
+    return session;
+  }
+
+  async getActiveSessionByAdmin(adminUserId: string): Promise<ImpersonationSession | undefined> {
+    const [session] = await db.select().from(impersonationSessions).where(
+      and(
+        eq(impersonationSessions.adminUserId, adminUserId),
+        eq(impersonationSessions.active, true),
+        gt(impersonationSessions.expiresAt, new Date())
+      )
+    );
+    return session;
+  }
+
+  async deactivateImpersonationSession(id: string): Promise<void> {
+    await db.update(impersonationSessions).set({ active: false }).where(eq(impersonationSessions.id, id));
+  }
+
+  async deactivateAllAdminSessions(adminUserId: string): Promise<void> {
+    await db.update(impersonationSessions).set({ active: false }).where(
+      and(
+        eq(impersonationSessions.adminUserId, adminUserId),
+        eq(impersonationSessions.active, true)
+      )
+    );
   }
 }
 
