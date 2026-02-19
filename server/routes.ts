@@ -431,15 +431,6 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/adjusters/:id/metrics", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
-    try {
-      const metrics = await storage.getAdjusterMetrics(req.params.id, req.auth!.organizationId);
-      res.json(metrics || null);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
   app.use("/api", exportsRouter);
 
   app.get("/api/clients", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {

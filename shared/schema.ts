@@ -170,29 +170,31 @@ export const claimVersions = pgTable("claim_versions", {
 export const adjusters = pgTable("adjusters", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull(),
-  fullName: text("full_name").notNull(),
-  carrier: text("carrier"),
-  licenseNumber: text("license_number"),
+  carrierName: text("carrier_name").notNull(),
+  adjusterName: text("adjuster_name").notNull(),
+  adjusterEmail: text("adjuster_email"),
+  adjusterPhone: text("adjuster_phone"),
   region: text("region"),
-  email: text("email"),
-  phone: text("phone"),
-  isActive: boolean("is_active").default(true),
+  ladderAssistVendor: text("ladder_assist_vendor"),
+  isFieldAdjuster: boolean("is_field_adjuster").default(false),
+  isDeskAdjuster: boolean("is_desk_adjuster").default(false),
+  avgResponseTimeHours: real("avg_response_time_hours").default(0),
+  avgDaysToInitialDetermination: real("avg_days_to_initial_determination").default(0),
+  supplementAcceptanceRate: real("supplement_acceptance_rate").default(0),
+  reinspectionRate: real("reinspection_rate").default(0),
+  denialRate: real("denial_rate").default(0),
+  escalationTriggerRate: real("escalation_trigger_rate").default(0),
+  totalClaimsTracked: integer("total_claims_tracked").default(0),
+  totalDenials: integer("total_denials").default(0),
+  totalReinspections: integer("total_reinspections").default(0),
+  totalSupplementsRequested: integer("total_supplements_requested").default(0),
+  totalSupplementsApproved: integer("total_supplements_approved").default(0),
+  frictionScore: real("friction_score").default(0),
+  integrityScore: real("integrity_score").default(0),
+  escalationScore: real("escalation_score").default(0),
+  outcomeMigrationScore: real("outcome_migration_score").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const adjusterMetrics = pgTable("adjuster_metrics", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  adjusterId: varchar("adjuster_id").notNull(),
-  organizationId: varchar("organization_id").notNull(),
-  totalClaims: integer("total_claims").default(0),
-  denialRate: real("denial_rate").default(0),
-  supplementApprovalRate: real("supplement_approval_rate").default(0),
-  averageDaysToClose: real("average_days_to_close").default(0),
-  averageInitialPayout: real("average_initial_payout").default(0),
-  averageSupplementIncrease: real("average_supplement_increase").default(0),
-  escalationFrequency: real("escalation_frequency").default(0),
-  lastUpdated: timestamp("last_updated").defaultNow(),
 });
 
 export const founderAgreements = pgTable("founder_agreements", {
@@ -230,7 +232,6 @@ export const insertClientSchema = createInsertSchema(clients).omit({ id: true, c
 export const insertClaimSchema = createInsertSchema(claims).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClaimVersionSchema = createInsertSchema(claimVersions).omit({ id: true, changedAt: true });
 export const insertAdjusterSchema = createInsertSchema(adjusters).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertAdjusterMetricsSchema = createInsertSchema(adjusterMetrics).omit({ id: true, lastUpdated: true });
 export const insertSupplementSchema = createInsertSchema(supplements).omit({ id: true, createdAt: true });
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
 export const insertEmailSchema = createInsertSchema(emails).omit({ id: true, createdAt: true });
@@ -267,7 +268,6 @@ export type InsertClaim = z.infer<typeof insertClaimSchema>;
 export type ClaimVersion = typeof claimVersions.$inferSelect;
 export type Adjuster = typeof adjusters.$inferSelect;
 export type InsertAdjuster = z.infer<typeof insertAdjusterSchema>;
-export type AdjusterMetrics = typeof adjusterMetrics.$inferSelect;
 export type Supplement = typeof supplements.$inferSelect;
 export type InsertSupplement = z.infer<typeof insertSupplementSchema>;
 export type Document = typeof documents.$inferSelect;

@@ -6,7 +6,6 @@ import {
   type Claim, type InsertClaim,
   type ClaimVersion,
   type Adjuster, type InsertAdjuster,
-  type AdjusterMetrics,
   type Client, type InsertClient,
   type Supplement, type InsertSupplement,
   type Document, type InsertDocument,
@@ -15,7 +14,7 @@ import {
   type FounderAgreement,
   type AuditLog,
   organizations, users, userSessions, billingAccounts,
-  claims, claimVersions, adjusters, adjusterMetrics,
+  claims, claimVersions, adjusters,
   clients, supplements, documents, emails, aiInsights,
   founderAgreements, auditLogs,
 } from "@shared/schema";
@@ -101,19 +100,6 @@ export interface IStorage {
 
   getAiInsights(claimId: string, orgId: string): Promise<AiInsight[]>;
   createAiInsight(insight: InsertAiInsight): Promise<AiInsight>;
-
-  getAdjusterMetrics(adjusterId: string, orgId: string): Promise<AdjusterMetrics | undefined>;
-  upsertAdjusterMetrics(data: {
-    adjusterId: string;
-    organizationId: string;
-    totalClaims?: number;
-    denialRate?: number;
-    supplementApprovalRate?: number;
-    averageDaysToClose?: number;
-    averageInitialPayout?: number;
-    averageSupplementIncrease?: number;
-    escalationFrequency?: number;
-  }): Promise<AdjusterMetrics>;
 
   createFounderAgreement(orgId: string, userId: string, ip: string, version: string, hash: string): Promise<FounderAgreement>;
   getFounderAgreement(orgId: string): Promise<FounderAgreement | undefined>;
@@ -422,36 +408,6 @@ export class DatabaseStorage implements IStorage {
 
   async createAiInsight(insight: InsertAiInsight): Promise<AiInsight> {
     const [created] = await db.insert(aiInsights).values(insight).returning();
-    return created;
-  }
-
-  async getAdjusterMetrics(adjusterId: string, orgId: string): Promise<AdjusterMetrics | undefined> {
-    const [metrics] = await db.select().from(adjusterMetrics).where(
-      and(eq(adjusterMetrics.adjusterId, adjusterId), eq(adjusterMetrics.organizationId, orgId))
-    );
-    return metrics;
-  }
-
-  async upsertAdjusterMetrics(data: {
-    adjusterId: string;
-    organizationId: string;
-    totalClaims?: number;
-    denialRate?: number;
-    supplementApprovalRate?: number;
-    averageDaysToClose?: number;
-    averageInitialPayout?: number;
-    averageSupplementIncrease?: number;
-    escalationFrequency?: number;
-  }): Promise<AdjusterMetrics> {
-    const existing = await this.getAdjusterMetrics(data.adjusterId, data.organizationId);
-    if (existing) {
-      const [updated] = await db.update(adjusterMetrics)
-        .set({ ...data, lastUpdated: new Date() })
-        .where(eq(adjusterMetrics.id, existing.id))
-        .returning();
-      return updated;
-    }
-    const [created] = await db.insert(adjusterMetrics).values(data).returning();
     return created;
   }
 
