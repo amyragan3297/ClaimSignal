@@ -28,11 +28,13 @@ import {
   Users,
   UserCircle,
   AlertTriangle,
+  FileSearch,
 } from "lucide-react";
 
 const baseNavItems = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Claims", href: "/claims", icon: FileText },
+  { title: "Evidence", href: "/evidence", icon: FileSearch },
   { title: "Clients", href: "/clients", icon: UserCircle },
   { title: "Adjusters", href: "/adjusters", icon: Users },
   { title: "Billing", href: "/billing", icon: CreditCard },

@@ -140,6 +140,10 @@ export const claims = pgTable("claims", {
   escalationCategory: text("escalation_category"),
   riskScore: integer("risk_score"),
   lossDate: timestamp("loss_date"),
+  aiClaimSummary: text("ai_claim_summary"),
+  adjusterFrictionScore: real("adjuster_friction_score"),
+  supplementProbabilityScore: real("supplement_probability_score"),
+  ircComplianceRiskScore: real("irc_compliance_risk_score"),
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -319,6 +323,51 @@ export const timelineEvents = pgTable("timeline_events", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const triggerSourceEnum = pgEnum("trigger_source", ["estimate_delta", "transcript", "photo_flag", "denial_letter"]);
+
+export const adjusterPlaybooks = pgTable("adjuster_playbooks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adjusterId: varchar("adjuster_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  commonDenialPatterns: json("common_denial_patterns"),
+  averageSupplementResponseDays: real("average_supplement_response_days"),
+  commonCoverageLimitationsCited: json("common_coverage_limitations_cited"),
+  ircTriggerSensitivityScore: real("irc_trigger_sensitivity_score"),
+  escalationThresholdRecommended: integer("escalation_threshold_recommended"),
+  denialPatternFrequency: integer("denial_pattern_frequency").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const ircCodes = pgTable("irc_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  codeReference: text("code_reference").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  supplementTriggerKeywords: json("supplement_trigger_keywords"),
+  roofingTypeApplicable: text("roofing_type_applicable"),
+  severityWeight: real("severity_weight"),
+});
+
+export const supplementTriggers = pgTable("supplement_triggers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  claimId: varchar("claim_id").notNull(),
+  ircCodeId: varchar("irc_code_id"),
+  triggerSource: triggerSourceEnum("trigger_source"),
+  confidenceScore: real("confidence_score"),
+  estimatedFinancialDelta: real("estimated_financial_delta"),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const piiAccessLogs = pgTable("pii_access_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  claimId: varchar("claim_id").notNull(),
+  fieldAccessed: text("field_accessed").notNull(),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
 export const founderAgreements = pgTable("founder_agreements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull(),
@@ -363,6 +412,10 @@ export const insertExtractedEntitySchema = createInsertSchema(extractedEntities)
 export const insertClaimDraftSchema = createInsertSchema(claimDrafts).omit({ id: true, createdAt: true });
 export const insertAudioRecordingSchema = createInsertSchema(audioRecordings).omit({ id: true, createdAt: true, processedAt: true });
 export const insertTimelineEventSchema = createInsertSchema(timelineEvents).omit({ id: true, createdAt: true });
+export const insertAdjusterPlaybookSchema = createInsertSchema(adjusterPlaybooks).omit({ id: true, createdAt: true });
+export const insertIrcCodeSchema = createInsertSchema(ircCodes).omit({ id: true });
+export const insertSupplementTriggerSchema = createInsertSchema(supplementTriggers).omit({ id: true, createdAt: true });
+export const insertPiiAccessLogSchema = createInsertSchema(piiAccessLogs).omit({ id: true, timestamp: true });
 export const insertFounderAgreementSchema = createInsertSchema(founderAgreements).omit({ id: true, signedAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, timestamp: true });
 
@@ -413,5 +466,13 @@ export type AudioRecording = typeof audioRecordings.$inferSelect;
 export type InsertAudioRecording = z.infer<typeof insertAudioRecordingSchema>;
 export type TimelineEvent = typeof timelineEvents.$inferSelect;
 export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
+export type AdjusterPlaybook = typeof adjusterPlaybooks.$inferSelect;
+export type InsertAdjusterPlaybook = z.infer<typeof insertAdjusterPlaybookSchema>;
+export type IrcCode = typeof ircCodes.$inferSelect;
+export type InsertIrcCode = z.infer<typeof insertIrcCodeSchema>;
+export type SupplementTrigger = typeof supplementTriggers.$inferSelect;
+export type InsertSupplementTrigger = z.infer<typeof insertSupplementTriggerSchema>;
+export type PiiAccessLog = typeof piiAccessLogs.$inferSelect;
+export type InsertPiiAccessLog = z.infer<typeof insertPiiAccessLogSchema>;
 export type FounderAgreement = typeof founderAgreements.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;

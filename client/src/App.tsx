@@ -15,6 +15,7 @@ import BillingPage from "@/pages/billing";
 import FounderLegalPage from "@/pages/founder-legal";
 import AdminPage from "@/pages/admin";
 import AdjustersPage from "@/pages/adjusters";
+import EvidencePage from "@/pages/evidence";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -25,6 +26,7 @@ function AppRoutes() {
         <Route path="/dashboard" component={DashboardPage} />
         <Route path="/claims" component={ClaimsPage} />
         <Route path="/claims/:id" component={ClaimDetailPage} />
+        <Route path="/evidence" component={EvidencePage} />
         <Route path="/clients" component={ClientsPage} />
         <Route path="/adjusters" component={AdjustersPage} />
         <Route path="/billing" component={BillingPage} />

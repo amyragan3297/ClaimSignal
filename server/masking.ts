@@ -1,14 +1,12 @@
-import type { Claim } from "@shared/schema";
-
 type Role = string;
 
-const PII_VISIBLE_ROLES: string[] = ["super_admin", "team_owner"];
+const PII_UNMASK_ROLES: string[] = ["super_admin"];
 
-function maskString(value: string | null | undefined): string | null | undefined {
+export function maskString(value: string | null | undefined): string | null | undefined {
   if (!value) return value;
   const v = value.trim();
   if (v.length <= 2) return "**";
-  if (v.length <= 6) return v[0] + "***" + v[v.length - 1];
+  if (v.length <= 4) return v.slice(0, 2) + "****";
   return v.slice(0, 2) + "****" + v.slice(-2);
 }
 
@@ -20,7 +18,7 @@ function maskAddress(value: string | null | undefined): string | null | undefine
 }
 
 export function applyPiiMasking<T extends Record<string, any>>(row: T, role: Role): T {
-  if (PII_VISIBLE_ROLES.includes(role)) return row;
+  if (PII_UNMASK_ROLES.includes(role)) return row;
 
   return {
     ...row,
@@ -39,5 +37,5 @@ export function applyPiiMaskingToList<T extends Record<string, any>>(rows: T[], 
 }
 
 export function canViewUnmasked(role: string): boolean {
-  return PII_VISIBLE_ROLES.includes(role);
+  return PII_UNMASK_ROLES.includes(role);
 }

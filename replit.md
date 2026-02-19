@@ -76,8 +76,8 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 ### PII Masking & Data Privacy
 - **Role-based PII masking** enforced at API level (not UI)
 - **PII fields:** homeownerName, homeownerPhone, homeownerEmail, propertyAddress, claimNumber, policyNumber, insuredName
-- **Masking policy:** super_admin and team_owner see full PII; all other roles see masked PII by default
-- **Unmasked toggle:** `GET /api/claims?unmasked=true` — backend enforces role check, audits every unmask action
+- **Masking policy:** Only super_admin can unmask PII; all other roles (including team_owner, founder) see masked PII
+- **Unmasked toggle:** `GET /api/claims?unmasked=true` — backend enforces super_admin-only role check, audits every unmask action
 - **Audit trail:** PII_UNMASK_VIEW logged with actorUserId, tenantId, timestamp for legal protection
 - **Masking ON by default** — no raw PII in dashboards, screenshots, or exports unless super_admin explicitly toggles
 - **Masking utility:** `server/masking.ts` — `applyPiiMasking()`, `applyPiiMaskingToList()`, `canViewUnmasked()`
@@ -98,6 +98,26 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 - `POST /api/legal/founder/sign` - Sign founder agreement
 - `GET /api/admin/overview` - Platform stats (owner only)
 - `POST /api/admin/impersonate/:userId` - Impersonate user (owner only)
+- `POST /api/evidence/upload` - Upload evidence file (multipart/form-data, auto-classifies and extracts entities)
+- `GET /api/evidence/files` - List evidence files (tenant-scoped)
+- `GET /api/evidence/files/:id` - Get single evidence file
+- `POST /api/evidence/files/:id/match` - Match evidence file to a claim
+- `GET /api/evidence/entities/:evidenceFileId` - Get extracted entities for a file
+- `GET /api/evidence/timeline/:claimId` - Get timeline events for a claim
+- `GET /api/evidence/drafts` - List claim drafts needing review
+
+### Evidence Pipeline
+- **Upload:** SHA-256 deduplication, regex-based document classification (9 categories), entity extraction (claim#, policy#, dates, amounts, names)
+- **Auto-matching:** Matches uploaded documents to claims by claim number, policy number, or fuzzy name+address
+- **Timeline events:** Auto-generated from document classification (denial, payment, supplement, inspection events)
+- **Claim drafts:** Created for unmatched uploads with status needs_review
+- **Document categories:** denial_letter, estimate, scope, payment_letter, supplement, invoice, photo_report, policy, email_thread, unknown
+
+### Lifecycle Phases & Scoring
+- **9 lifecycle phases:** pre_claim, filed, inspected, initial_determination, supplement_submitted, reinspection_requested, escalated, resolved, closed
+- **Lifecycle velocity scoring:** Weighted time intervals (inspection 0.3, determination 0.4, resolution 0.3), normalized 0-100, lower=better
+- **Intelligence scores:** frictionScore, scopeDeltaScore, escalationLevel (0-5), outcomeMigrationDelta, approvalProbability
+- **Financial fields:** rcvAmount, acvAmount, deductible, supplementAmountTotal, finalPaidAmount
 
 ### Admin Access
 - Default platform owner: `admin@claimsignal.com` / `ClaimSignal2026!`
@@ -123,3 +143,12 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 - 2026-02-19: Export enforces masking for non-privileged roles, audit logs all exports (EXPORT_MASKED/EXPORT_UNMASKED)
 - 2026-02-19: Clients page with CRUD UI, claim detail page with supplements section and export dropdown
 - 2026-02-19: Navigation updated: Dashboard, Claims, Clients, Adjusters, Billing
+- 2026-02-19: Evidence pipeline: SHA-256 dedup, document classification, entity extraction, claim auto-match, timeline events
+- 2026-02-19: New tables: evidence_files, extracted_entities, claim_drafts, audio_recordings, timeline_events, adjuster_playbooks, irc_codes, supplement_triggers, pii_access_logs
+- 2026-02-19: Claims extended with lifecycle phases (9 phases), lifecycle dates, financial fields, scoring fields, AI summary fields
+- 2026-02-19: Masking policy tightened: only super_admin can unmask PII (team_owner removed)
+- 2026-02-19: Lifecycle velocity scoring engine (weighted time intervals, 0-100 normalized)
+- 2026-02-19: Evidence upload page with drop zone, classification display, entity viewer, claim matching
+- 2026-02-19: Claim detail page enhanced with phase progression, financial summary, intelligence scores, timeline
+- 2026-02-19: Claims list enhanced with Phase and Escalation columns, new form fields for phase/dates/financials
+- 2026-02-19: Navigation updated: Dashboard, Claims, Evidence, Clients, Adjusters, Billing

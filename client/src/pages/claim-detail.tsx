@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { Claim, Supplement } from "@shared/schema";
+import type { Claim, Supplement, TimelineEvent } from "@shared/schema";
 import {
   ArrowLeft,
   FileText,
@@ -22,6 +22,15 @@ import {
   Shield,
   Download,
   Plus,
+  FileUp,
+  XCircle,
+  FilePlus,
+  Search,
+  RotateCcw,
+  CheckCircle,
+  Activity,
+  Brain,
+  Calendar,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -32,6 +41,45 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+
+const LIFECYCLE_PHASES = [
+  { key: "pre_claim", label: "Pre-Claim" },
+  { key: "filed", label: "Filed" },
+  { key: "inspected", label: "Inspected" },
+  { key: "initial_determination", label: "Initial Determination" },
+  { key: "supplement_submitted", label: "Supplement Submitted" },
+  { key: "reinspection_requested", label: "Reinspection Requested" },
+  { key: "escalated", label: "Escalated" },
+  { key: "resolved", label: "Resolved" },
+  { key: "closed", label: "Closed" },
+] as const;
+
+const EVENT_TYPE_CONFIG: Record<string, { icon: typeof FileUp; color: string }> = {
+  doc_uploaded: { icon: FileUp, color: "text-muted-foreground" },
+  denial: { icon: XCircle, color: "text-red-500" },
+  payment_issued: { icon: DollarSign, color: "text-green-500" },
+  supplement_submitted: { icon: FilePlus, color: "text-muted-foreground" },
+  inspection: { icon: Search, color: "text-muted-foreground" },
+  escalation: { icon: AlertTriangle, color: "text-orange-500" },
+  reinspection: { icon: RotateCcw, color: "text-muted-foreground" },
+  determination: { icon: CheckCircle, color: "text-muted-foreground" },
+};
+
+function formatCurrency(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "\u2014";
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function getScoreColor(value: number, thresholds: { good: number; warn: number }, lowerIsBetter = false): string {
+  if (lowerIsBetter) {
+    if (value <= thresholds.good) return "text-green-500";
+    if (value <= thresholds.warn) return "text-yellow-500";
+    return "text-red-500";
+  }
+  if (value >= thresholds.good) return "text-green-500";
+  if (value >= thresholds.warn) return "text-yellow-500";
+  return "text-red-500";
+}
 
 const createSupplementSchema = z.object({
   amountRequested: z.coerce.number().min(0, "Amount required"),
@@ -44,24 +92,26 @@ export default function ClaimDetailPage() {
   const { toast } = useToast();
   const { data: authData } = useAuth();
   const userRole = authData?.user?.role || "standard";
-  const canToggleUnmasked = userRole === "super_admin" || userRole === "team_owner";
+  const canToggleUnmasked = userRole === "super_admin";
   const [showUnmasked, setShowUnmasked] = useState(false);
 
+  const claimId = params?.id;
+
   const { data: claim, isLoading } = useQuery<Claim>({
-    queryKey: ["/api/claims", params?.id, { unmasked: showUnmasked && canToggleUnmasked }],
+    queryKey: ["/api/claims", claimId, { unmasked: showUnmasked && canToggleUnmasked }],
     queryFn: async () => {
-      const url = showUnmasked && canToggleUnmasked 
-        ? `/api/claims/${params?.id}?unmasked=true` 
-        : `/api/claims/${params?.id}`;
+      const url = showUnmasked && canToggleUnmasked
+        ? `/api/claims/${claimId}?unmasked=true`
+        : `/api/claims/${claimId}`;
       const res = await apiRequest("GET", url);
       return res.json();
     },
-    enabled: !!params?.id,
+    enabled: !!claimId,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("DELETE", `/api/claims/${params?.id}`);
+      await apiRequest("DELETE", `/api/claims/${claimId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
@@ -75,12 +125,21 @@ export default function ClaimDetailPage() {
   });
 
   const { data: supplementsList } = useQuery<Supplement[]>({
-    queryKey: ["/api/claims", params?.id, "supplements"],
+    queryKey: ["/api/claims", claimId, "supplements"],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/claims/${params?.id}/supplements`);
+      const res = await apiRequest("GET", `/api/claims/${claimId}/supplements`);
       return res.json();
     },
-    enabled: !!params?.id,
+    enabled: !!claimId,
+  });
+
+  const { data: timelineEvents, isLoading: timelineLoading } = useQuery<TimelineEvent[]>({
+    queryKey: ["/api/evidence/timeline", claimId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/evidence/timeline/${claimId}`);
+      return res.json();
+    },
+    enabled: !!claimId,
   });
 
   const [suppDialogOpen, setSuppDialogOpen] = useState(false);
@@ -92,10 +151,10 @@ export default function ClaimDetailPage() {
 
   const createSuppMutation = useMutation({
     mutationFn: async (data: z.infer<typeof createSupplementSchema>) => {
-      await apiRequest("POST", `/api/claims/${params?.id}/supplements`, data);
+      await apiRequest("POST", `/api/claims/${claimId}/supplements`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/claims", params?.id, "supplements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId, "supplements"] });
       toast({ title: "Supplement added" });
       setSuppDialogOpen(false);
       suppForm.reset();
@@ -107,12 +166,12 @@ export default function ClaimDetailPage() {
 
   const handleExport = async (type: string, format: string) => {
     try {
-      const res = await apiRequest("GET", `/api/exports/claims/${params?.id}?type=${type}&format=${format}`);
+      const res = await apiRequest("GET", `/api/exports/claims/${claimId}?type=${type}&format=${format}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `claim_${params?.id}_${type}.${format}`;
+      a.download = `claim_${claimId}_${type}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
       toast({ title: "Export downloaded" });
@@ -125,6 +184,7 @@ export default function ClaimDetailPage() {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-16 w-full" />
         <div className="grid md:grid-cols-2 gap-4">
           <Skeleton className="h-64" />
           <Skeleton className="h-64" />
@@ -152,6 +212,16 @@ export default function ClaimDetailPage() {
     denied: "destructive",
     closed: "outline",
   };
+
+  const currentPhaseIndex = LIFECYCLE_PHASES.findIndex(p => p.key === claim.currentPhase);
+
+  const sortedTimeline = timelineEvents
+    ? [...timelineEvents].sort((a, b) => {
+        const dateA = a.eventDate ? new Date(a.eventDate).getTime() : 0;
+        const dateB = b.eventDate ? new Date(b.eventDate).getTime() : 0;
+        return dateA - dateB;
+      })
+    : [];
 
   return (
     <div className="space-y-6">
@@ -223,6 +293,49 @@ export default function ClaimDetailPage() {
         </div>
       </div>
 
+      {claim.currentPhase && (
+        <Card data-testid="card-lifecycle-phase">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-3 mb-4">
+              <Activity className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">Lifecycle Phase</span>
+              <Badge variant="default" data-testid="badge-current-phase" className="capitalize">
+                {claim.currentPhase.replace(/_/g, " ")}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-1 overflow-x-auto pb-1" data-testid="phase-progression">
+              {LIFECYCLE_PHASES.map((phase, idx) => {
+                const isCompleted = idx < currentPhaseIndex;
+                const isCurrent = idx === currentPhaseIndex;
+                return (
+                  <div key={phase.key} className="flex items-center">
+                    <div
+                      className={`flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap transition-colors ${
+                        isCurrent
+                          ? "bg-primary text-primary-foreground"
+                          : isCompleted
+                          ? "bg-primary/20 text-primary"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                      data-testid={`phase-step-${phase.key}`}
+                    >
+                      {phase.label}
+                    </div>
+                    {idx < LIFECYCLE_PHASES.length - 1 && (
+                      <div
+                        className={`w-4 h-0.5 ${
+                          idx < currentPhaseIndex ? "bg-primary" : "bg-muted"
+                        }`}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {canToggleUnmasked && (
         <div className="flex items-center justify-between rounded-md border border-border bg-card p-3">
           <div className="flex items-center gap-2">
@@ -288,39 +401,133 @@ export default function ClaimDetailPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-testid="card-financial-summary">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <DollarSign className="w-4 h-4 text-primary" />
-              Financials
+              Financial Summary
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <InfoRow
-              label="Claim Amount"
-              value={claim.claimAmount ? `$${claim.claimAmount.toLocaleString()}` : "\u2014"}
-              testId="detail-claim-amount"
-            />
-            <InfoRow
-              label="Approved Amount"
-              value={claim.approvedAmount ? `$${claim.approvedAmount.toLocaleString()}` : "\u2014"}
-              testId="detail-approved-amount"
-            />
+            <InfoRow label="Claim Amount" value={formatCurrency(claim.claimAmount)} testId="detail-claim-amount" />
+            <InfoRow label="Approved Amount" value={formatCurrency(claim.approvedAmount)} testId="detail-approved-amount" />
+            <InfoRow label="RCV Amount" value={formatCurrency(claim.rcvAmount)} testId="detail-rcv-amount" />
+            <InfoRow label="ACV Amount" value={formatCurrency(claim.acvAmount)} testId="detail-acv-amount" />
+            <InfoRow label="Deductible" value={formatCurrency(claim.deductible)} testId="detail-deductible" />
+            <InfoRow label="Supplement Total" value={formatCurrency(claim.supplementAmountTotal)} testId="detail-supplement-total" />
+            <InfoRow label="Final Paid" value={formatCurrency(claim.finalPaidAmount)} testId="detail-final-paid" />
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-intelligence-scores">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Brain className="w-4 h-4 text-primary" />
+              Intelligence Scores
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {claim.lifecycleVelocityScore !== null && claim.lifecycleVelocityScore !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Lifecycle Velocity</span>
+                <span
+                  className={`text-sm font-medium ${getScoreColor(claim.lifecycleVelocityScore, { good: 30, warn: 60 }, true)}`}
+                  data-testid="detail-velocity-score"
+                >
+                  {claim.lifecycleVelocityScore.toFixed(1)}
+                </span>
+              </div>
+            )}
+            {claim.scopeDeltaScore !== null && claim.scopeDeltaScore !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Scope Delta</span>
+                <span
+                  className={`text-sm font-medium ${getScoreColor(claim.scopeDeltaScore, { good: 30, warn: 60 }, true)}`}
+                  data-testid="detail-scope-delta"
+                >
+                  {claim.scopeDeltaScore.toFixed(1)}
+                </span>
+              </div>
+            )}
+            {claim.escalationLevel !== null && claim.escalationLevel !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Escalation Level</span>
+                <span
+                  className={`text-sm font-medium ${getScoreColor(claim.escalationLevel, { good: 1, warn: 3 }, true)}`}
+                  data-testid="detail-escalation-level"
+                >
+                  {claim.escalationLevel} / 5
+                </span>
+              </div>
+            )}
+            {claim.outcomeMigrationDelta !== null && claim.outcomeMigrationDelta !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Outcome Migration Delta</span>
+                <span
+                  className={`text-sm font-medium ${getScoreColor(Math.abs(claim.outcomeMigrationDelta), { good: 10, warn: 30 }, true)}`}
+                  data-testid="detail-outcome-migration"
+                >
+                  {claim.outcomeMigrationDelta > 0 ? "+" : ""}{claim.outcomeMigrationDelta.toFixed(1)}
+                </span>
+              </div>
+            )}
+            {claim.frictionScore !== null && claim.frictionScore !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Friction Score</span>
+                <span
+                  className={`text-sm font-medium ${getScoreColor(claim.frictionScore, { good: 30, warn: 60 }, true)}`}
+                  data-testid="detail-intel-friction"
+                >
+                  {claim.frictionScore}
+                </span>
+              </div>
+            )}
+            {claim.approvalProbability !== null && claim.approvalProbability !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Approval Probability</span>
+                <span
+                  className={`text-sm font-medium ${getScoreColor(claim.approvalProbability * 100, { good: 70, warn: 40 })}`}
+                  data-testid="detail-approval-probability"
+                >
+                  {(claim.approvalProbability * 100).toFixed(0)}%
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" />
-              Timeline
+              <Calendar className="w-4 h-4 text-primary" />
+              Key Dates
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <InfoRow
-              label="Loss Date"
-              value={claim.lossDate ? new Date(claim.lossDate).toLocaleDateString() : "\u2014"}
-              testId="detail-loss-date"
+              label="Date of Loss"
+              value={claim.dateOfLoss ? new Date(claim.dateOfLoss).toLocaleDateString() : (claim.lossDate ? new Date(claim.lossDate).toLocaleDateString() : "\u2014")}
+              testId="detail-date-of-loss"
+            />
+            <InfoRow
+              label="Inspection Date"
+              value={claim.inspectionDate ? new Date(claim.inspectionDate).toLocaleDateString() : "\u2014"}
+              testId="detail-inspection-date"
+            />
+            <InfoRow
+              label="Determination Date"
+              value={claim.determinationDate ? new Date(claim.determinationDate).toLocaleDateString() : "\u2014"}
+              testId="detail-determination-date"
+            />
+            <InfoRow
+              label="Reinspection Date"
+              value={claim.reinspectionDate ? new Date(claim.reinspectionDate).toLocaleDateString() : "\u2014"}
+              testId="detail-reinspection-date"
+            />
+            <InfoRow
+              label="Resolution Date"
+              value={claim.resolutionDate ? new Date(claim.resolutionDate).toLocaleDateString() : "\u2014"}
+              testId="detail-resolution-date"
             />
             <InfoRow
               label="Created"
@@ -412,6 +619,68 @@ export default function ClaimDetailPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="card-timeline">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
+            Timeline
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {timelineLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : !sortedTimeline.length ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No timeline events</p>
+          ) : (
+            <div className="relative" data-testid="timeline-events">
+              {sortedTimeline.map((event, idx) => {
+                const config = EVENT_TYPE_CONFIG[event.eventType] || { icon: FileText, color: "text-muted-foreground" };
+                const EventIcon = config.icon;
+                const isLast = idx === sortedTimeline.length - 1;
+
+                return (
+                  <div key={event.id} className="flex gap-3" data-testid={`timeline-event-${event.id}`}>
+                    <div className="flex flex-col items-center">
+                      <div className={`flex items-center justify-center w-8 h-8 rounded-full bg-muted shrink-0 ${config.color}`}>
+                        <EventIcon className="w-4 h-4" />
+                      </div>
+                      {!isLast && (
+                        <div className="w-0.5 bg-border flex-1 min-h-[24px]" />
+                      )}
+                    </div>
+                    <div className={`pb-6 ${isLast ? "" : ""}`}>
+                      <p className="text-sm font-medium" data-testid={`timeline-title-${event.id}`}>
+                        {event.title}
+                      </p>
+                      {event.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5" data-testid={`timeline-desc-${event.id}`}>
+                          {event.description}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground/70 mt-1" data-testid={`timeline-date-${event.id}`}>
+                        {event.eventDate
+                          ? new Date(event.eventDate).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "\u2014"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

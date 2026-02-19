@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -32,6 +33,11 @@ const createClaimSchema = z.object({
   lossType: z.string().optional(),
   status: z.string().default("open"),
   notes: z.string().optional(),
+  currentPhase: z.string().default("pre_claim"),
+  dateOfLoss: z.string().optional(),
+  rcvAmount: z.string().optional(),
+  acvAmount: z.string().optional(),
+  deductible: z.string().optional(),
 });
 
 const statusColors: Record<string, string> = {
@@ -42,6 +48,32 @@ const statusColors: Record<string, string> = {
   closed: "outline",
 };
 
+const phaseColors: Record<string, string> = {
+  pre_claim: "outline",
+  filed: "default",
+  inspected: "secondary",
+  initial_determination: "secondary",
+  supplement_submitted: "secondary",
+  reinspection_requested: "secondary",
+  escalated: "destructive",
+  resolved: "default",
+  closed: "outline",
+};
+
+const escalationColors = (level: number | null | undefined) => {
+  if (level === null || level === undefined) return "outline";
+  if (level <= 1) return "secondary";
+  if (level <= 3) return "secondary";
+  return "destructive";
+};
+
+const formatPhase = (phase: string) => {
+  return phase
+    .split("_")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
 export default function ClaimsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -49,7 +81,7 @@ export default function ClaimsPage() {
   const { toast } = useToast();
   const { data: authData } = useAuth();
   const userRole = authData?.user?.role || "standard";
-  const canToggleUnmasked = userRole === "super_admin" || userRole === "team_owner";
+  const canToggleUnmasked = userRole === "super_admin";
   const [showUnmasked, setShowUnmasked] = useState(false);
 
   const { data: claims, isLoading } = useQuery<Claim[]>({
@@ -75,6 +107,11 @@ export default function ClaimsPage() {
       lossType: "",
       status: "open",
       notes: "",
+      currentPhase: "pre_claim",
+      dateOfLoss: "",
+      rcvAmount: "",
+      acvAmount: "",
+      deductible: "",
     },
   });
 
@@ -99,7 +136,8 @@ export default function ClaimsPage() {
       (c.claimNumber || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (c.carrier || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (c.propertyAddress || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ((c as any).homeownerName || "").toLowerCase().includes(searchQuery.toLowerCase())
+      ((c as any).homeownerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      formatPhase(c.currentPhase).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -165,6 +203,45 @@ export default function ClaimsPage() {
               <div className="space-y-2">
                 <Label>Notes</Label>
                 <Textarea placeholder="Additional details..." data-testid="input-notes" {...form.register("notes")} className="resize-none" />
+              </div>
+              <div className="space-y-2">
+                <Label>Current Phase</Label>
+                <Select value={form.watch("currentPhase")} onValueChange={(value) => form.setValue("currentPhase", value)}>
+                  <SelectTrigger data-testid="select-current-phase">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pre_claim">Pre Claim</SelectItem>
+                    <SelectItem value="filed">Filed</SelectItem>
+                    <SelectItem value="inspected">Inspected</SelectItem>
+                    <SelectItem value="initial_determination">Initial Determination</SelectItem>
+                    <SelectItem value="supplement_submitted">Supplement Submitted</SelectItem>
+                    <SelectItem value="reinspection_requested">Reinspection Requested</SelectItem>
+                    <SelectItem value="escalated">Escalated</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Date of Loss</Label>
+                  <Input type="date" data-testid="input-date-of-loss" {...form.register("dateOfLoss")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>RCV Amount</Label>
+                  <Input type="number" placeholder="0.00" data-testid="input-rcv-amount" {...form.register("rcvAmount")} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>ACV Amount</Label>
+                  <Input type="number" placeholder="0.00" data-testid="input-acv-amount" {...form.register("acvAmount")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Deductible</Label>
+                  <Input type="number" placeholder="0.00" data-testid="input-deductible" {...form.register("deductible")} />
+                </div>
               </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} data-testid="button-cancel-claim">
@@ -253,6 +330,8 @@ export default function ClaimsPage() {
                     <TableHead>Property</TableHead>
                     <TableHead>Homeowner</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Phase</TableHead>
+                    <TableHead>Escalation</TableHead>
                     <TableHead>Risk Score</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
@@ -274,6 +353,24 @@ export default function ClaimsPage() {
                           className="text-xs capitalize"
                         >
                           {claim.status.replace("_", " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={(phaseColors[claim.currentPhase] as any) || "outline"}
+                          className="text-xs"
+                          data-testid={`badge-phase-${claim.id}`}
+                        >
+                          {formatPhase(claim.currentPhase)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={(escalationColors(claim.escalationLevel) as any) || "outline"}
+                          className="text-xs"
+                          data-testid={`badge-escalation-${claim.id}`}
+                        >
+                          {claim.escalationLevel ?? "\u2014"}
                         </Badge>
                       </TableCell>
                       <TableCell>

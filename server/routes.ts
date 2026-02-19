@@ -7,6 +7,8 @@ import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, 
 import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked } from "./masking";
 import { createCheckoutSession, handleWebhookEvent } from "./billing";
 import exportsRouter from "./exports";
+import evidenceRouter from "./evidence";
+import { computeLifecycleVelocity } from "./scoring";
 import { createHash } from "crypto";
 import {
   type AuthRequest,
@@ -339,6 +341,16 @@ export async function registerRoutes(
       const claim = await storage.updateClaim(req.params.id, orgId, req.body);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
 
+      const velocity = computeLifecycleVelocity(
+        claim.dateOfLoss ? new Date(claim.dateOfLoss) : null,
+        claim.inspectionDate ? new Date(claim.inspectionDate) : null,
+        claim.determinationDate ? new Date(claim.determinationDate) : null,
+        claim.resolutionDate ? new Date(claim.resolutionDate) : null
+      );
+      if (velocity !== null && velocity !== claim.lifecycleVelocityScore) {
+        await storage.updateClaim(req.params.id, orgId, { lifecycleVelocityScore: velocity });
+      }
+
       const versionNumber = (await storage.getLatestVersionNumber(claim.id)) + 1;
       await storage.createClaimVersion({
         claimId: claim.id,
@@ -431,6 +443,8 @@ export async function registerRoutes(
       res.status(400).json({ message: err.message });
     }
   });
+
+  app.use("/api/evidence", requireAuth, requireActiveSubscription, evidenceRouter);
 
   app.use("/api", exportsRouter);
 

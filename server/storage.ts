@@ -13,10 +13,21 @@ import {
   type AiInsight, type InsertAiInsight,
   type FounderAgreement,
   type AuditLog,
+  type EvidenceFile, type InsertEvidenceFile,
+  type ExtractedEntity, type InsertExtractedEntity,
+  type ClaimDraft, type InsertClaimDraft,
+  type AudioRecording, type InsertAudioRecording,
+  type TimelineEvent, type InsertTimelineEvent,
+  type AdjusterPlaybook, type InsertAdjusterPlaybook,
+  type IrcCode, type InsertIrcCode,
+  type SupplementTrigger, type InsertSupplementTrigger,
+  type PiiAccessLog, type InsertPiiAccessLog,
   organizations, users, userSessions, billingAccounts,
   claims, claimVersions, adjusters,
   clients, supplements, documents, emails, aiInsights,
   founderAgreements, auditLogs,
+  evidenceFiles, extractedEntities, claimDrafts, audioRecordings, timelineEvents,
+  adjusterPlaybooks, ircCodes, supplementTriggers, piiAccessLogs,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, count, desc, gt, isNull, sql } from "drizzle-orm";
@@ -121,6 +132,46 @@ export interface IStorage {
     ipAddress?: string;
   }): Promise<AuditLog>;
   getAuditLogs(orgId?: string): Promise<AuditLog[]>;
+
+  getEvidenceFiles(orgId: string, claimId?: string): Promise<EvidenceFile[]>;
+  getEvidenceFile(id: string, orgId: string): Promise<EvidenceFile | undefined>;
+  getEvidenceFileBySha256(sha256: string, orgId: string): Promise<EvidenceFile | undefined>;
+  createEvidenceFile(file: InsertEvidenceFile): Promise<EvidenceFile>;
+  updateEvidenceFile(id: string, orgId: string, data: Partial<EvidenceFile>): Promise<EvidenceFile | undefined>;
+
+  getExtractedEntities(evidenceFileId: string): Promise<ExtractedEntity[]>;
+  getExtractedEntitiesByClaim(claimId: string): Promise<ExtractedEntity[]>;
+  createExtractedEntity(entity: InsertExtractedEntity): Promise<ExtractedEntity>;
+
+  getClaimDrafts(orgId: string): Promise<ClaimDraft[]>;
+  getClaimDraft(id: string, orgId: string): Promise<ClaimDraft | undefined>;
+  createClaimDraft(draft: InsertClaimDraft): Promise<ClaimDraft>;
+  updateClaimDraft(id: string, orgId: string, data: Partial<ClaimDraft>): Promise<ClaimDraft | undefined>;
+
+  getAudioRecordings(claimId: string, orgId: string): Promise<AudioRecording[]>;
+  createAudioRecording(recording: InsertAudioRecording): Promise<AudioRecording>;
+  updateAudioRecording(id: string, orgId: string, data: Partial<AudioRecording>): Promise<AudioRecording | undefined>;
+
+  getTimelineEvents(claimId: string, orgId: string): Promise<TimelineEvent[]>;
+  createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent>;
+
+  // Adjuster Playbooks
+  getAdjusterPlaybook(adjusterId: string, orgId: string): Promise<AdjusterPlaybook | undefined>;
+  createAdjusterPlaybook(playbook: InsertAdjusterPlaybook): Promise<AdjusterPlaybook>;
+  updateAdjusterPlaybook(id: string, orgId: string, data: Partial<AdjusterPlaybook>): Promise<AdjusterPlaybook | undefined>;
+
+  // IRC Codes
+  getIrcCodes(): Promise<IrcCode[]>;
+  getIrcCode(id: string): Promise<IrcCode | undefined>;
+  createIrcCode(code: InsertIrcCode): Promise<IrcCode>;
+
+  // Supplement Triggers
+  getSupplementTriggers(claimId: string): Promise<SupplementTrigger[]>;
+  createSupplementTrigger(trigger: InsertSupplementTrigger): Promise<SupplementTrigger>;
+
+  // PII Access Logs
+  createPiiAccessLog(log: InsertPiiAccessLog): Promise<PiiAccessLog>;
+  getPiiAccessLogs(claimId: string): Promise<PiiAccessLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -456,6 +507,157 @@ export class DatabaseStorage implements IStorage {
       return db.select().from(auditLogs).where(eq(auditLogs.organizationId, orgId)).orderBy(desc(auditLogs.timestamp)).limit(200);
     }
     return db.select().from(auditLogs).orderBy(desc(auditLogs.timestamp)).limit(200);
+  }
+
+  async getAdjusterPlaybook(adjusterId: string, orgId: string): Promise<AdjusterPlaybook | undefined> {
+    const [playbook] = await db.select().from(adjusterPlaybooks).where(
+      and(eq(adjusterPlaybooks.adjusterId, adjusterId), eq(adjusterPlaybooks.organizationId, orgId))
+    );
+    return playbook;
+  }
+
+  async createAdjusterPlaybook(playbook: InsertAdjusterPlaybook): Promise<AdjusterPlaybook> {
+    const [created] = await db.insert(adjusterPlaybooks).values(playbook).returning();
+    return created;
+  }
+
+  async updateAdjusterPlaybook(id: string, orgId: string, data: Partial<AdjusterPlaybook>): Promise<AdjusterPlaybook | undefined> {
+    const [updated] = await db.update(adjusterPlaybooks).set(data).where(
+      and(eq(adjusterPlaybooks.id, id), eq(adjusterPlaybooks.organizationId, orgId))
+    ).returning();
+    return updated;
+  }
+
+  async getIrcCodes(): Promise<IrcCode[]> {
+    return db.select().from(ircCodes);
+  }
+
+  async getIrcCode(id: string): Promise<IrcCode | undefined> {
+    const [code] = await db.select().from(ircCodes).where(eq(ircCodes.id, id));
+    return code;
+  }
+
+  async createIrcCode(code: InsertIrcCode): Promise<IrcCode> {
+    const [created] = await db.insert(ircCodes).values(code).returning();
+    return created;
+  }
+
+  async getSupplementTriggers(claimId: string): Promise<SupplementTrigger[]> {
+    return db.select().from(supplementTriggers).where(eq(supplementTriggers.claimId, claimId)).orderBy(desc(supplementTriggers.createdAt));
+  }
+
+  async createSupplementTrigger(trigger: InsertSupplementTrigger): Promise<SupplementTrigger> {
+    const [created] = await db.insert(supplementTriggers).values(trigger).returning();
+    return created;
+  }
+
+  async createPiiAccessLog(log: InsertPiiAccessLog): Promise<PiiAccessLog> {
+    const [created] = await db.insert(piiAccessLogs).values(log).returning();
+    return created;
+  }
+
+  async getPiiAccessLogs(claimId: string): Promise<PiiAccessLog[]> {
+    return db.select().from(piiAccessLogs).where(eq(piiAccessLogs.claimId, claimId)).orderBy(desc(piiAccessLogs.timestamp));
+  }
+
+  async getEvidenceFiles(orgId: string, claimId?: string): Promise<EvidenceFile[]> {
+    if (claimId) {
+      return db.select().from(evidenceFiles).where(
+        and(eq(evidenceFiles.organizationId, orgId), eq(evidenceFiles.claimId, claimId))
+      ).orderBy(desc(evidenceFiles.uploadedAt));
+    }
+    return db.select().from(evidenceFiles).where(eq(evidenceFiles.organizationId, orgId)).orderBy(desc(evidenceFiles.uploadedAt));
+  }
+
+  async getEvidenceFile(id: string, orgId: string): Promise<EvidenceFile | undefined> {
+    const [file] = await db.select().from(evidenceFiles).where(
+      and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId))
+    );
+    return file;
+  }
+
+  async getEvidenceFileBySha256(sha256: string, orgId: string): Promise<EvidenceFile | undefined> {
+    const [file] = await db.select().from(evidenceFiles).where(
+      and(eq(evidenceFiles.sha256, sha256), eq(evidenceFiles.organizationId, orgId))
+    );
+    return file;
+  }
+
+  async createEvidenceFile(file: InsertEvidenceFile): Promise<EvidenceFile> {
+    const [created] = await db.insert(evidenceFiles).values(file).returning();
+    return created;
+  }
+
+  async updateEvidenceFile(id: string, orgId: string, data: Partial<EvidenceFile>): Promise<EvidenceFile | undefined> {
+    const [updated] = await db.update(evidenceFiles).set(data).where(
+      and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId))
+    ).returning();
+    return updated;
+  }
+
+  async getExtractedEntities(evidenceFileId: string): Promise<ExtractedEntity[]> {
+    return db.select().from(extractedEntities).where(eq(extractedEntities.evidenceFileId, evidenceFileId));
+  }
+
+  async getExtractedEntitiesByClaim(claimId: string): Promise<ExtractedEntity[]> {
+    return db.select().from(extractedEntities).where(eq(extractedEntities.claimId, claimId));
+  }
+
+  async createExtractedEntity(entity: InsertExtractedEntity): Promise<ExtractedEntity> {
+    const [created] = await db.insert(extractedEntities).values(entity).returning();
+    return created;
+  }
+
+  async getClaimDrafts(orgId: string): Promise<ClaimDraft[]> {
+    return db.select().from(claimDrafts).where(eq(claimDrafts.organizationId, orgId)).orderBy(desc(claimDrafts.createdAt));
+  }
+
+  async getClaimDraft(id: string, orgId: string): Promise<ClaimDraft | undefined> {
+    const [draft] = await db.select().from(claimDrafts).where(
+      and(eq(claimDrafts.id, id), eq(claimDrafts.organizationId, orgId))
+    );
+    return draft;
+  }
+
+  async createClaimDraft(draft: InsertClaimDraft): Promise<ClaimDraft> {
+    const [created] = await db.insert(claimDrafts).values(draft).returning();
+    return created;
+  }
+
+  async updateClaimDraft(id: string, orgId: string, data: Partial<ClaimDraft>): Promise<ClaimDraft | undefined> {
+    const [updated] = await db.update(claimDrafts).set(data).where(
+      and(eq(claimDrafts.id, id), eq(claimDrafts.organizationId, orgId))
+    ).returning();
+    return updated;
+  }
+
+  async getAudioRecordings(claimId: string, orgId: string): Promise<AudioRecording[]> {
+    return db.select().from(audioRecordings).where(
+      and(eq(audioRecordings.claimId, claimId), eq(audioRecordings.organizationId, orgId))
+    );
+  }
+
+  async createAudioRecording(recording: InsertAudioRecording): Promise<AudioRecording> {
+    const [created] = await db.insert(audioRecordings).values(recording).returning();
+    return created;
+  }
+
+  async updateAudioRecording(id: string, orgId: string, data: Partial<AudioRecording>): Promise<AudioRecording | undefined> {
+    const [updated] = await db.update(audioRecordings).set(data).where(
+      and(eq(audioRecordings.id, id), eq(audioRecordings.organizationId, orgId))
+    ).returning();
+    return updated;
+  }
+
+  async getTimelineEvents(claimId: string, orgId: string): Promise<TimelineEvent[]> {
+    return db.select().from(timelineEvents).where(
+      and(eq(timelineEvents.claimId, claimId), eq(timelineEvents.organizationId, orgId))
+    ).orderBy(desc(timelineEvents.eventDate));
+  }
+
+  async createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent> {
+    const [created] = await db.insert(timelineEvents).values(event).returning();
+    return created;
   }
 }
 
