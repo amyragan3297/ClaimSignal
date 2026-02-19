@@ -3,9 +3,10 @@ import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum, json, real
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const userRoleEnum = pgEnum("user_role", ["super_admin", "admin", "team_owner", "founder", "standard"]);
+export const userRoleEnum = pgEnum("user_role", ["super_admin", "admin", "team_owner", "founder", "standard", "carrier_analyst"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["trialing", "active", "past_due", "canceled"]);
 export const planTypeEnum = pgEnum("plan_type", ["founder", "pro", "team", "enterprise", "individual"]);
+export const organizationTypeEnum = pgEnum("organization_type", ["contractor", "roofing_firm", "enterprise_operator", "carrier", "tpa"]);
 
 export const claimPhaseEnum = pgEnum("claim_phase", [
   "pre_claim", "filed", "inspected", "initial_determination",
@@ -30,6 +31,7 @@ export const claimDraftStatusEnum = pgEnum("claim_draft_status", ["needs_review"
 export const organizations = pgTable("organizations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  organizationType: organizationTypeEnum("organization_type").default("contractor"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -235,8 +237,46 @@ export const adjusters = pgTable("adjusters", {
   integrityScore: real("integrity_score").default(0),
   escalationScore: real("escalation_score").default(0),
   outcomeMigrationScore: real("outcome_migration_score").default(0),
+  denialRatio: real("denial_ratio").default(0),
+  partialApprovalRatio: real("partial_approval_ratio").default(0),
+  supplementReductionRatio: real("supplement_reduction_ratio").default(0),
+  transcriptDelayLanguageRate: real("transcript_delay_language_rate").default(0),
+  transcriptDeflectionLanguageRate: real("transcript_deflection_language_rate").default(0),
+  ircRejectionRate: real("irc_rejection_rate").default(0),
+  paymentUnderScopeRatio: real("payment_under_scope_ratio").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const adjusterAggregatedMetrics = pgTable("adjuster_aggregated_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adjusterName: text("adjuster_name").notNull(),
+  carrier: text("carrier").notNull(),
+  region: text("region"),
+  timePeriod: text("time_period").notNull(),
+  avgFrictionScore: real("avg_friction_score").default(0),
+  avgDenialRate: real("avg_denial_rate").default(0),
+  avgSupplementApprovalRate: real("avg_supplement_approval_rate").default(0),
+  avgResponseTimeHours: real("avg_response_time_hours").default(0),
+  avgDaysToInitialDetermination: real("avg_days_to_initial_determination").default(0),
+  avgEscalationRate: real("avg_escalation_rate").default(0),
+  avgReinspectionRate: real("avg_reinspection_rate").default(0),
+  avgLifecycleVelocityScore: real("avg_lifecycle_velocity_score").default(0),
+  avgScopeDeltaScore: real("avg_scope_delta_score").default(0),
+  totalClaimsModeled: integer("total_claims_modeled").default(0),
+  totalDenials: integer("total_denials").default(0),
+  totalSupplementsSubmitted: integer("total_supplements_submitted").default(0),
+  totalSupplementsApproved: integer("total_supplements_approved").default(0),
+  totalEscalations: integer("total_escalations").default(0),
+  decisionVarianceScore: real("decision_variance_score").default(0),
+  responseVelocityDeviation: real("response_velocity_deviation").default(0),
+  outlierBehaviorFlag: boolean("outlier_behavior_flag").default(false),
+  supplementInflationIndex: real("supplement_inflation_index").default(0),
+  commonTriggerFrequency: json("common_trigger_frequency"),
+  complianceTrendScore: real("compliance_trend_score").default(0),
+  computedAt: timestamp("computed_at").defaultNow(),
+  periodStart: timestamp("period_start"),
+  periodEnd: timestamp("period_end"),
 });
 
 export const evidenceFiles = pgTable("evidence_files", {
@@ -395,6 +435,76 @@ export const auditLogs = pgTable("audit_logs", {
   ipAddress: text("ip_address"),
 });
 
+export const supplementIntelligence = pgTable("supplement_intelligence", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  claimId: varchar("claim_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  ircCodeReference: text("irc_code_reference"),
+  triggerDetected: boolean("trigger_detected").default(false),
+  triggerSource: triggerSourceEnum("trigger_source"),
+  confidenceScore: real("confidence_score"),
+  financialImpactEstimate: real("financial_impact_estimate"),
+  adjusterResponseOutcome: text("adjuster_response_outcome"),
+  daysToResolution: integer("days_to_resolution"),
+  supplementResistanceScore: real("supplement_resistance_score"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const adjusterIrcBehavior = pgTable("adjuster_irc_behavior", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adjusterId: varchar("adjuster_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  ircCodeReference: text("irc_code_reference").notNull(),
+  triggerFrequency: integer("trigger_frequency").default(0),
+  approvalRate: real("approval_rate").default(0),
+  denialRate: real("denial_rate").default(0),
+  avgTimeToDecision: real("avg_time_to_decision").default(0),
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const communicationSignals = pgTable("communication_signals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  claimId: varchar("claim_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  adjusterId: varchar("adjuster_id"),
+  sourceType: text("source_type"),
+  sourceId: varchar("source_id"),
+  delayLanguageDetected: boolean("delay_language_detected").default(false),
+  coverageLimitationCited: boolean("coverage_limitation_cited").default(false),
+  deflectionLanguageDetected: boolean("deflection_language_detected").default(false),
+  policyReferenceDetected: boolean("policy_reference_detected").default(false),
+  timelineCommitmentDetected: boolean("timeline_commitment_detected").default(false),
+  refusalLanguageDetected: boolean("refusal_language_detected").default(false),
+  escalationResistanceLanguageDetected: boolean("escalation_resistance_language_detected").default(false),
+  sentimentScore: real("sentiment_score"),
+  complianceRiskIndicator: real("compliance_risk_indicator"),
+  communicationRiskScore: real("communication_risk_score"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const playbookInsights = pgTable("playbook_insights", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adjusterId: varchar("adjuster_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  insightType: text("insight_type").notNull(),
+  description: text("description"),
+  frequency: integer("frequency").default(0),
+  recommendedResponseStrategy: text("recommended_response_strategy"),
+  supportingEvidenceCount: integer("supporting_evidence_count").default(0),
+  confidenceScore: real("confidence_score"),
+  generatedAt: timestamp("generated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const scoringWeights = pgTable("scoring_weights", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  metricName: text("metric_name").notNull(),
+  weightValue: real("weight_value").notNull(),
+  activeVersion: text("active_version").notNull().default("v1"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertUserSessionSchema = createInsertSchema(userSessions).omit({ id: true, createdAt: true, lastUsedAt: true });
@@ -403,6 +513,7 @@ export const insertClientSchema = createInsertSchema(clients).omit({ id: true, c
 export const insertClaimSchema = createInsertSchema(claims).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClaimVersionSchema = createInsertSchema(claimVersions).omit({ id: true, changedAt: true });
 export const insertAdjusterSchema = createInsertSchema(adjusters).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAdjusterAggregatedMetricSchema = createInsertSchema(adjusterAggregatedMetrics).omit({ id: true, computedAt: true });
 export const insertSupplementSchema = createInsertSchema(supplements).omit({ id: true, createdAt: true });
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
 export const insertEmailSchema = createInsertSchema(emails).omit({ id: true, createdAt: true });
@@ -418,6 +529,11 @@ export const insertSupplementTriggerSchema = createInsertSchema(supplementTrigge
 export const insertPiiAccessLogSchema = createInsertSchema(piiAccessLogs).omit({ id: true, timestamp: true });
 export const insertFounderAgreementSchema = createInsertSchema(founderAgreements).omit({ id: true, signedAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, timestamp: true });
+export const insertSupplementIntelligenceSchema = createInsertSchema(supplementIntelligence).omit({ id: true, createdAt: true });
+export const insertAdjusterIrcBehaviorSchema = createInsertSchema(adjusterIrcBehavior).omit({ id: true, createdAt: true });
+export const insertCommunicationSignalSchema = createInsertSchema(communicationSignals).omit({ id: true, createdAt: true });
+export const insertPlaybookInsightSchema = createInsertSchema(playbookInsights).omit({ id: true, createdAt: true });
+export const insertScoringWeightSchema = createInsertSchema(scoringWeights).omit({ id: true, createdAt: true });
 
 export const signupSchema = z.object({
   email: z.string().email("Valid email required"),
@@ -425,6 +541,7 @@ export const signupSchema = z.object({
   fullName: z.string().min(2, "Full name required"),
   orgName: z.string().min(2, "Organization name required"),
   planType: z.enum(["founder", "pro", "team", "enterprise"]).default("pro"),
+  organizationType: z.enum(["contractor", "roofing_firm", "enterprise_operator", "carrier", "tpa"]).default("contractor"),
 });
 
 export const registerSchema = signupSchema;
@@ -448,6 +565,8 @@ export type InsertClaim = z.infer<typeof insertClaimSchema>;
 export type ClaimVersion = typeof claimVersions.$inferSelect;
 export type Adjuster = typeof adjusters.$inferSelect;
 export type InsertAdjuster = z.infer<typeof insertAdjusterSchema>;
+export type AdjusterAggregatedMetric = typeof adjusterAggregatedMetrics.$inferSelect;
+export type InsertAdjusterAggregatedMetric = z.infer<typeof insertAdjusterAggregatedMetricSchema>;
 export type Supplement = typeof supplements.$inferSelect;
 export type InsertSupplement = z.infer<typeof insertSupplementSchema>;
 export type Document = typeof documents.$inferSelect;
@@ -476,3 +595,13 @@ export type PiiAccessLog = typeof piiAccessLogs.$inferSelect;
 export type InsertPiiAccessLog = z.infer<typeof insertPiiAccessLogSchema>;
 export type FounderAgreement = typeof founderAgreements.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type SupplementIntelligence = typeof supplementIntelligence.$inferSelect;
+export type InsertSupplementIntelligence = z.infer<typeof insertSupplementIntelligenceSchema>;
+export type AdjusterIrcBehavior = typeof adjusterIrcBehavior.$inferSelect;
+export type InsertAdjusterIrcBehavior = z.infer<typeof insertAdjusterIrcBehaviorSchema>;
+export type CommunicationSignal = typeof communicationSignals.$inferSelect;
+export type InsertCommunicationSignal = z.infer<typeof insertCommunicationSignalSchema>;
+export type PlaybookInsight = typeof playbookInsights.$inferSelect;
+export type InsertPlaybookInsight = z.infer<typeof insertPlaybookInsightSchema>;
+export type ScoringWeight = typeof scoringWeights.$inferSelect;
+export type InsertScoringWeight = z.infer<typeof insertScoringWeightSchema>;

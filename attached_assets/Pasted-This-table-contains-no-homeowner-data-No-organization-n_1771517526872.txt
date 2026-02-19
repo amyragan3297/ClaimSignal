@@ -1,0 +1,137 @@
+This table contains no homeowner data.
+No organization names.
+No addresses.
+
+Pure behavior modeling.
+
+⸻
+
+5️⃣ CARRIER MODE (Layer 3)
+
+If organization_type == carrier:
+
+Carrier sees:
+
+• Adjuster performance internally
+• Trend analysis
+• Friction clusters
+• Escalation distribution
+• Supplement approval efficiency
+• Timeline velocity metrics
+
+Carrier does NOT see homeowner PII across contractors.
+
+Carrier sees aggregated pattern intelligence only.
+
+⸻
+
+6️⃣ PERMISSION MATRIX FOR DUAL-SIDE
+
+Owner:
+	•	Full control
+	•	Can unmask
+	•	Can delete
+
+Contractor Admin:
+	•	Full tenant access
+	•	Masked by default
+	•	Cannot see cross-tenant
+
+Carrier Analyst:
+	•	No PII
+	•	Only aggregated data
+	•	No individual homeowner detail
+
+Enterprise:
+	•	Configurable
+
+⸻
+
+7️⃣ SUPPLEMENT + IRC INTELLIGENCE LAYER
+
+This is neutral and works for both sides.
+
+Contractor:
+	•	Receives supplement triggers
+	•	Sees approval probability
+	•	Sees adjuster playbook
+
+Carrier:
+	•	Sees supplement inflation patterns
+	•	Sees common trigger frequency
+	•	Sees compliance trends
+
+Same engine.
+Different view.
+
+⸻
+
+8️⃣ ADJUSTER PLAYBOOK DESIGN
+
+Playbook has two views.
+
+Contractor View:
+	•	Known denial phrases
+	•	Escalation threshold
+	•	Typical supplement acceptance rate
+	•	Suggested documentation
+
+Carrier View:
+	•	Pattern consistency
+	•	Decision variance
+	•	Response velocity deviation
+	•	Outlier behavior
+
+Same data.
+Different perspective.
+
+⸻
+
+9️⃣ TRANSCRIPT + EMAIL INTELLIGENCE
+
+Transcript engine feeds:
+
+• Friction scoring
+• Escalation scoring
+• Denial language detection
+• Compliance language detection
+
+Contractor sees:
+Escalation advice.
+
+Carrier sees:
+Communication consistency and risk markers.
+
+⸻
+
+10️⃣ MASKING STRATEGY FOR DUAL SYSTEM
+
+PII must never enter aggregated layer.
+
+All aggregation happens on:
+
+adjuster_id
+carrier_name
+organization_type
+time_period
+
+Never homeowner identifiers.
+
+⸻
+
+11️⃣ LONG TERM ACQUISITION STRATEGY
+
+If carrier wants acquisition:
+
+They are buying:
+
+• Behavioral database
+• Friction modeling engine
+• Escalation classification system
+• IRC trigger intelligence
+• Supplement probability engine
+• Communication analytics engine
+
+Not contractor CRM features.
+
+That’s the difference.

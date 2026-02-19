@@ -18,16 +18,25 @@ import {
   type ClaimDraft, type InsertClaimDraft,
   type AudioRecording, type InsertAudioRecording,
   type TimelineEvent, type InsertTimelineEvent,
+  type AdjusterAggregatedMetric, type InsertAdjusterAggregatedMetric,
   type AdjusterPlaybook, type InsertAdjusterPlaybook,
   type IrcCode, type InsertIrcCode,
   type SupplementTrigger, type InsertSupplementTrigger,
   type PiiAccessLog, type InsertPiiAccessLog,
+  type SupplementIntelligence, type InsertSupplementIntelligence,
+  type AdjusterIrcBehavior, type InsertAdjusterIrcBehavior,
+  type CommunicationSignal, type InsertCommunicationSignal,
+  type PlaybookInsight, type InsertPlaybookInsight,
+  type ScoringWeight, type InsertScoringWeight,
   organizations, users, userSessions, billingAccounts,
   claims, claimVersions, adjusters,
   clients, supplements, documents, emails, aiInsights,
   founderAgreements, auditLogs,
   evidenceFiles, extractedEntities, claimDrafts, audioRecordings, timelineEvents,
   adjusterPlaybooks, ircCodes, supplementTriggers, piiAccessLogs,
+  adjusterAggregatedMetrics,
+  supplementIntelligence, adjusterIrcBehavior, communicationSignals, playbookInsights,
+  scoringWeights,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, count, desc, gt, isNull, sql } from "drizzle-orm";
@@ -172,6 +181,34 @@ export interface IStorage {
   // PII Access Logs
   createPiiAccessLog(log: InsertPiiAccessLog): Promise<PiiAccessLog>;
   getPiiAccessLogs(claimId: string): Promise<PiiAccessLog[]>;
+
+  // Aggregated Metrics (Layer 2)
+  getAggregatedMetrics(filters?: { carrier?: string; region?: string; timePeriod?: string }): Promise<AdjusterAggregatedMetric[]>;
+  getAggregatedMetricsByAdjuster(adjusterName: string, carrier: string): Promise<AdjusterAggregatedMetric[]>;
+  upsertAggregatedMetric(metric: InsertAdjusterAggregatedMetric): Promise<AdjusterAggregatedMetric>;
+  deleteAggregatedMetricsByPeriod(timePeriod: string): Promise<void>;
+
+  // Supplement Intelligence
+  getSupplementIntelligence(claimId: string, orgId: string): Promise<SupplementIntelligence[]>;
+  createSupplementIntelligence(data: InsertSupplementIntelligence): Promise<SupplementIntelligence>;
+
+  // Adjuster IRC Behavior
+  getAdjusterIrcBehaviors(adjusterId: string, orgId: string): Promise<AdjusterIrcBehavior[]>;
+  getAdjusterIrcBehaviorByCode(adjusterId: string, ircCodeRef: string, orgId: string): Promise<AdjusterIrcBehavior | undefined>;
+  upsertAdjusterIrcBehavior(data: InsertAdjusterIrcBehavior): Promise<AdjusterIrcBehavior>;
+
+  // Communication Signals
+  getCommunicationSignals(claimId: string, orgId: string): Promise<CommunicationSignal[]>;
+  getCommunicationSignalsByAdjuster(adjusterId: string, orgId: string): Promise<CommunicationSignal[]>;
+  createCommunicationSignal(signal: InsertCommunicationSignal): Promise<CommunicationSignal>;
+
+  // Playbook Insights
+  getPlaybookInsights(adjusterId: string, orgId: string): Promise<PlaybookInsight[]>;
+  createPlaybookInsight(insight: InsertPlaybookInsight): Promise<PlaybookInsight>;
+
+  // Scoring Weights
+  getScoringWeights(activeVersion?: string): Promise<ScoringWeight[]>;
+  upsertScoringWeight(data: InsertScoringWeight): Promise<ScoringWeight>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -657,6 +694,106 @@ export class DatabaseStorage implements IStorage {
 
   async createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent> {
     const [created] = await db.insert(timelineEvents).values(event).returning();
+    return created;
+  }
+
+  async getAggregatedMetrics(filters?: { carrier?: string; region?: string; timePeriod?: string }): Promise<AdjusterAggregatedMetric[]> {
+    let conditions = [];
+    if (filters?.carrier) conditions.push(eq(adjusterAggregatedMetrics.carrier, filters.carrier));
+    if (filters?.region) conditions.push(eq(adjusterAggregatedMetrics.region, filters.region));
+    if (filters?.timePeriod) conditions.push(eq(adjusterAggregatedMetrics.timePeriod, filters.timePeriod));
+    
+    if (conditions.length === 0) {
+      return db.select().from(adjusterAggregatedMetrics).orderBy(desc(adjusterAggregatedMetrics.computedAt));
+    }
+    return db.select().from(adjusterAggregatedMetrics).where(and(...conditions)).orderBy(desc(adjusterAggregatedMetrics.computedAt));
+  }
+
+  async getAggregatedMetricsByAdjuster(adjusterName: string, carrier: string): Promise<AdjusterAggregatedMetric[]> {
+    return db.select().from(adjusterAggregatedMetrics).where(
+      and(eq(adjusterAggregatedMetrics.adjusterName, adjusterName), eq(adjusterAggregatedMetrics.carrier, carrier))
+    ).orderBy(desc(adjusterAggregatedMetrics.computedAt));
+  }
+
+  async upsertAggregatedMetric(metric: InsertAdjusterAggregatedMetric): Promise<AdjusterAggregatedMetric> {
+    const [created] = await db.insert(adjusterAggregatedMetrics).values(metric).returning();
+    return created;
+  }
+
+  async deleteAggregatedMetricsByPeriod(timePeriod: string): Promise<void> {
+    await db.delete(adjusterAggregatedMetrics).where(eq(adjusterAggregatedMetrics.timePeriod, timePeriod));
+  }
+
+  async getSupplementIntelligence(claimId: string, orgId: string): Promise<SupplementIntelligence[]> {
+    return db.select().from(supplementIntelligence).where(
+      and(eq(supplementIntelligence.claimId, claimId), eq(supplementIntelligence.organizationId, orgId))
+    );
+  }
+
+  async createSupplementIntelligence(data: InsertSupplementIntelligence): Promise<SupplementIntelligence> {
+    const [created] = await db.insert(supplementIntelligence).values(data).returning();
+    return created;
+  }
+
+  async getAdjusterIrcBehaviors(adjusterId: string, orgId: string): Promise<AdjusterIrcBehavior[]> {
+    return db.select().from(adjusterIrcBehavior).where(
+      and(eq(adjusterIrcBehavior.adjusterId, adjusterId), eq(adjusterIrcBehavior.organizationId, orgId))
+    );
+  }
+
+  async getAdjusterIrcBehaviorByCode(adjusterId: string, ircCodeRef: string, orgId: string): Promise<AdjusterIrcBehavior | undefined> {
+    const [row] = await db.select().from(adjusterIrcBehavior).where(
+      and(
+        eq(adjusterIrcBehavior.adjusterId, adjusterId),
+        eq(adjusterIrcBehavior.ircCodeReference, ircCodeRef),
+        eq(adjusterIrcBehavior.organizationId, orgId)
+      )
+    );
+    return row;
+  }
+
+  async upsertAdjusterIrcBehavior(data: InsertAdjusterIrcBehavior): Promise<AdjusterIrcBehavior> {
+    const [created] = await db.insert(adjusterIrcBehavior).values(data).returning();
+    return created;
+  }
+
+  async getCommunicationSignals(claimId: string, orgId: string): Promise<CommunicationSignal[]> {
+    return db.select().from(communicationSignals).where(
+      and(eq(communicationSignals.claimId, claimId), eq(communicationSignals.organizationId, orgId))
+    );
+  }
+
+  async getCommunicationSignalsByAdjuster(adjusterId: string, orgId: string): Promise<CommunicationSignal[]> {
+    return db.select().from(communicationSignals).where(
+      and(eq(communicationSignals.adjusterId, adjusterId), eq(communicationSignals.organizationId, orgId))
+    );
+  }
+
+  async createCommunicationSignal(signal: InsertCommunicationSignal): Promise<CommunicationSignal> {
+    const [created] = await db.insert(communicationSignals).values(signal).returning();
+    return created;
+  }
+
+  async getPlaybookInsights(adjusterId: string, orgId: string): Promise<PlaybookInsight[]> {
+    return db.select().from(playbookInsights).where(
+      and(eq(playbookInsights.adjusterId, adjusterId), eq(playbookInsights.organizationId, orgId))
+    );
+  }
+
+  async createPlaybookInsight(insight: InsertPlaybookInsight): Promise<PlaybookInsight> {
+    const [created] = await db.insert(playbookInsights).values(insight).returning();
+    return created;
+  }
+
+  async getScoringWeights(activeVersion?: string): Promise<ScoringWeight[]> {
+    if (activeVersion) {
+      return db.select().from(scoringWeights).where(eq(scoringWeights.activeVersion, activeVersion));
+    }
+    return db.select().from(scoringWeights);
+  }
+
+  async upsertScoringWeight(data: InsertScoringWeight): Promise<ScoringWeight> {
+    const [created] = await db.insert(scoringWeights).values(data).returning();
     return created;
   }
 }

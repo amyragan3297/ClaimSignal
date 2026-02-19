@@ -119,9 +119,37 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 - **Intelligence scores:** frictionScore, scopeDeltaScore, escalationLevel (0-5), outcomeMigrationDelta, approvalProbability
 - **Financial fields:** rcvAmount, acvAmount, deductible, supplementAmountTotal, finalPaidAmount
 
+### Dual-Sided Intelligence Architecture
+- **Organization types:** contractor, roofing_firm, enterprise_operator, carrier, tpa (organizationTypeEnum on organizations table)
+- **Three data layers:** Layer 1 (Private Tenant Data), Layer 2 (Aggregated Anonymous Behavioral Data), Layer 3 (Carrier Intelligence)
+- **Layer 2 table:** adjuster_aggregated_metrics — no PII, no org names, no addresses; aggregated by adjuster_name + carrier + time_period
+- **Carrier mode:** Carriers see aggregated pattern intelligence only, no homeowner PII
+- **Roles:** super_admin, admin, team_owner, founder, standard, carrier_analyst
+
+### Intelligence Core v2 — Master Scoring Model
+- **4 master scores:** adjuster_friction_score, claim_friction_score, supplement_resistance_score, communication_risk_score
+- **Adjuster behavioral metrics:** denialRatio, partialApprovalRatio, supplementReductionRatio, transcriptDelayLanguageRate, transcriptDeflectionLanguageRate, ircRejectionRate, paymentUnderScopeRatio
+- **Tables:** supplement_intelligence, adjuster_irc_behavior, communication_signals, playbook_insights, scoring_weights
+- **Configurable weights:** scoring_weights table with metric_name, weight_value, active_version; defaults seeded on startup
+- **Scoring pipeline:** computeFullClaimScoring() computes all scores for a claim from supplement intelligence + communication signals + IRC conflicts + lifecycle velocity
+- **Aggregation engine:** computeAggregatedMetrics() cross-tenant anonymous aggregation for Layer 2
+
+### Intelligence API Routes
+- `GET/POST /api/intelligence/supplements/:claimId` - Supplement intelligence per claim
+- `GET/POST /api/intelligence/irc-behavior/:adjusterId` - Adjuster IRC behavior patterns
+- `GET/POST /api/intelligence/signals/:claimId` - Communication signals per claim
+- `GET /api/intelligence/signals/adjuster/:adjusterId` - Communication signals per adjuster
+- `GET/POST /api/intelligence/playbook/:adjusterId` - Playbook insights per adjuster
+- `GET /api/intelligence/scoring/claim/:claimId` - Full claim scoring pipeline
+- `GET /api/intelligence/scoring/adjuster/:adjusterId` - Adjuster friction score
+- `GET/POST /api/intelligence/weights` - Scoring weights (POST super_admin only)
+- `GET /api/intelligence/aggregated` - Aggregated metrics (Layer 2) with ?carrier, ?region, ?timePeriod filters
+- `POST /api/intelligence/aggregated/compute` - Trigger aggregation (super_admin only)
+
 ### Admin Access
 - Default platform owner: `admin@claimsignal.com` / `ClaimSignal2026!`
 - Auto-seeded on first startup with role: super_admin
+- Default scoring weights (v1) seeded on first startup
 
 ## Recent Changes
 - 2026-02-19: Complete rebuild - all backend files rewritten for new 10-table schema

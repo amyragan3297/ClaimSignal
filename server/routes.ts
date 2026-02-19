@@ -8,7 +8,9 @@ import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked } from "./maski
 import { createCheckoutSession, handleWebhookEvent } from "./billing";
 import exportsRouter from "./exports";
 import evidenceRouter from "./evidence";
+import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity } from "./scoring";
+import { seedDefaultWeights } from "./scoring";
 import { createHash } from "crypto";
 import {
   type AuthRequest,
@@ -445,6 +447,7 @@ export async function registerRoutes(
   });
 
   app.use("/api/evidence", requireAuth, requireActiveSubscription, evidenceRouter);
+  app.use("/api/intelligence", requireAuth, requireActiveSubscription, intelligenceRouter);
 
   app.use("/api", exportsRouter);
 
@@ -754,6 +757,7 @@ export async function registerRoutes(
   });
 
   seedPlatformOwner();
+  seedDefaultWeights().catch(console.error);
 
   return httpServer;
 }
