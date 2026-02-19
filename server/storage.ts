@@ -46,6 +46,15 @@ export interface IStorage {
   getAdjusters(orgId: string): Promise<Adjuster[]>;
   createAdjuster(adjuster: InsertAdjuster): Promise<Adjuster>;
   getAdjusterCount(orgId: string): Promise<number>;
+
+  getAllUsers(): Promise<User[]>;
+  getAllOrgs(): Promise<Org[]>;
+  getAllSubscriptions(): Promise<Subscription[]>;
+  getAllOrgMembers(): Promise<OrgMember[]>;
+  getAllClaims(): Promise<Claim[]>;
+  getTotalClaimCount(): Promise<number>;
+  setUserAdmin(userId: string, isAdmin: boolean): Promise<User | undefined>;
+  updateUserTier(orgId: string, tier: string): Promise<Subscription | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -186,6 +195,41 @@ export class DatabaseStorage implements IStorage {
   async getAdjusterCount(orgId: string): Promise<number> {
     const result = await db.select({ count: count() }).from(adjusters).where(eq(adjusters.orgId, orgId));
     return result[0]?.count ?? 0;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users);
+  }
+
+  async getAllOrgs(): Promise<Org[]> {
+    return db.select().from(orgs);
+  }
+
+  async getAllSubscriptions(): Promise<Subscription[]> {
+    return db.select().from(subscriptions);
+  }
+
+  async getAllOrgMembers(): Promise<OrgMember[]> {
+    return db.select().from(orgMembers);
+  }
+
+  async getAllClaims(): Promise<Claim[]> {
+    return db.select().from(claims);
+  }
+
+  async getTotalClaimCount(): Promise<number> {
+    const result = await db.select({ count: count() }).from(claims);
+    return result[0]?.count ?? 0;
+  }
+
+  async setUserAdmin(userId: string, isAdmin: boolean): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ isAdmin }).where(eq(users.id, userId)).returning();
+    return updated;
+  }
+
+  async updateUserTier(orgId: string, tier: string): Promise<Subscription | undefined> {
+    const [updated] = await db.update(subscriptions).set({ tier: tier as any }).where(eq(subscriptions.orgId, orgId)).returning();
+    return updated;
   }
 }
 

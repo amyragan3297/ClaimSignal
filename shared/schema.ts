@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   fullName: text("full_name").notNull(),
   isAdmin: boolean("is_admin").default(false),
+  isPlatformOwner: boolean("is_platform_owner").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -93,6 +94,29 @@ export const claims = pgTable("claims", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const auditActionEnum = pgEnum("audit_action", ["IMPERSONATION_START", "IMPERSONATION_END"]);
+
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminUserId: varchar("admin_user_id").notNull(),
+  targetUserId: varchar("target_user_id").notNull(),
+  actionType: auditActionEnum("action_type").notNull(),
+  ipAddress: text("ip_address"),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const impersonationSessions = pgTable("impersonation_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminUserId: varchar("admin_user_id").notNull(),
+  targetUserId: varchar("target_user_id").notNull(),
+  targetOrgId: varchar("target_org_id").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  active: boolean("active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertOrgSchema = createInsertSchema(orgs).omit({ id: true, createdAt: true });
 export const insertOrgMemberSchema = createInsertSchema(orgMembers).omit({ id: true });
@@ -128,3 +152,5 @@ export type Adjuster = typeof adjusters.$inferSelect;
 export type InsertAdjuster = z.infer<typeof insertAdjusterSchema>;
 export type Claim = typeof claims.$inferSelect;
 export type InsertClaim = z.infer<typeof insertClaimSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type ImpersonationSession = typeof impersonationSessions.$inferSelect;

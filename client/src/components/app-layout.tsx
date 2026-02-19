@@ -25,13 +25,15 @@ import {
   Shield,
   LogOut,
   Loader2,
+  Lock,
 } from "lucide-react";
 
 const navItems = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Claims", href: "/claims", icon: FileText },
-  { title: "Billing", href: "/billing", icon: CreditCard },
-  { title: "Founder Agreement", href: "/legal/founder", icon: Shield },
+  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, adminOnly: false },
+  { title: "Claims", href: "/claims", icon: FileText, adminOnly: false },
+  { title: "Billing", href: "/billing", icon: CreditCard, adminOnly: false },
+  { title: "Founder Agreement", href: "/legal/founder", icon: Shield, adminOnly: false },
+  { title: "Admin", href: "/admin", icon: Lock, adminOnly: true },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -76,7 +78,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {navItems.map((item) => {
+                  {navItems.filter((item) => !item.adminOnly || user?.isAdmin).map((item) => {
                     const isActive = location === item.href || location.startsWith(item.href + "/");
                     return (
                       <SidebarMenuItem key={item.title}>

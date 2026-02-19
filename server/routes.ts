@@ -24,6 +24,17 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  const user = await storage.getUser(req.session.userId);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -139,6 +150,7 @@ export async function registerRoutes(
         membership: membership ? { role: membership.role } : { role: "member" },
         subscription: subscription || null,
         founderAgreement: founderAgreement || null,
+        isAdmin: !!user.isAdmin,
       });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -363,7 +375,138 @@ export async function registerRoutes(
     }
   });
 
+  // --- Admin routes ---
+  app.get("/api/admin/overview", requireAdmin, async (_req, res) => {
+    try {
+      const [allUsers, allOrgs, allSubs, totalClaims, founderCount] = await Promise.all([
+        storage.getAllUsers(),
+        storage.getAllOrgs(),
+        storage.getAllSubscriptions(),
+        storage.getTotalClaimCount(),
+        storage.getFounderCount(),
+      ]);
+      res.json({
+        totalUsers: allUsers.length,
+        totalOrgs: allOrgs.length,
+        totalSubscriptions: allSubs.length,
+        totalClaims,
+        founderCount,
+        founderMax: 3,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/admin/users", requireAdmin, async (_req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const allMembers = await storage.getAllOrgMembers();
+      const allOrgs = await storage.getAllOrgs();
+      const allSubs = await storage.getAllSubscriptions();
+
+      const enriched = allUsers.map((u) => {
+        const { password, ...safeUser } = u;
+        const membership = allMembers.find((m) => m.userId === u.id);
+        const org = membership ? allOrgs.find((o) => o.id === membership.orgId) : null;
+        const subscription = org ? allSubs.find((s) => s.orgId === org.id) : null;
+        return {
+          ...safeUser,
+          orgName: org?.name || null,
+          orgId: org?.id || null,
+          role: membership?.role || null,
+          tier: subscription?.tier || null,
+          subscriptionStatus: subscription?.status || null,
+        };
+      });
+
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/admin/subscriptions", requireAdmin, async (_req, res) => {
+    try {
+      const allSubs = await storage.getAllSubscriptions();
+      const allOrgs = await storage.getAllOrgs();
+
+      const enriched = allSubs.map((s) => {
+        const org = allOrgs.find((o) => o.id === s.orgId);
+        return {
+          ...s,
+          orgName: org?.name || "Unknown",
+        };
+      });
+
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/tier", requireAdmin, async (req, res) => {
+    try {
+      const { tier } = req.body;
+      if (!["founder", "pro", "team", "enterprise"].includes(tier)) {
+        return res.status(400).json({ message: "Invalid tier" });
+      }
+
+      if (tier === "founder") {
+        const founderCount = await storage.getFounderCount();
+        if (founderCount >= 3) {
+          return res.status(400).json({ message: "Founder tier is at capacity (3/3)" });
+        }
+      }
+
+      const members = await storage.getAllOrgMembers();
+      const membership = members.find((m) => m.userId === req.params.id);
+      if (!membership) {
+        return res.status(404).json({ message: "User org not found" });
+      }
+
+      const updated = await storage.updateUserTier(membership.orgId, tier);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Seed admin account on startup
+  seedAdmin();
+
   return httpServer;
+}
+
+async function seedAdmin() {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) return;
+
+  const existing = await storage.getUserByEmail(adminEmail);
+  if (existing) {
+    if (!existing.isAdmin) {
+      await storage.setUserAdmin(existing.id, true);
+    }
+    return;
+  }
+
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
+  const user = await storage.createUser({
+    email: adminEmail,
+    password: hashedPassword,
+    fullName: "ClaimSignal Admin",
+  });
+  await storage.setUserAdmin(user.id, true);
+
+  const org = await storage.createOrg({ name: "ClaimSignal", type: "individual" });
+  await storage.addOrgMember(org.id, user.id, "owner");
+  await storage.createSubscription({
+    orgId: org.id,
+    tier: "enterprise",
+    status: "active",
+    seatLimit: 999,
+  });
 }
 
 async function findUserOrg(userId: string) {

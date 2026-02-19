@@ -10,6 +10,7 @@ interface AuthUser {
   membership: { role: string };
   subscription: Subscription | null;
   founderAgreement: FounderAgreement | null;
+  isAdmin: boolean;
 }
 
 interface AuthContextType {
