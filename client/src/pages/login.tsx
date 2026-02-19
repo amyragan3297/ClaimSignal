@@ -195,7 +195,7 @@ export default function LoginPage() {
                       <SelectContent>
                         <SelectItem value="pro" data-testid="select-item-pro">Pro - $79/mo</SelectItem>
                         <SelectItem value="team" data-testid="select-item-team">Team - $149/mo</SelectItem>
-                        <SelectItem value="founder" data-testid="select-item-founder">Founder - $249/mo (14-day trial, limited spots)</SelectItem>
+                        <SelectItem value="founder" data-testid="select-item-founder">Founding Partner - $99/mo (14-day trial, invitation only)</SelectItem>
                         <SelectItem value="enterprise" data-testid="select-item-enterprise">Enterprise - Contact sales</SelectItem>
                       </SelectContent>
                     </Select>

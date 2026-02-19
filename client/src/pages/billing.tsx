@@ -93,7 +93,7 @@ export default function BillingPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Price</span>
               <span className="text-sm font-medium" data-testid="text-plan-price">
-                {billing?.planType === "founder" ? "$249/mo"
+                {billing?.planType === "founder" ? "$99/mo"
                   : billing?.planType === "pro" ? "$79/mo"
                   : billing?.planType === "team" ? "$149/mo"
                   : billing?.planType === "enterprise" ? "Custom"

@@ -296,11 +296,11 @@ export default function Homepage() {
             <Card className="border-primary" data-testid="card-pricing-founder">
               <CardContent className="p-6">
                 <div className="mb-6">
-                  <Badge variant="secondary" className="mb-3" data-testid="badge-founder-spots">Limited - 3 Spots</Badge>
-                  <h3 className="text-lg font-bold mb-1">Founder</h3>
-                  <p className="text-sm text-muted-foreground mb-4">For early adopters</p>
+                  <Badge variant="secondary" className="mb-3" data-testid="badge-founder-spots">Invitation Only - 3 Spots</Badge>
+                  <h3 className="text-lg font-bold mb-1">Founding Partner</h3>
+                  <p className="text-sm text-muted-foreground mb-4">For founding collaborators</p>
                   <div>
-                    <span className="text-3xl font-bold">$249</span>
+                    <span className="text-3xl font-bold">$99</span>
                     <span className="text-muted-foreground">/mo</span>
                   </div>
                 </div>
@@ -309,8 +309,8 @@ export default function Homepage() {
                     "Full unmasked data access",
                     "All 6 intelligence engines",
                     "14-day free trial",
-                    "Founder advisory input",
-                    "Permanently locked pricing",
+                    "Roadmap collaboration eligibility",
+                    "Price locked permanently",
                     "Priority support",
                   ].map((feature) => (
                     <div key={feature} className="flex items-center gap-2 text-sm">
