@@ -63,7 +63,7 @@ export default function AdminPage() {
     },
   });
 
-  if (!auth?.isPlatformOwner) {
+  if (!auth?.isPlatformOwner && auth?.user?.role !== "super_admin") {
     return <Redirect to="/dashboard" />;
   }
 

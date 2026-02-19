@@ -52,8 +52,9 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 - JWT-based with 15-minute access tokens and 30-day refresh tokens
 - Refresh tokens stored as SHA-256 hashes in `user_sessions` table
 - Token rotation on refresh (old token revoked, new one issued)
+- **Roles:** `super_admin`, `admin`, `founder`, `standard` (userRoleEnum)
+- **super_admin** role = platform owner, has full admin panel access, impersonation, all data visibility
 - Billing gate: Access only if `subscription_status = active` OR `(trialing AND trial_end_date > now())`
-- Platform owner can impersonate users with full audit logging
 - Session secret via `SESSION_SECRET` env var
 
 ### Billing Model

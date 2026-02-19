@@ -182,7 +182,7 @@ export async function registerRoutes(
         org,
         billing: billing || null,
         founderAgreement: founderAgreement || null,
-        isPlatformOwner: !!user.isPlatformOwner,
+        isPlatformOwner: !!user.isPlatformOwner || user.role === "super_admin",
         isImpersonation: req.auth!.isImpersonation,
       });
     } catch (err: any) {
@@ -646,8 +646,8 @@ async function seedPlatformOwner() {
 
   const existing = await storage.getUserByEmail(email);
   if (existing) {
-    if (!existing.isPlatformOwner) {
-      await storage.updateUser(existing.id, { isPlatformOwner: true });
+    if (!existing.isPlatformOwner || existing.role !== "super_admin") {
+      await storage.updateUser(existing.id, { isPlatformOwner: true, role: "super_admin" });
     }
     return;
   }
@@ -660,7 +660,7 @@ async function seedPlatformOwner() {
     passwordHash,
     fullName: "Platform Owner",
     organizationId: org.id,
-    role: "admin",
+    role: "super_admin",
     isPlatformOwner: true,
     founderFlag: false,
   });

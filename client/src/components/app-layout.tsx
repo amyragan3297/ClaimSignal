@@ -110,7 +110,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       </SidebarMenuItem>
                     );
                   })}
-                  {data.isPlatformOwner && (
+                  {(data.isPlatformOwner || data.user?.role === "super_admin") && (
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild
