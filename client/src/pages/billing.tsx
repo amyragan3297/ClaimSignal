@@ -85,7 +85,7 @@ export default function BillingPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base" data-testid="text-plan-name">
-              {billing?.planType ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1) : "Free"} Plan
+              {billing?.planType === "founder" ? "Founding Partner" : billing?.planType ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1) : "Free"} Plan
             </CardTitle>
             <Shield className="w-4 h-4 text-primary" />
           </CardHeader>
@@ -94,8 +94,8 @@ export default function BillingPage() {
               <span className="text-sm text-muted-foreground">Price</span>
               <span className="text-sm font-medium" data-testid="text-plan-price">
                 {billing?.planType === "founder" ? "$99/mo"
-                  : billing?.planType === "pro" ? "$79/mo"
-                  : billing?.planType === "team" ? "$149/mo"
+                  : billing?.planType === "pro" ? "$199/mo"
+                  : billing?.planType === "team" ? "$399/mo"
                   : billing?.planType === "enterprise" ? "Custom"
                   : "N/A"}
               </span>

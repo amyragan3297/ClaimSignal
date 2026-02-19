@@ -193,8 +193,8 @@ export default function LoginPage() {
                         <SelectValue placeholder="Select a plan" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="pro" data-testid="select-item-pro">Pro - $79/mo</SelectItem>
-                        <SelectItem value="team" data-testid="select-item-team">Team - $149/mo</SelectItem>
+                        <SelectItem value="pro" data-testid="select-item-pro">Pro - $199/mo</SelectItem>
+                        <SelectItem value="team" data-testid="select-item-team">Team - $399/mo</SelectItem>
                         <SelectItem value="founder" data-testid="select-item-founder">Founding Partner - $99/mo (14-day trial, invitation only)</SelectItem>
                         <SelectItem value="enterprise" data-testid="select-item-enterprise">Enterprise - Contact sales</SelectItem>
                       </SelectContent>

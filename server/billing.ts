@@ -131,6 +131,11 @@ export async function handleWebhookEvent(
       await handleSubscriptionDeleted(subscription);
       break;
     }
+    case "invoice.payment_failed": {
+      const invoice = event.data.object;
+      await handlePaymentFailed(invoice);
+      break;
+    }
   }
 
   return { received: true };
@@ -204,6 +209,31 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   }
 
   log(`Subscription canceled for org ${orgId}`, "stripe");
+}
+
+async function handlePaymentFailed(invoice: any) {
+  const sub = invoice.subscription;
+  const subscriptionId = typeof sub === "string" ? sub : sub?.id;
+  if (!subscriptionId) return;
+
+  const stripe = getStripe();
+  if (!stripe) return;
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const orgId = subscription.metadata?.org_id;
+  if (!orgId) {
+    log("Payment failed invoice missing org_id in subscription metadata", "stripe");
+    return;
+  }
+
+  const existing = await storage.getBillingAccountByOrg(orgId);
+  if (existing) {
+    await storage.updateBillingAccount(existing.id, {
+      subscriptionStatus: "past_due",
+    });
+  }
+
+  log(`Payment failed for org ${orgId}, subscription ${subscriptionId}`, "stripe");
 }
 
 function mapStripeStatus(stripeStatus: string): string {

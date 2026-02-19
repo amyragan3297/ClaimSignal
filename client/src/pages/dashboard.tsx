@@ -67,8 +67,8 @@ export default function DashboardPage() {
                 <Shield className="w-5 h-5 text-destructive" />
               </div>
               <div>
-                <p className="font-medium text-sm">Founder Agreement Required</p>
-                <p className="text-xs text-muted-foreground">Sign the founder agreement to unlock full unmasked data access.</p>
+                <p className="font-medium text-sm">Founding Partner Agreement Required</p>
+                <p className="text-xs text-muted-foreground">Sign the Founding Partner agreement to unlock full unmasked data access.</p>
               </div>
             </div>
             <Link href="/legal/founder">

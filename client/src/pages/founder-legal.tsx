@@ -30,8 +30,8 @@ export default function FounderLegalPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-founder-title">Founder Agreement</h1>
-        <p className="text-sm text-muted-foreground">Review and sign the founder data access agreement</p>
+        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-founder-title">Founding Partner Agreement</h1>
+        <p className="text-sm text-muted-foreground">Review and sign the Founding Partner data access and co-branding agreement</p>
       </div>
 
       {agreement ? (
@@ -42,7 +42,7 @@ export default function FounderLegalPage() {
             </div>
             <h3 className="text-lg font-semibold">Agreement Signed</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              You signed the Founder Agreement on {new Date(agreement.signedAt).toLocaleDateString()}.
+              You signed the Founding Partner Agreement on {agreement.signedAt ? new Date(agreement.signedAt).toLocaleDateString() : "N/A"}.
               You have full unmasked data access.
             </p>
             <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
@@ -55,34 +55,42 @@ export default function FounderLegalPage() {
         <>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base">Founder Data Access Agreement</CardTitle>
+              <CardTitle className="text-base">Founding Partner Agreement</CardTitle>
               <Badge variant="outline">Version 1.0</Badge>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-muted-foreground leading-relaxed">
               <p>
-                By signing this Founder Agreement, you acknowledge and agree to the following terms
-                as a Founder-tier user of the ClaimSignal platform:
+                By signing this Founding Partner Agreement, you acknowledge and agree to the following terms
+                as a Founding Partner of the ClaimSignal platform:
               </p>
               <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <Shield className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                  <p><strong className="text-foreground">Founding Partner Pricing:</strong> Your subscription rate of $99/month is permanently locked for the lifetime of your active subscription. This rate will never increase as long as your subscription remains active and in good standing.</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Shield className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                  <p><strong className="text-foreground">Cancellation Policy:</strong> If you cancel your Founding Partner subscription for any reason, the $99/month founding rate is forfeited permanently. Resubscription will be at the then-current public pricing. This pricing cannot be reinstated once lost.</p>
+                </div>
                 <div className="flex items-start gap-3">
                   <Shield className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                   <p><strong className="text-foreground">Data Access:</strong> You will receive full unmasked access to claim data, adjuster records, and organizational intelligence within your tenant boundary.</p>
                 </div>
                 <div className="flex items-start gap-3">
                   <Shield className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                  <p><strong className="text-foreground">Confidentiality:</strong> All data accessed through the platform is confidential and shall not be disclosed to unauthorized parties.</p>
+                  <p><strong className="text-foreground">Roadmap Collaboration:</strong> As a Founding Partner, you are eligible for product roadmap collaboration, including advisory input on feature direction, early access to new capabilities, and priority consideration for feature requests.</p>
                 </div>
                 <div className="flex items-start gap-3">
                   <Shield className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                  <p><strong className="text-foreground">Compliance:</strong> You agree to use the platform in compliance with all applicable laws and insurance regulations.</p>
+                  <p><strong className="text-foreground">Co-Branding &amp; Logo Usage:</strong> Both parties grant written permission for mutual logo use in co-branded materials, case studies, and marketing collateral. Either party may revoke this permission with 30 days written notice.</p>
                 </div>
                 <div className="flex items-start gap-3">
                   <Shield className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                  <p><strong className="text-foreground">Audit Trail:</strong> All actions taken on the platform are logged and may be audited. You consent to this monitoring.</p>
+                  <p><strong className="text-foreground">Confidentiality:</strong> All data accessed through the platform is confidential and shall not be disclosed to unauthorized parties. Both parties agree to maintain confidentiality of shared business information.</p>
                 </div>
                 <div className="flex items-start gap-3">
                   <Shield className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                  <p><strong className="text-foreground">Founder Benefits:</strong> As a Founder, you receive permanently locked pricing, early access to new features, and advisory input on product direction.</p>
+                  <p><strong className="text-foreground">Compliance &amp; Audit:</strong> You agree to use the platform in compliance with all applicable laws and insurance regulations. All actions taken on the platform are logged and may be audited.</p>
                 </div>
               </div>
             </CardContent>
@@ -91,7 +99,7 @@ export default function FounderLegalPage() {
           <div className="text-center">
             <Button onClick={handleSign} disabled={loading} data-testid="button-sign-agreement">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Sign Founder Agreement
+              Sign Founding Partner Agreement
             </Button>
             <p className="text-xs text-muted-foreground mt-2">
               Signing is binding and will be recorded with your IP address and timestamp.

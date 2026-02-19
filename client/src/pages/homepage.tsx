@@ -233,15 +233,15 @@ export default function Homepage() {
               <CardContent className="p-6">
                 <div className="mb-6">
                   <h3 className="text-lg font-bold mb-1">Pro</h3>
-                  <p className="text-sm text-muted-foreground mb-4">For individual contractors</p>
+                  <p className="text-sm text-muted-foreground mb-4">Independent contractor / high volume operator</p>
                   <div>
-                    <span className="text-3xl font-bold">$79</span>
+                    <span className="text-3xl font-bold">$199</span>
                     <span className="text-muted-foreground">/mo</span>
                   </div>
                 </div>
                 <div className="space-y-3 mb-8">
                   {[
-                    "Masked data access",
+                    "Full platform access",
                     "6 intelligence engines",
                     "Claims lifecycle tracking",
                     "Adjuster metrics",
@@ -265,9 +265,9 @@ export default function Homepage() {
               <CardContent className="p-6">
                 <div className="mb-6">
                   <h3 className="text-lg font-bold mb-1">Team</h3>
-                  <p className="text-sm text-muted-foreground mb-4">For growing teams</p>
+                  <p className="text-sm text-muted-foreground mb-4">Multi-user account</p>
                   <div>
-                    <span className="text-3xl font-bold">$149</span>
+                    <span className="text-3xl font-bold">$399</span>
                     <span className="text-muted-foreground">/mo</span>
                   </div>
                 </div>
@@ -332,14 +332,14 @@ export default function Homepage() {
               <CardContent className="p-6">
                 <div className="mb-6">
                   <h3 className="text-lg font-bold mb-1">Enterprise</h3>
-                  <p className="text-sm text-muted-foreground mb-4">For large organizations</p>
+                  <p className="text-sm text-muted-foreground mb-4">Custom or high-scale organization</p>
                   <div>
                     <span className="text-3xl font-bold">Custom</span>
                   </div>
                 </div>
                 <div className="space-y-3 mb-8">
                   {[
-                    "Everything in Founder",
+                    "Everything in Team",
                     "Unlimited seats",
                     "Custom integrations",
                     "Dedicated support",
