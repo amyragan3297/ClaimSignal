@@ -3,9 +3,10 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
-import { signupSchema, loginSchema } from "@shared/schema";
+import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema } from "@shared/schema";
 import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked } from "./masking";
 import { createCheckoutSession, handleWebhookEvent } from "./billing";
+import exportsRouter from "./exports";
 import { createHash } from "crypto";
 import {
   type AuthRequest,
@@ -436,6 +437,83 @@ export async function registerRoutes(
       res.json(metrics || null);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.use("/api", exportsRouter);
+
+  app.get("/api/clients", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const clientsList = await storage.getClients(req.auth!.organizationId);
+      res.json(clientsList);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/clients/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const client = await storage.getClient(req.params.id as string, req.auth!.organizationId);
+      if (!client) return res.status(404).json({ message: "Client not found" });
+      res.json(client);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/clients", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const parsed = insertClientSchema.parse({
+        ...req.body,
+        organizationId: req.auth!.organizationId,
+      });
+      const client = await storage.createClient(parsed);
+      res.json(client);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  app.put("/api/clients/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const updated = await storage.updateClient(req.params.id as string, req.auth!.organizationId, req.body);
+      if (!updated) return res.status(404).json({ message: "Client not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/claims/:claimId/supplements", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const supps = await storage.getSupplements(req.params.claimId as string, req.auth!.organizationId);
+      res.json(supps);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/claims/:claimId/supplements", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const parsed = insertSupplementSchema.parse({
+        ...req.body,
+        claimId: req.params.claimId as string,
+        organizationId: req.auth!.organizationId,
+      });
+      const supp = await storage.createSupplement(parsed);
+      res.json(supp);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  app.put("/api/supplements/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const updated = await storage.updateSupplement(req.params.id as string, req.auth!.organizationId, req.body);
+      if (!updated) return res.status(404).json({ message: "Supplement not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
     }
   });
 

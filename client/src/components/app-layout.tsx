@@ -26,12 +26,14 @@ import {
   Loader2,
   Lock,
   Users,
+  UserCircle,
   AlertTriangle,
 } from "lucide-react";
 
 const baseNavItems = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Claims", href: "/claims", icon: FileText },
+  { title: "Clients", href: "/clients", icon: UserCircle },
   { title: "Adjusters", href: "/adjusters", icon: Users },
   { title: "Billing", href: "/billing", icon: CreditCard },
 ];

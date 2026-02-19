@@ -7,10 +7,16 @@ import {
   type ClaimVersion,
   type Adjuster, type InsertAdjuster,
   type AdjusterMetrics,
+  type Client, type InsertClient,
+  type Supplement, type InsertSupplement,
+  type Document, type InsertDocument,
+  type Email, type InsertEmail,
+  type AiInsight, type InsertAiInsight,
   type FounderAgreement,
   type AuditLog,
   organizations, users, userSessions, billingAccounts,
   claims, claimVersions, adjusters, adjusterMetrics,
+  clients, supplements, documents, emails, aiInsights,
   founderAgreements, auditLogs,
 } from "@shared/schema";
 import { db } from "./db";
@@ -76,6 +82,25 @@ export interface IStorage {
   createAdjuster(adjuster: InsertAdjuster): Promise<Adjuster>;
   updateAdjuster(id: string, orgId: string, data: Partial<InsertAdjuster>): Promise<Adjuster | undefined>;
   getAdjusterCount(orgId: string): Promise<number>;
+
+  getClients(orgId: string): Promise<Client[]>;
+  getClient(id: string, orgId: string): Promise<Client | undefined>;
+  createClient(client: InsertClient): Promise<Client>;
+  updateClient(id: string, orgId: string, data: Partial<InsertClient>): Promise<Client | undefined>;
+
+  getSupplements(claimId: string, orgId: string): Promise<Supplement[]>;
+  getSupplement(id: string, orgId: string): Promise<Supplement | undefined>;
+  createSupplement(supplement: InsertSupplement): Promise<Supplement>;
+  updateSupplement(id: string, orgId: string, data: Partial<InsertSupplement>): Promise<Supplement | undefined>;
+
+  getDocuments(claimId: string, orgId: string): Promise<Document[]>;
+  createDocument(doc: InsertDocument): Promise<Document>;
+
+  getEmails(claimId: string, orgId: string): Promise<Email[]>;
+  createEmail(email: InsertEmail): Promise<Email>;
+
+  getAiInsights(claimId: string, orgId: string): Promise<AiInsight[]>;
+  createAiInsight(insight: InsertAiInsight): Promise<AiInsight>;
 
   getAdjusterMetrics(adjusterId: string, orgId: string): Promise<AdjusterMetrics | undefined>;
   upsertAdjusterMetrics(data: {
@@ -333,6 +358,71 @@ export class DatabaseStorage implements IStorage {
   async getAdjusterCount(orgId: string): Promise<number> {
     const result = await db.select({ count: count() }).from(adjusters).where(eq(adjusters.organizationId, orgId));
     return result[0]?.count ?? 0;
+  }
+
+  async getClients(orgId: string): Promise<Client[]> {
+    return db.select().from(clients).where(eq(clients.organizationId, orgId));
+  }
+
+  async getClient(id: string, orgId: string): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients).where(and(eq(clients.id, id), eq(clients.organizationId, orgId)));
+    return client;
+  }
+
+  async createClient(client: InsertClient): Promise<Client> {
+    const [created] = await db.insert(clients).values(client).returning();
+    return created;
+  }
+
+  async updateClient(id: string, orgId: string, data: Partial<InsertClient>): Promise<Client | undefined> {
+    const [updated] = await db.update(clients).set(data).where(and(eq(clients.id, id), eq(clients.organizationId, orgId))).returning();
+    return updated;
+  }
+
+  async getSupplements(claimId: string, orgId: string): Promise<Supplement[]> {
+    return db.select().from(supplements).where(and(eq(supplements.claimId, claimId), eq(supplements.organizationId, orgId)));
+  }
+
+  async getSupplement(id: string, orgId: string): Promise<Supplement | undefined> {
+    const [supplement] = await db.select().from(supplements).where(and(eq(supplements.id, id), eq(supplements.organizationId, orgId)));
+    return supplement;
+  }
+
+  async createSupplement(supplement: InsertSupplement): Promise<Supplement> {
+    const [created] = await db.insert(supplements).values(supplement).returning();
+    return created;
+  }
+
+  async updateSupplement(id: string, orgId: string, data: Partial<InsertSupplement>): Promise<Supplement | undefined> {
+    const [updated] = await db.update(supplements).set(data).where(and(eq(supplements.id, id), eq(supplements.organizationId, orgId))).returning();
+    return updated;
+  }
+
+  async getDocuments(claimId: string, orgId: string): Promise<Document[]> {
+    return db.select().from(documents).where(and(eq(documents.claimId, claimId), eq(documents.organizationId, orgId)));
+  }
+
+  async createDocument(doc: InsertDocument): Promise<Document> {
+    const [created] = await db.insert(documents).values(doc).returning();
+    return created;
+  }
+
+  async getEmails(claimId: string, orgId: string): Promise<Email[]> {
+    return db.select().from(emails).where(and(eq(emails.claimId, claimId), eq(emails.organizationId, orgId)));
+  }
+
+  async createEmail(email: InsertEmail): Promise<Email> {
+    const [created] = await db.insert(emails).values(email).returning();
+    return created;
+  }
+
+  async getAiInsights(claimId: string, orgId: string): Promise<AiInsight[]> {
+    return db.select().from(aiInsights).where(and(eq(aiInsights.claimId, claimId), eq(aiInsights.organizationId, orgId)));
+  }
+
+  async createAiInsight(insight: InsertAiInsight): Promise<AiInsight> {
+    const [created] = await db.insert(aiInsights).values(insight).returning();
+    return created;
   }
 
   async getAdjusterMetrics(adjusterId: string, orgId: string): Promise<AdjusterMetrics | undefined> {

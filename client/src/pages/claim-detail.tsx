@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { Claim } from "@shared/schema";
+import type { Claim, Supplement } from "@shared/schema";
 import {
   ArrowLeft,
   FileText,
@@ -20,8 +20,23 @@ import {
   AlertTriangle,
   Loader2,
   Shield,
+  Download,
+  Plus,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+const createSupplementSchema = z.object({
+  amountRequested: z.coerce.number().min(0, "Amount required"),
+  notes: z.string().optional(),
+});
 
 export default function ClaimDetailPage() {
   const [, params] = useRoute("/claims/:id");
@@ -58,6 +73,53 @@ export default function ClaimDetailPage() {
       toast({ title: "Failed to delete", description: err.message, variant: "destructive" });
     },
   });
+
+  const { data: supplementsList } = useQuery<Supplement[]>({
+    queryKey: ["/api/claims", params?.id, "supplements"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/claims/${params?.id}/supplements`);
+      return res.json();
+    },
+    enabled: !!params?.id,
+  });
+
+  const [suppDialogOpen, setSuppDialogOpen] = useState(false);
+
+  const suppForm = useForm<z.infer<typeof createSupplementSchema>>({
+    resolver: zodResolver(createSupplementSchema),
+    defaultValues: { amountRequested: 0, notes: "" },
+  });
+
+  const createSuppMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof createSupplementSchema>) => {
+      await apiRequest("POST", `/api/claims/${params?.id}/supplements`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", params?.id, "supplements"] });
+      toast({ title: "Supplement added" });
+      setSuppDialogOpen(false);
+      suppForm.reset();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to add supplement", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleExport = async (type: string, format: string) => {
+    try {
+      const res = await apiRequest("GET", `/api/exports/claims/${params?.id}?type=${type}&format=${format}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `claim_${params?.id}_${type}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export downloaded" });
+    } catch (err: any) {
+      toast({ title: "Export failed", description: err.message, variant: "destructive" });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -115,6 +177,38 @@ export default function ClaimDetailPage() {
           >
             {claim.status.replace("_", " ")}
           </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" data-testid="button-export-claim">
+                <Download className="w-4 h-4" />
+                Download
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport("intelligence_summary", "pdf")} data-testid="export-intel-pdf">
+                Intelligence Summary (PDF)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("claim_packet_masked", "pdf")} data-testid="export-masked-pdf">
+                Claim Packet - Masked (PDF)
+              </DropdownMenuItem>
+              {canToggleUnmasked && (
+                <DropdownMenuItem onClick={() => handleExport("claim_packet_unmasked", "pdf")} data-testid="export-unmasked-pdf">
+                  Full Claim Packet - Unmasked (PDF)
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => handleExport("intelligence_summary", "csv")} data-testid="export-intel-csv">
+                Intelligence Summary (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("claim_packet_masked", "csv")} data-testid="export-masked-csv">
+                Claim Packet - Masked (CSV)
+              </DropdownMenuItem>
+              {canToggleUnmasked && (
+                <DropdownMenuItem onClick={() => handleExport("claim_packet_unmasked", "csv")} data-testid="export-unmasked-csv">
+                  Full Claim Packet - Unmasked (CSV)
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="ghost"
             size="icon"
@@ -257,6 +351,70 @@ export default function ClaimDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+          <CardTitle className="text-base font-semibold">Supplements</CardTitle>
+          <Dialog open={suppDialogOpen} onOpenChange={setSuppDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" data-testid="button-add-supplement">
+                <Plus className="w-3 h-3" />
+                Add
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Supplement</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={suppForm.handleSubmit((d) => createSuppMutation.mutate(d))} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Amount Requested ($)</Label>
+                  <Input type="number" step="0.01" data-testid="input-supp-amount" {...suppForm.register("amountRequested")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Input data-testid="input-supp-notes" {...suppForm.register("notes")} />
+                </div>
+                <Button type="submit" className="w-full" disabled={createSuppMutation.isPending} data-testid="button-submit-supplement">
+                  {createSuppMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Submit Supplement"}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </CardHeader>
+        <CardContent>
+          {!supplementsList?.length ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No supplements filed</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Requested</TableHead>
+                  <TableHead>Approved</TableHead>
+                  <TableHead>Denied</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Submitted</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {supplementsList.map((s) => (
+                  <TableRow key={s.id} data-testid={`row-supplement-${s.id}`}>
+                    <TableCell>${s.amountRequested?.toLocaleString() ?? "0"}</TableCell>
+                    <TableCell>${s.amountApproved?.toLocaleString() ?? "0"}</TableCell>
+                    <TableCell>${s.amountDenied?.toLocaleString() ?? "0"}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">{s.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {s.dateSubmitted ? new Date(s.dateSubmitted).toLocaleDateString() : "\u2014"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

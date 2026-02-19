@@ -115,3 +115,11 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 - 2026-02-19: Adjusters page added with fullName, carrier, licenseNumber, region fields
 - 2026-02-19: Admin panel with impersonation and subscription breakdown
 - 2026-02-19: Schema: planTypeEnum supports founder/pro/team/enterprise/individual (legacy)
+- 2026-02-19: Added clients table (homeowner records separate from claims) with CRUD API
+- 2026-02-19: Added supplements table with CRUD API under /api/claims/:id/supplements
+- 2026-02-19: Added documents, emails, ai_insights tables (schema ready, basic CRUD in storage)
+- 2026-02-19: Extended claims with clientId, roofType, shingleType, rcvTotal, acvTotal, deductible, escalationCategory, approvalProbability
+- 2026-02-19: Export system: GET /api/exports/claims/:claimId with ?format=pdf|csv&type=intelligence_summary|claim_packet_masked|claim_packet_unmasked
+- 2026-02-19: Export enforces masking for non-privileged roles, audit logs all exports (EXPORT_MASKED/EXPORT_UNMASKED)
+- 2026-02-19: Clients page with CRUD UI, claim detail page with supplements section and export dropdown
+- 2026-02-19: Navigation updated: Dashboard, Claims, Clients, Adjusters, Billing

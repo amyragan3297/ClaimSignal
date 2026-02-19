@@ -9,6 +9,8 @@ import Homepage from "@/pages/homepage";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
 import ClaimsPage from "@/pages/claims";
+import ClaimDetailPage from "@/pages/claim-detail";
+import ClientsPage from "@/pages/clients";
 import BillingPage from "@/pages/billing";
 import FounderLegalPage from "@/pages/founder-legal";
 import AdminPage from "@/pages/admin";
@@ -22,6 +24,8 @@ function AppRoutes() {
       <Switch>
         <Route path="/dashboard" component={DashboardPage} />
         <Route path="/claims" component={ClaimsPage} />
+        <Route path="/claims/:id" component={ClaimDetailPage} />
+        <Route path="/clients" component={ClientsPage} />
         <Route path="/adjusters" component={AdjustersPage} />
         <Route path="/billing" component={BillingPage} />
         <Route path="/legal/founder" component={FounderLegalPage} />
