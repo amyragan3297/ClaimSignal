@@ -49,7 +49,7 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" data-testid="badge-plan-type">
-            Founder Plan
+            {billing?.planType === "founder" ? "Founding Partner" : billing?.planType ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1) : "Free"} Plan
           </Badge>
           {billing?.subscriptionStatus === "trialing" && daysLeft !== null && (
             <Badge variant="secondary" data-testid="badge-trial-status">

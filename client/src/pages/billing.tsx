@@ -65,7 +65,7 @@ export default function BillingPage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Plan</span>
-              <span className="text-sm font-medium capitalize" data-testid="text-plan-type">{billing?.planType || "None"}</span>
+              <span className="text-sm font-medium" data-testid="text-plan-type">{billing?.planType === "founder" ? "Founding Partner" : billing?.planType ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1) : "None"}</span>
             </div>
             {isTrialing && daysLeft !== null && (
               <div className="flex items-center justify-between">
