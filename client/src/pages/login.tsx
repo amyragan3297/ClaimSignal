@@ -13,6 +13,7 @@ import { Shield, ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { loginSchema, signupSchema } from "@shared/schema";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function LoginPage() {
   const { login, register: registerUser } = useAuth();
@@ -21,6 +22,7 @@ export default function LoginPage() {
 
   const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const defaultTab = searchParams.get("tab") === "register" ? "register" : "login";
+  const defaultPlan = searchParams.get("plan") || "pro";
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -29,7 +31,7 @@ export default function LoginPage() {
 
   const registerForm = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "", fullName: "", orgName: "" },
+    defaultValues: { email: "", password: "", fullName: "", orgName: "", planType: defaultPlan as "pro" | "team" | "founder" | "enterprise" },
   });
 
   const [loginLoading, setLoginLoading] = useState(false);
@@ -48,6 +50,11 @@ export default function LoginPage() {
   }
 
   async function onRegister(data: z.infer<typeof signupSchema>) {
+    if (data.planType === "enterprise") {
+      window.location.href = "mailto:enterprise@claimsignal.com?subject=Enterprise Plan Inquiry";
+      return;
+    }
+
     try {
       setRegisterLoading(true);
       await registerUser(data);
@@ -175,12 +182,38 @@ export default function LoginPage() {
                       <p className="text-xs text-destructive">{registerForm.formState.errors.password.message}</p>
                     )}
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="register-plan">Plan</Label>
+                    <Select
+                      value={registerForm.watch("planType")}
+                      onValueChange={(value) => registerForm.setValue("planType", value as "pro" | "team" | "founder" | "enterprise")}
+                      data-testid="select-register-plan"
+                    >
+                      <SelectTrigger id="register-plan" data-testid="select-trigger-plan">
+                        <SelectValue placeholder="Select a plan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pro" data-testid="select-item-pro">Pro - $79/mo</SelectItem>
+                        <SelectItem value="team" data-testid="select-item-team">Team - $149/mo</SelectItem>
+                        <SelectItem value="founder" data-testid="select-item-founder">Founder - $249/mo (14-day trial, limited spots)</SelectItem>
+                        <SelectItem value="enterprise" data-testid="select-item-enterprise">Enterprise - Contact sales</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button type="submit" className="w-full" disabled={registerLoading} data-testid="button-register-submit">
                     {registerLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Start 14-Day Trial
+                    {registerForm.watch("planType") === "founder"
+                      ? "Start 14-Day Free Trial"
+                      : registerForm.watch("planType") === "enterprise"
+                        ? "Contact Sales"
+                        : "Get Started"}
                   </Button>
                   <p className="text-xs text-center text-muted-foreground">
-                    All signups receive Founder pricing. 14-day free trial included.
+                    {registerForm.watch("planType") === "founder"
+                      ? "14-day free trial. Payment method required."
+                      : registerForm.watch("planType") === "enterprise"
+                        ? "Custom pricing for large organizations."
+                        : "Immediate access. No trial period."}
                   </p>
                 </form>
               </TabsContent>

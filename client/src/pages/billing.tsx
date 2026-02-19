@@ -24,7 +24,7 @@ export default function BillingPage() {
   async function handleCheckout() {
     try {
       setLoading(true);
-      const res = await apiRequest("POST", "/api/billing/checkout");
+      const res = await apiRequest("POST", "/api/billing/checkout", { planType: billing?.planType || "pro" });
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
@@ -84,18 +84,41 @@ export default function BillingPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <CardTitle className="text-base">Founder Plan</CardTitle>
+            <CardTitle className="text-base" data-testid="text-plan-name">
+              {billing?.planType ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1) : "Free"} Plan
+            </CardTitle>
             <Shield className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              All ClaimSignal users are Founders. Your pricing is locked in permanently.
-            </p>
-            <ul className="text-sm space-y-1 text-muted-foreground">
-              <li className="flex items-center gap-2"><Clock className="w-3 h-3 text-primary" /> 14-day free trial</li>
-              <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Full platform access</li>
-              <li className="flex items-center gap-2"><CreditCard className="w-3 h-3 text-primary" /> Locked founder pricing</li>
-            </ul>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Price</span>
+              <span className="text-sm font-medium" data-testid="text-plan-price">
+                {billing?.planType === "founder" ? "$249/mo"
+                  : billing?.planType === "pro" ? "$79/mo"
+                  : billing?.planType === "team" ? "$149/mo"
+                  : billing?.planType === "enterprise" ? "Custom"
+                  : "N/A"}
+              </span>
+            </div>
+            {billing?.planType === "founder" && (
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                <li className="flex items-center gap-2"><Clock className="w-3 h-3 text-primary" /> 14-day free trial</li>
+                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Full unmasked data access</li>
+                <li className="flex items-center gap-2"><CreditCard className="w-3 h-3 text-primary" /> Permanently locked pricing</li>
+              </ul>
+            )}
+            {(billing?.planType === "pro" || billing?.planType === "team") && (
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> No trial - immediate access</li>
+                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Full platform access</li>
+              </ul>
+            )}
+            {billing?.planType === "enterprise" && (
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Custom enterprise plan</li>
+                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Dedicated support</li>
+              </ul>
+            )}
           </CardContent>
         </Card>
       </div>

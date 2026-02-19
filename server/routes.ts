@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import { signupSchema, loginSchema } from "@shared/schema";
 import { shouldMask, maskClaims, maskClaim } from "./masking";
-import { createFounderCheckoutSession, handleWebhookEvent } from "./billing";
+import { createCheckoutSession, handleWebhookEvent } from "./billing";
 import { createHash } from "crypto";
 import {
   type AuthRequest,
@@ -39,6 +39,15 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Email already registered" });
       }
 
+      const planType = data.planType || "pro";
+
+      if (planType === "founder") {
+        const founderCount = await storage.getFounderSubscriptionCount();
+        if (founderCount >= 3) {
+          return res.status(400).json({ message: "Founder tier unavailable - all 3 spots are taken" });
+        }
+      }
+
       const passwordHash = await bcrypt.hash(data.password, 12);
       const org = await storage.createOrganization({ name: data.orgName });
 
@@ -47,23 +56,30 @@ export async function registerRoutes(
         passwordHash,
         fullName: data.fullName,
         organizationId: org.id,
-        role: "founder",
-        founderFlag: true,
+        role: planType === "founder" ? "founder" : "standard",
+        founderFlag: planType === "founder",
       });
 
-      const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-      await storage.createBillingAccount({
+      const billingData: any = {
         organizationId: org.id,
-        subscriptionStatus: "trialing",
-        planType: "founder",
-        trialStartDate: new Date(),
-        trialEndDate: trialEnd,
-      });
+        planType,
+      };
+
+      if (planType === "founder") {
+        const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        billingData.subscriptionStatus = "trialing";
+        billingData.trialStartDate = new Date();
+        billingData.trialEndDate = trialEnd;
+      } else {
+        billingData.subscriptionStatus = "active";
+      }
+
+      await storage.createBillingAccount(billingData);
 
       await storage.createAuditLog({
         organizationId: org.id,
         actorUserId: user.id,
-        actorRole: "founder",
+        actorRole: planType === "founder" ? "founder" : "standard",
         actionType: "USER_REGISTERED",
         entityType: "user",
         entityId: user.id,
@@ -193,8 +209,9 @@ export async function registerRoutes(
       const orgId = req.auth!.organizationId;
       let claimsData = await storage.getClaims(orgId);
 
+      const billing = await storage.getBillingAccountByOrg(orgId);
       const agreement = await storage.getFounderAgreement(orgId);
-      if (shouldMask(!!agreement)) {
+      if (shouldMask(billing?.planType || null, !!agreement)) {
         claimsData = maskClaims(claimsData);
       }
 
@@ -210,8 +227,9 @@ export async function registerRoutes(
       let claim = await storage.getClaim(req.params.id, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
 
+      const billing = await storage.getBillingAccountByOrg(orgId);
       const agreement = await storage.getFounderAgreement(orgId);
-      if (shouldMask(!!agreement)) {
+      if (shouldMask(billing?.planType || null, !!agreement)) {
         claim = maskClaim(claim);
       }
 
@@ -389,7 +407,17 @@ export async function registerRoutes(
       const user = await storage.getUser(userId);
       if (!user) return res.status(401).json({ message: "User not found" });
 
-      const result = await createFounderCheckoutSession(orgId, userId, user.email);
+      const validPlans = ["founder", "pro", "team", "enterprise"];
+      const planType = validPlans.includes(req.body?.planType) ? req.body.planType : "pro";
+
+      if (planType === "founder") {
+        const founderCount = await storage.getFounderSubscriptionCount();
+        if (founderCount >= 3) {
+          return res.status(400).json({ message: "Founder tier unavailable - all 3 spots are taken" });
+        }
+      }
+
+      const result = await createCheckoutSession(orgId, userId, user.email, planType);
       if ("error" in result) {
         if (result.error.includes("not configured")) {
           return res.json({ message: result.error, fallback: true });

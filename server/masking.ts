@@ -13,6 +13,7 @@ export function maskClaims(claims: Claim[]): Claim[] {
   return claims.map(maskClaim);
 }
 
-export function shouldMask(hasFounderAgreement: boolean): boolean {
-  return !hasFounderAgreement;
+export function shouldMask(planType: string | null, hasFounderAgreement: boolean): boolean {
+  if (planType === "founder" && hasFounderAgreement) return false;
+  return true;
 }

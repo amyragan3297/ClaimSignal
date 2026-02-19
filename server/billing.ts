@@ -11,31 +11,70 @@ export function isStripeConfigured(): boolean {
   return !!process.env.STRIPE_SECRET_KEY;
 }
 
-export async function createFounderCheckoutSession(
+async function getFounderCount(): Promise<number> {
+  return storage.getFounderSubscriptionCount();
+}
+
+export async function createCheckoutSession(
   orgId: string,
   userId: string,
-  userEmail: string
+  userEmail: string,
+  planType: string
 ): Promise<{ url: string } | { error: string }> {
+  if (planType === "founder") {
+    const founderCount = await getFounderCount();
+    if (founderCount >= 3) {
+      return { error: "Founder tier unavailable - all 3 spots are taken" };
+    }
+  }
+
   const stripe = getStripe();
   if (!stripe) {
-    const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     const existing = await storage.getBillingAccountByOrg(orgId);
     if (existing) {
-      await storage.updateBillingAccount(existing.id, {
-        subscriptionStatus: "trialing",
-        trialStartDate: new Date(),
-        trialEndDate: trialEnd,
-      });
+      if (planType === "founder") {
+        const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        await storage.updateBillingAccount(existing.id, {
+          subscriptionStatus: "trialing",
+          planType: planType as any,
+          trialStartDate: new Date(),
+          trialEndDate: trialEnd,
+        });
+      } else {
+        await storage.updateBillingAccount(existing.id, {
+          subscriptionStatus: "active",
+          planType: planType as any,
+        });
+      }
     }
     return { error: "Stripe is not configured. Trial activated locally for development." };
   }
 
-  const priceId = process.env.STRIPE_PRICE_FOUNDER;
+  const priceEnvMap: Record<string, string | undefined> = {
+    founder: process.env.STRIPE_PRICE_FOUNDER,
+    pro: process.env.STRIPE_PRICE_PRO,
+    team: process.env.STRIPE_PRICE_TEAM,
+    enterprise: process.env.STRIPE_PRICE_ENTERPRISE,
+  };
+
+  const priceId = priceEnvMap[planType];
   if (!priceId) {
-    return { error: "Founder price ID not configured" };
+    return { error: `${planType} price ID not configured` };
   }
 
   const appUrl = process.env.APP_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+
+  const subscriptionData: any = {
+    metadata: {
+      org_id: orgId,
+      user_id: userId,
+      plan_type: planType,
+    },
+  };
+
+  if (planType === "founder") {
+    subscriptionData.trial_period_days = 14;
+  }
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -44,18 +83,11 @@ export async function createFounderCheckoutSession(
     success_url: `${appUrl}/dashboard?checkout=success`,
     cancel_url: `${appUrl}/billing?checkout=canceled`,
     customer_email: userEmail,
-    subscription_data: {
-      trial_period_days: 14,
-      metadata: {
-        org_id: orgId,
-        user_id: userId,
-        plan_type: "founder",
-      },
-    },
+    subscription_data: subscriptionData,
     metadata: {
       org_id: orgId,
       user_id: userId,
-      plan_type: "founder",
+      plan_type: planType,
     },
   });
 
@@ -111,16 +143,22 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
     return;
   }
 
+  const planType = session.metadata?.plan_type;
+
   const existing = await storage.getBillingAccountByOrg(orgId);
   if (existing) {
-    await storage.updateBillingAccount(existing.id, {
+    const updateData: any = {
       stripeCustomerId: session.customer as string,
       stripeSubscriptionId: session.subscription as string,
-      subscriptionStatus: "trialing",
-    });
+      subscriptionStatus: planType === "founder" ? "trialing" : "active",
+    };
+    if (planType) {
+      updateData.planType = planType;
+    }
+    await storage.updateBillingAccount(existing.id, updateData);
   }
 
-  log(`Checkout complete for org ${orgId}`, "stripe");
+  log(`Checkout complete for org ${orgId}, plan=${planType}`, "stripe");
 }
 
 async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
@@ -134,18 +172,24 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
   const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000) : null;
   const trialStart = subscription.trial_start ? new Date(subscription.trial_start * 1000) : null;
 
+  const planType = subscription.metadata?.plan_type;
+
   const existing = await storage.getBillingAccountByOrg(orgId);
   if (existing) {
-    await storage.updateBillingAccount(existing.id, {
+    const updateData: any = {
       subscriptionStatus: status as any,
       stripeSubscriptionId: subscription.id,
       stripeCustomerId: subscription.customer as string,
       trialStartDate: trialStart,
       trialEndDate: trialEnd,
-    });
+    };
+    if (planType) {
+      updateData.planType = planType;
+    }
+    await storage.updateBillingAccount(existing.id, updateData);
   }
 
-  log(`Subscription updated for org ${orgId}: status=${status}`, "stripe");
+  log(`Subscription updated for org ${orgId}: status=${status}, plan=${planType}`, "stripe");
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {

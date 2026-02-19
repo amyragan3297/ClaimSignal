@@ -86,7 +86,7 @@ export default function Homepage() {
             </Link>
             <Link href="/login?tab=register">
               <Button size="sm" data-testid="link-register">
-                Start 14-Day Trial
+                Get Started
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -116,7 +116,7 @@ export default function Homepage() {
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <Link href="/login?tab=register">
               <Button size="lg" data-testid="button-hero-cta">
-                Start 14-Day Trial
+                Get Started
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
@@ -216,60 +216,150 @@ export default function Homepage() {
       </section>
 
       <section className="py-24 px-6 bg-card/50" id="pricing">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <Badge variant="outline" className="mb-4">
               Operate With Signal.
             </Badge>
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-              Founder Pricing
+              Pricing
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              ClaimSignal is built for contractors who want structural advantage.
-              Start structured claim intelligence today.
+              Choose the plan that fits your operation.
             </p>
           </div>
-          <Card className="border-primary max-w-lg mx-auto">
-            <CardContent className="p-8">
-              <div className="text-center mb-6">
-                <Badge className="mb-4">Founder Access</Badge>
-                <h3 className="text-2xl font-bold mb-2">Founder Plan</h3>
-                <p className="text-sm text-muted-foreground mb-4">Full platform access with unmasked data and founder benefits.</p>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card data-testid="card-pricing-pro">
+              <CardContent className="p-6">
                 <div className="mb-6">
-                  <span className="text-4xl font-bold">$149</span>
-                  <span className="text-muted-foreground">/mo</span>
-                </div>
-              </div>
-              <div className="space-y-3 mb-8">
-                {[
-                  "Full unmasked data access",
-                  "All 6 intelligence engines",
-                  "14-day free trial",
-                  "Claim lifecycle tracking (8 phases)",
-                  "Adjuster performance metrics",
-                  "Escalation architecture (levels 0-5)",
-                  "Outcome migration tracking",
-                  "Priority support",
-                  "Founder advisory input",
-                  "Permanently locked pricing",
-                ].map((feature) => (
-                  <div key={feature} className="flex items-center gap-2 text-sm">
-                    <Check className="w-4 h-4 text-primary shrink-0" />
-                    <span>{feature}</span>
+                  <h3 className="text-lg font-bold mb-1">Pro</h3>
+                  <p className="text-sm text-muted-foreground mb-4">For individual contractors</p>
+                  <div>
+                    <span className="text-3xl font-bold">$79</span>
+                    <span className="text-muted-foreground">/mo</span>
                   </div>
-                ))}
-              </div>
-              <Link href="/login?tab=register">
-                <Button className="w-full" size="lg" data-testid="button-pricing-cta">
-                  Start 14-Day Trial
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Link>
-              <p className="text-xs text-center text-muted-foreground mt-3">
-                Payment method required. Cancel anytime during trial.
-              </p>
-            </CardContent>
-          </Card>
+                </div>
+                <div className="space-y-3 mb-8">
+                  {[
+                    "Masked data access",
+                    "6 intelligence engines",
+                    "Claims lifecycle tracking",
+                    "Adjuster metrics",
+                  ].map((feature) => (
+                    <div key={feature} className="flex items-center gap-2 text-sm">
+                      <Check className="w-4 h-4 text-primary shrink-0" />
+                      <span>{feature}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/login?tab=register&plan=pro">
+                  <Button className="w-full" data-testid="button-pricing-pro">
+                    Get Started
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-pricing-team">
+              <CardContent className="p-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold mb-1">Team</h3>
+                  <p className="text-sm text-muted-foreground mb-4">For growing teams</p>
+                  <div>
+                    <span className="text-3xl font-bold">$149</span>
+                    <span className="text-muted-foreground">/mo</span>
+                  </div>
+                </div>
+                <div className="space-y-3 mb-8">
+                  {[
+                    "Everything in Pro",
+                    "Multi-user organization",
+                    "Role-based access",
+                    "Priority support",
+                  ].map((feature) => (
+                    <div key={feature} className="flex items-center gap-2 text-sm">
+                      <Check className="w-4 h-4 text-primary shrink-0" />
+                      <span>{feature}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/login?tab=register&plan=team">
+                  <Button className="w-full" data-testid="button-pricing-team">
+                    Get Started
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card className="border-primary" data-testid="card-pricing-founder">
+              <CardContent className="p-6">
+                <div className="mb-6">
+                  <Badge variant="secondary" className="mb-3" data-testid="badge-founder-spots">Limited - 3 Spots</Badge>
+                  <h3 className="text-lg font-bold mb-1">Founder</h3>
+                  <p className="text-sm text-muted-foreground mb-4">For early adopters</p>
+                  <div>
+                    <span className="text-3xl font-bold">$249</span>
+                    <span className="text-muted-foreground">/mo</span>
+                  </div>
+                </div>
+                <div className="space-y-3 mb-8">
+                  {[
+                    "Full unmasked data access",
+                    "All 6 intelligence engines",
+                    "14-day free trial",
+                    "Founder advisory input",
+                    "Permanently locked pricing",
+                    "Priority support",
+                  ].map((feature) => (
+                    <div key={feature} className="flex items-center gap-2 text-sm">
+                      <Check className="w-4 h-4 text-primary shrink-0" />
+                      <span>{feature}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/login?tab=register&plan=founder">
+                  <Button className="w-full" data-testid="button-pricing-founder">
+                    Start 14-Day Trial
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-pricing-enterprise">
+              <CardContent className="p-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold mb-1">Enterprise</h3>
+                  <p className="text-sm text-muted-foreground mb-4">For large organizations</p>
+                  <div>
+                    <span className="text-3xl font-bold">Custom</span>
+                  </div>
+                </div>
+                <div className="space-y-3 mb-8">
+                  {[
+                    "Everything in Founder",
+                    "Unlimited seats",
+                    "Custom integrations",
+                    "Dedicated support",
+                    "SLA guarantees",
+                  ].map((feature) => (
+                    <div key={feature} className="flex items-center gap-2 text-sm">
+                      <Check className="w-4 h-4 text-primary shrink-0" />
+                      <span>{feature}</span>
+                    </div>
+                  ))}
+                </div>
+                <a href="mailto:enterprise@claimsignal.com">
+                  <Button variant="outline" className="w-full" data-testid="button-pricing-enterprise">
+                    Contact Sales
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </a>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 

@@ -5,7 +5,7 @@ import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "founder", "standard"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["trialing", "active", "past_due", "canceled"]);
-export const planTypeEnum = pgEnum("plan_type", ["founder", "individual", "team"]);
+export const planTypeEnum = pgEnum("plan_type", ["founder", "pro", "team", "enterprise", "individual"]);
 
 export const organizations = pgTable("organizations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -155,7 +155,7 @@ export const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   fullName: z.string().min(2, "Full name required"),
   orgName: z.string().min(2, "Organization name required"),
-  planType: z.enum(["individual", "team", "founder"]).default("individual"),
+  planType: z.enum(["founder", "pro", "team", "enterprise"]).default("pro"),
 });
 
 export const registerSchema = signupSchema;

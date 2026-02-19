@@ -29,12 +29,11 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-const navItems = [
+const baseNavItems = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Claims", href: "/claims", icon: FileText },
   { title: "Adjusters", href: "/adjusters", icon: Users },
   { title: "Billing", href: "/billing", icon: CreditCard },
-  { title: "Founder Agreement", href: "/legal/founder", icon: Shield },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -94,7 +93,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {navItems.map((item) => {
+                  {[...baseNavItems, ...(billing?.planType === "founder" ? [{ title: "Founder Agreement", href: "/legal/founder", icon: Shield }] : [])].map((item) => {
                     const isActiveRoute = location === item.href || location.startsWith(item.href + "/");
                     return (
                       <SidebarMenuItem key={item.title}>
@@ -180,7 +179,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs" data-testid="badge-header-plan">
-                Founder
+                {billing?.planType ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1) : 'Free'}
               </Badge>
             </div>
           </header>

@@ -57,11 +57,12 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 - Session secret via `SESSION_SECRET` env var
 
 ### Billing Model
-- **Founder-only:** All signups are founders, no other plan tiers
-- **14-day free trial** with payment method required upfront via Stripe Checkout
-- **Dev fallback:** When Stripe keys not configured, trial auto-activates locally
-- **Stripe integration:** Checkout sessions, webhook handling for subscription lifecycle
-- **Required secrets:** `STRIPE_SECRET_KEY`, `STRIPE_PRICE_FOUNDER`, `STRIPE_WEBHOOK_SECRET`
+- **4 tiers:** Founder ($249/mo), Pro ($79/mo), Team ($149/mo), Enterprise (custom/contact sales)
+- **Founder tier:** 14-day free trial, global cap of 3 subscriptions, full unmasked data (after signing agreement)
+- **Pro/Team/Enterprise:** No trial, immediate active status, data always masked
+- **Dev fallback:** When Stripe keys not configured, founder gets trial, others get active status
+- **Stripe integration:** Checkout sessions with per-tier pricing, webhook handling for subscription lifecycle
+- **Required secrets:** `STRIPE_SECRET_KEY`, `STRIPE_PRICE_FOUNDER`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, `STRIPE_PRICE_ENTERPRISE`, `STRIPE_WEBHOOK_SECRET`
 
 ### Intelligence Engines (6 total)
 1. Friction Scoring Engine
@@ -91,7 +92,9 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 - 2026-02-19: Complete rebuild - all backend files rewritten for new 10-table schema
 - 2026-02-19: JWT auth with refresh token rotation, cookie-based refresh
 - 2026-02-19: Frontend rewritten with JWT Bearer auth flow, auto-refresh on 401
-- 2026-02-19: Homepage updated to founder-only pricing, 14-day trial, 6 intelligence engines
+- 2026-02-19: Homepage updated to 4-tier pricing (Founder/Pro/Team/Enterprise), 6 intelligence engines
+- 2026-02-19: Multi-tier billing: Founder $249/mo (14-day trial, 3 cap), Pro $79/mo, Team $149/mo, Enterprise (contact sales)
+- 2026-02-19: Registration flow with plan selection, founder cap enforcement, masking per plan type
 - 2026-02-19: Adjusters page added with fullName, carrier, licenseNumber, region fields
 - 2026-02-19: Admin panel with impersonation and subscription breakdown
-- 2026-02-19: Schema: adjusters table updated with full_name, license_number, region, is_active columns
+- 2026-02-19: Schema: planTypeEnum supports founder/pro/team/enterprise/individual (legacy)

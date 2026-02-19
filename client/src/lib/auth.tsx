@@ -29,7 +29,7 @@ interface AuthContextType {
   data: AuthData | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (input: { email: string; password: string; fullName: string; orgName: string }) => Promise<void>;
+  register: (input: { email: string; password: string; fullName: string; orgName: string; planType?: string }) => Promise<void>;
   logout: () => Promise<void>;
   refetch: () => Promise<void>;
   stopImpersonation: () => Promise<void>;
@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchMe();
   };
 
-  const register = async (input: { email: string; password: string; fullName: string; orgName: string }) => {
+  const register = async (input: { email: string; password: string; fullName: string; orgName: string; planType?: string }) => {
     const res = await apiRequest("POST", "/api/auth/register", input);
     const result = await res.json();
     setAccessToken(result.accessToken);

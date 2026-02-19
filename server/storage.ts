@@ -91,6 +91,8 @@ export interface IStorage {
   createFounderAgreement(orgId: string, userId: string, ip: string, version: string, hash: string): Promise<FounderAgreement>;
   getFounderAgreement(orgId: string): Promise<FounderAgreement | undefined>;
 
+  getFounderSubscriptionCount(): Promise<number>;
+
   createAuditLog(data: {
     organizationId?: string;
     actorUserId: string;
@@ -363,6 +365,16 @@ export class DatabaseStorage implements IStorage {
   async getFounderAgreement(orgId: string): Promise<FounderAgreement | undefined> {
     const [agreement] = await db.select().from(founderAgreements).where(eq(founderAgreements.organizationId, orgId));
     return agreement;
+  }
+
+  async getFounderSubscriptionCount(): Promise<number> {
+    const result = await db.select({ count: count() }).from(billingAccounts).where(
+      and(
+        eq(billingAccounts.planType, "founder"),
+        sql`${billingAccounts.subscriptionStatus} IN ('active', 'trialing')`
+      )
+    );
+    return result[0]?.count ?? 0;
   }
 
   async createAuditLog(data: {
