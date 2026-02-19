@@ -1,11 +1,31 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum, json, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum, json, real, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["super_admin", "admin", "team_owner", "founder", "standard"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["trialing", "active", "past_due", "canceled"]);
 export const planTypeEnum = pgEnum("plan_type", ["founder", "pro", "team", "enterprise", "individual"]);
+
+export const claimPhaseEnum = pgEnum("claim_phase", [
+  "pre_claim", "filed", "inspected", "initial_determination",
+  "supplement_submitted", "reinspection_requested", "escalated", "resolved", "closed"
+]);
+
+export const sourceTypeEnum = pgEnum("source_type", ["upload", "email_import", "portal_download"]);
+export const fileTypeEnum = pgEnum("file_type_enum", ["pdf", "image", "docx", "eml", "msg", "txt", "other"]);
+export const docCategoryEnum = pgEnum("doc_category", [
+  "denial_letter", "estimate", "scope", "payment_letter", "supplement",
+  "invoice", "photo_report", "policy", "email_thread", "unknown"
+]);
+export const extractionStatusEnum = pgEnum("extraction_status", ["pending", "processing", "complete", "failed"]);
+export const entityTypeEnum = pgEnum("entity_type", [
+  "claim_number", "policy_number", "adjuster_name", "adjuster_email", "adjuster_phone",
+  "insured_name", "property_address", "date_of_loss", "inspection_date", "determination_date",
+  "payment_date", "rcv", "acv", "deductible", "depreciation", "supplement_amount",
+  "check_amount", "coverage_type"
+]);
+export const claimDraftStatusEnum = pgEnum("claim_draft_status", ["needs_review", "merged", "discarded"]);
 
 export const organizations = pgTable("organizations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -22,6 +42,7 @@ export const users = pgTable("users", {
   founderFlag: boolean("founder_flag").default(false),
   isPlatformOwner: boolean("is_platform_owner").default(false),
   fullName: text("full_name").notNull(),
+  founderLockedRate: boolean("founder_locked_rate").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   emailVerifiedAt: timestamp("email_verified_at"),
@@ -74,35 +95,52 @@ export const claims = pgTable("claims", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull(),
   clientId: varchar("client_id"),
+  adjusterId: varchar("adjuster_id"),
   claimNumber: text("claim_number").notNull(),
   carrier: text("carrier"),
-  dateOfLoss: timestamp("date_of_loss"),
-  propertyAddress: text("property_address"),
-  adjusterId: varchar("adjuster_id"),
-  status: text("status").notNull().default("open"),
-  riskScore: integer("risk_score"),
-  notes: text("notes"),
+  policyNumber: text("policy_number"),
   homeownerName: text("homeowner_name"),
   homeownerPhone: text("homeowner_phone"),
   homeownerEmail: text("homeowner_email"),
-  policyNumber: text("policy_number"),
   insuredName: text("insured_name"),
-  lossType: text("loss_type"),
+  propertyAddress: text("property_address"),
   address: text("address"),
   city: text("city"),
   state: text("state"),
   zipCode: text("zip_code"),
-  claimAmount: real("claim_amount"),
-  approvedAmount: real("approved_amount"),
-  lossDate: timestamp("loss_date"),
-  frictionScore: integer("friction_score"),
+  lossType: text("loss_type"),
   roofType: text("roof_type"),
   shingleType: text("shingle_type"),
+  notes: text("notes"),
+  status: text("status").notNull().default("open"),
+
+  currentPhase: claimPhaseEnum("current_phase").default("pre_claim"),
+  dateOfLoss: timestamp("date_of_loss"),
+  inspectionDate: timestamp("inspection_date"),
+  determinationDate: timestamp("determination_date"),
+  reinspectionDate: timestamp("reinspection_date"),
+  resolutionDate: timestamp("resolution_date"),
+
+  rcvAmount: real("rcv_amount"),
+  acvAmount: real("acv_amount"),
+  deductible: real("deductible"),
+  supplementAmountTotal: real("supplement_amount_total"),
+  finalPaidAmount: real("final_paid_amount"),
+  claimAmount: real("claim_amount"),
+  approvedAmount: real("approved_amount"),
   rcvTotal: real("rcv_total"),
   acvTotal: real("acv_total"),
-  deductible: real("deductible"),
-  escalationCategory: text("escalation_category"),
+
+  lifecycleVelocityScore: real("lifecycle_velocity_score"),
+  scopeDeltaScore: real("scope_delta_score"),
+  escalationLevel: integer("escalation_level").default(0),
+  outcomeMigrationDelta: real("outcome_migration_delta"),
+  frictionScore: integer("friction_score"),
   approvalProbability: real("approval_probability"),
+  escalationCategory: text("escalation_category"),
+  riskScore: integer("risk_score"),
+  lossDate: timestamp("loss_date"),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   archivedAt: timestamp("archived_at"),
@@ -197,6 +235,90 @@ export const adjusters = pgTable("adjusters", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const evidenceFiles = pgTable("evidence_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull(),
+  uploadedByUserId: varchar("uploaded_by_user_id").notNull(),
+  claimId: varchar("claim_id"),
+  sourceType: sourceTypeEnum("source_type").default("upload"),
+  fileName: text("file_name").notNull(),
+  fileType: fileTypeEnum("file_type").default("other"),
+  storageUrl: text("storage_url"),
+  sha256: text("sha256"),
+  fileSize: integer("file_size"),
+  pages: integer("pages"),
+  docCategory: docCategoryEnum("doc_category").default("unknown"),
+  carrierName: text("carrier_name"),
+  confidence: real("confidence"),
+  extractedJson: json("extracted_json"),
+  extractionVersion: text("extraction_version"),
+  extractionStatus: extractionStatusEnum("extraction_status").default("pending"),
+  extractionErrors: text("extraction_errors"),
+  normalizedTextHash: text("normalized_text_hash"),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
+
+export const extractedEntities = pgTable("extracted_entities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  evidenceFileId: varchar("evidence_file_id").notNull(),
+  claimId: varchar("claim_id"),
+  entityType: entityTypeEnum("entity_type").notNull(),
+  rawValue: text("raw_value").notNull(),
+  normalizedValue: text("normalized_value"),
+  confidence: real("confidence"),
+  pageNumber: integer("page_number"),
+  anchorText: text("anchor_text"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const claimDrafts = pgTable("claim_drafts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull(),
+  createdFromEvidenceFileId: varchar("created_from_evidence_file_id"),
+  extractedClaimNumber: text("extracted_claim_number"),
+  extractedInsured: text("extracted_insured"),
+  extractedAddress: text("extracted_address"),
+  extractedCarrier: text("extracted_carrier"),
+  extractedDateOfLoss: timestamp("extracted_date_of_loss"),
+  status: claimDraftStatusEnum("status").default("needs_review"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const audioRecordings = pgTable("audio_recordings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull(),
+  claimId: varchar("claim_id"),
+  uploadedByUserId: varchar("uploaded_by_user_id").notNull(),
+  fileUrl: text("file_url"),
+  durationSeconds: integer("duration_seconds"),
+  sha256Hash: text("sha256_hash"),
+  transcriptText: text("transcript_text"),
+  transcriptConfidence: real("transcript_confidence"),
+  hostilityScore: real("hostility_score"),
+  complianceLanguageScore: real("compliance_language_score"),
+  delayLanguageDetected: boolean("delay_language_detected").default(false),
+  denialPreLanguageDetected: boolean("denial_pre_language_detected").default(false),
+  badFaithRiskIndicator: real("bad_faith_risk_indicator"),
+  processedAt: timestamp("processed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const timelineEvents = pgTable("timeline_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  claimId: varchar("claim_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  eventType: text("event_type").notNull(),
+  eventDate: timestamp("event_date").defaultNow(),
+  title: text("title").notNull(),
+  description: text("description"),
+  evidenceFileId: varchar("evidence_file_id"),
+  audioRecordingId: varchar("audio_recording_id"),
+  deepLinkTarget: json("deep_link_target"),
+  createdByUserId: varchar("created_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const founderAgreements = pgTable("founder_agreements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull(),
@@ -236,6 +358,11 @@ export const insertSupplementSchema = createInsertSchema(supplements).omit({ id:
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
 export const insertEmailSchema = createInsertSchema(emails).omit({ id: true, createdAt: true });
 export const insertAiInsightSchema = createInsertSchema(aiInsights).omit({ id: true, createdAt: true });
+export const insertEvidenceFileSchema = createInsertSchema(evidenceFiles).omit({ id: true, uploadedAt: true, processedAt: true });
+export const insertExtractedEntitySchema = createInsertSchema(extractedEntities).omit({ id: true, createdAt: true });
+export const insertClaimDraftSchema = createInsertSchema(claimDrafts).omit({ id: true, createdAt: true });
+export const insertAudioRecordingSchema = createInsertSchema(audioRecordings).omit({ id: true, createdAt: true, processedAt: true });
+export const insertTimelineEventSchema = createInsertSchema(timelineEvents).omit({ id: true, createdAt: true });
 export const insertFounderAgreementSchema = createInsertSchema(founderAgreements).omit({ id: true, signedAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, timestamp: true });
 
@@ -276,5 +403,15 @@ export type Email = typeof emails.$inferSelect;
 export type InsertEmail = z.infer<typeof insertEmailSchema>;
 export type AiInsight = typeof aiInsights.$inferSelect;
 export type InsertAiInsight = z.infer<typeof insertAiInsightSchema>;
+export type EvidenceFile = typeof evidenceFiles.$inferSelect;
+export type InsertEvidenceFile = z.infer<typeof insertEvidenceFileSchema>;
+export type ExtractedEntity = typeof extractedEntities.$inferSelect;
+export type InsertExtractedEntity = z.infer<typeof insertExtractedEntitySchema>;
+export type ClaimDraft = typeof claimDrafts.$inferSelect;
+export type InsertClaimDraft = z.infer<typeof insertClaimDraftSchema>;
+export type AudioRecording = typeof audioRecordings.$inferSelect;
+export type InsertAudioRecording = z.infer<typeof insertAudioRecordingSchema>;
+export type TimelineEvent = typeof timelineEvents.$inferSelect;
+export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
 export type FounderAgreement = typeof founderAgreements.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;

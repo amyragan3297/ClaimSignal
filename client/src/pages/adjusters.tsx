@@ -3,29 +3,190 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Adjuster } from "@shared/schema";
-import { Plus, Users, Loader2, Search, X } from "lucide-react";
+import { Plus, Users, Loader2, Search, X, ChevronLeft, Activity, BarChart3, Target, TrendingUp } from "lucide-react";
 
 const createAdjusterSchema = z.object({
-  fullName: z.string().min(1, "Name required"),
-  carrier: z.string().optional(),
-  licenseNumber: z.string().optional(),
+  carrierName: z.string().min(1, "Carrier name required"),
+  adjusterName: z.string().min(1, "Adjuster name required"),
+  adjusterEmail: z.string().email("Valid email required").or(z.literal("")).optional(),
+  adjusterPhone: z.string().optional(),
   region: z.string().optional(),
+  ladderAssistVendor: z.string().optional(),
+  isFieldAdjuster: z.boolean().default(false),
+  isDeskAdjuster: z.boolean().default(false),
 });
+
+function formatPercent(val: number | null | undefined): string {
+  if (val == null) return "0%";
+  return `${(val * 100).toFixed(1)}%`;
+}
+
+function formatScore(val: number | null | undefined): string {
+  if (val == null) return "0.0";
+  return val.toFixed(1);
+}
+
+function ScoreCard({ label, value, max = 10 }: { label: string; value: number | null | undefined; max?: number }) {
+  const score = value ?? 0;
+  const pct = Math.min((score / max) * 100, 100);
+  const color = score <= 3 ? "text-green-500" : score <= 6 ? "text-yellow-500" : "text-red-500";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className={`text-sm font-semibold ${color}`}>{formatScore(value)}</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted">
+        <div className={`h-full rounded-full ${score <= 3 ? "bg-green-500" : score <= 6 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () => void }) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onBack} data-testid="button-back-adjusters">
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-adjuster-detail-name">{adjuster.adjusterName}</h1>
+          <p className="text-sm text-muted-foreground">{adjuster.carrierName}</p>
+        </div>
+        <div className="flex items-center gap-2 ml-auto flex-wrap">
+          {adjuster.isFieldAdjuster && <Badge variant="secondary" data-testid="badge-field-adjuster">Field</Badge>}
+          {adjuster.isDeskAdjuster && <Badge variant="secondary" data-testid="badge-desk-adjuster">Desk</Badge>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4 pb-4 space-y-1">
+            <p className="text-xs text-muted-foreground">Email</p>
+            <p className="text-sm font-medium" data-testid="text-adjuster-email">{adjuster.adjusterEmail || "\u2014"}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 space-y-1">
+            <p className="text-xs text-muted-foreground">Phone</p>
+            <p className="text-sm font-medium" data-testid="text-adjuster-phone">{adjuster.adjusterPhone || "\u2014"}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 space-y-1">
+            <p className="text-xs text-muted-foreground">Region</p>
+            <p className="text-sm font-medium" data-testid="text-adjuster-region">{adjuster.region || "\u2014"}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 space-y-1">
+            <p className="text-xs text-muted-foreground">Ladder Assist Vendor</p>
+            <p className="text-sm font-medium" data-testid="text-adjuster-vendor">{adjuster.ladderAssistVendor || "\u2014"}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2 pb-3">
+            <Target className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-base">Intelligence Scores</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ScoreCard label="Friction Score" value={adjuster.frictionScore} />
+            <ScoreCard label="Integrity Score" value={adjuster.integrityScore} />
+            <ScoreCard label="Escalation Score" value={adjuster.escalationScore} />
+            <ScoreCard label="Outcome Migration Score" value={adjuster.outcomeMigrationScore} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2 pb-3">
+            <Activity className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-base">Behavior Metrics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Avg Response Time</p>
+                <p className="text-sm font-semibold" data-testid="text-avg-response">{adjuster.avgResponseTimeHours ?? 0}h</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Avg Days to Determination</p>
+                <p className="text-sm font-semibold" data-testid="text-avg-determination">{adjuster.avgDaysToInitialDetermination ?? 0}d</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Supplement Acceptance</p>
+                <p className="text-sm font-semibold">{formatPercent(adjuster.supplementAcceptanceRate)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Reinspection Rate</p>
+                <p className="text-sm font-semibold">{formatPercent(adjuster.reinspectionRate)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Denial Rate</p>
+                <p className="text-sm font-semibold">{formatPercent(adjuster.denialRate)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Escalation Trigger</p>
+                <p className="text-sm font-semibold">{formatPercent(adjuster.escalationTriggerRate)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <BarChart3 className="w-4 h-4 text-muted-foreground" />
+          <CardTitle className="text-base">Volume Metrics</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold" data-testid="text-total-claims">{adjuster.totalClaimsTracked ?? 0}</p>
+              <p className="text-xs text-muted-foreground">Claims Tracked</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold">{adjuster.totalDenials ?? 0}</p>
+              <p className="text-xs text-muted-foreground">Denials</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold">{adjuster.totalReinspections ?? 0}</p>
+              <p className="text-xs text-muted-foreground">Reinspections</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold">{adjuster.totalSupplementsRequested ?? 0}</p>
+              <p className="text-xs text-muted-foreground">Supps Requested</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold">{adjuster.totalSupplementsApproved ?? 0}</p>
+              <p className="text-xs text-muted-foreground">Supps Approved</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default function AdjustersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedAdjuster, setSelectedAdjuster] = useState<Adjuster | null>(null);
   const { toast } = useToast();
 
   const { data: adjustersList, isLoading } = useQuery<Adjuster[]>({
@@ -34,12 +195,28 @@ export default function AdjustersPage() {
 
   const form = useForm<z.infer<typeof createAdjusterSchema>>({
     resolver: zodResolver(createAdjusterSchema),
-    defaultValues: { fullName: "", carrier: "", licenseNumber: "", region: "" },
+    defaultValues: {
+      carrierName: "",
+      adjusterName: "",
+      adjusterEmail: "",
+      adjusterPhone: "",
+      region: "",
+      ladderAssistVendor: "",
+      isFieldAdjuster: false,
+      isDeskAdjuster: false,
+    },
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: z.infer<typeof createAdjusterSchema>) => {
-      await apiRequest("POST", "/api/adjusters", data);
+      const payload = {
+        ...data,
+        adjusterEmail: data.adjusterEmail || undefined,
+        adjusterPhone: data.adjusterPhone || undefined,
+        region: data.region || undefined,
+        ladderAssistVendor: data.ladderAssistVendor || undefined,
+      };
+      await apiRequest("POST", "/api/adjusters", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/adjusters"] });
@@ -55,10 +232,15 @@ export default function AdjustersPage() {
 
   const filteredAdjusters = adjustersList?.filter(
     (a) =>
-      (a.fullName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (a.carrier || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (a.adjusterName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (a.carrierName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (a.region || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (selectedAdjuster) {
+    const fresh = adjustersList?.find((a) => a.id === selectedAdjuster.id) || selectedAdjuster;
+    return <AdjusterDetail adjuster={fresh} onBack={() => setSelectedAdjuster(null)} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -77,24 +259,58 @@ export default function AdjustersPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add Adjuster</DialogTitle>
+              <DialogDescription>Enter the adjuster's details below.</DialogDescription>
             </DialogHeader>
             <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Full Name</Label>
-                <Input placeholder="John Smith" data-testid="input-adjuster-name" {...form.register("fullName")} />
-                {form.formState.errors.fullName && <p className="text-xs text-destructive">{form.formState.errors.fullName.message}</p>}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Adjuster Name</Label>
+                  <Input placeholder="John Smith" data-testid="input-adjuster-name" {...form.register("adjusterName")} />
+                  {form.formState.errors.adjusterName && <p className="text-xs text-destructive">{form.formState.errors.adjusterName.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Carrier Name</Label>
+                  <Input placeholder="State Farm" data-testid="input-adjuster-carrier" {...form.register("carrierName")} />
+                  {form.formState.errors.carrierName && <p className="text-xs text-destructive">{form.formState.errors.carrierName.message}</p>}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Carrier</Label>
-                <Input placeholder="State Farm, Allstate..." data-testid="input-adjuster-carrier" {...form.register("carrier")} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input placeholder="adjuster@carrier.com" data-testid="input-adjuster-email" {...form.register("adjusterEmail")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input placeholder="555-0100" data-testid="input-adjuster-phone" {...form.register("adjusterPhone")} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>License Number</Label>
-                <Input placeholder="ADJ-12345" data-testid="input-adjuster-license" {...form.register("licenseNumber")} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Region</Label>
+                  <Input placeholder="Southeast, Texas..." data-testid="input-adjuster-region" {...form.register("region")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ladder Assist Vendor</Label>
+                  <Input placeholder="Vendor name" data-testid="input-adjuster-vendor" {...form.register("ladderAssistVendor")} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Region</Label>
-                <Input placeholder="Southeast, Texas..." data-testid="input-adjuster-region" {...form.register("region")} />
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={form.watch("isFieldAdjuster")}
+                    onCheckedChange={(v) => form.setValue("isFieldAdjuster", v)}
+                    data-testid="switch-field-adjuster"
+                  />
+                  <Label className="text-sm">Field Adjuster</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={form.watch("isDeskAdjuster")}
+                    onCheckedChange={(v) => form.setValue("isDeskAdjuster", v)}
+                    data-testid="switch-desk-adjuster"
+                  />
+                  <Label className="text-sm">Desk Adjuster</Label>
+                </div>
               </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -153,25 +369,40 @@ export default function AdjustersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
+                    <TableHead>Adjuster</TableHead>
                     <TableHead>Carrier</TableHead>
-                    <TableHead>License</TableHead>
                     <TableHead>Region</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Claims</TableHead>
+                    <TableHead className="text-right">Friction</TableHead>
+                    <TableHead className="text-right">Denial Rate</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredAdjusters.map((adj) => (
-                    <TableRow key={adj.id} data-testid={`row-adjuster-${adj.id}`}>
-                      <TableCell className="font-medium" data-testid={`text-adjuster-name-${adj.id}`}>{adj.fullName}</TableCell>
-                      <TableCell data-testid={`text-adjuster-carrier-${adj.id}`}>{adj.carrier || "\u2014"}</TableCell>
-                      <TableCell className="font-mono text-sm">{adj.licenseNumber || "\u2014"}</TableCell>
+                    <TableRow
+                      key={adj.id}
+                      className="cursor-pointer hover-elevate"
+                      onClick={() => setSelectedAdjuster(adj)}
+                      data-testid={`row-adjuster-${adj.id}`}
+                    >
+                      <TableCell className="font-medium" data-testid={`text-adjuster-name-${adj.id}`}>{adj.adjusterName}</TableCell>
+                      <TableCell data-testid={`text-adjuster-carrier-${adj.id}`}>{adj.carrierName}</TableCell>
                       <TableCell>{adj.region || "\u2014"}</TableCell>
                       <TableCell>
-                        <Badge variant={adj.isActive ? "default" : "secondary"} className="text-xs capitalize">
-                          {adj.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        <div className="flex items-center gap-1">
+                          {adj.isFieldAdjuster && <Badge variant="secondary" className="text-xs">Field</Badge>}
+                          {adj.isDeskAdjuster && <Badge variant="secondary" className="text-xs">Desk</Badge>}
+                          {!adj.isFieldAdjuster && !adj.isDeskAdjuster && <span className="text-muted-foreground">{"\u2014"}</span>}
+                        </div>
                       </TableCell>
+                      <TableCell className="text-right">{adj.totalClaimsTracked ?? 0}</TableCell>
+                      <TableCell className="text-right">
+                        <span className={`font-medium ${(adj.frictionScore ?? 0) > 6 ? "text-red-500" : (adj.frictionScore ?? 0) > 3 ? "text-yellow-500" : "text-green-500"}`}>
+                          {formatScore(adj.frictionScore)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">{formatPercent(adj.denialRate)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

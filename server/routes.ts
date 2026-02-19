@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
-import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema } from "@shared/schema";
+import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema } from "@shared/schema";
 import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked } from "./masking";
 import { createCheckoutSession, handleWebhookEvent } from "./billing";
 import exportsRouter from "./exports";
@@ -409,10 +409,11 @@ export async function registerRoutes(
 
   app.post("/api/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const adjuster = await storage.createAdjuster({
+      const parsed = insertAdjusterSchema.parse({
         ...req.body,
         organizationId: req.auth!.organizationId,
       });
+      const adjuster = await storage.createAdjuster(parsed);
 
       await storage.createAuditLog({
         organizationId: req.auth!.organizationId,
