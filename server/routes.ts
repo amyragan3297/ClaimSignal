@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import { signupSchema, loginSchema } from "@shared/schema";
-import { shouldMask, maskClaims, maskClaim } from "./masking";
+import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked } from "./masking";
 import { createCheckoutSession, handleWebhookEvent } from "./billing";
 import { createHash } from "crypto";
 import {
@@ -12,6 +12,7 @@ import {
   requireAuth,
   requireActiveSubscription,
   requirePlatformOwner,
+  requireSuperAdmin,
   blockDuringImpersonation,
   createAuthSession,
   refreshAuthSession,
@@ -206,13 +207,27 @@ export async function registerRoutes(
 
   app.get("/api/claims", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
+      const role = req.auth!.role;
       const orgId = req.auth!.organizationId;
-      let claimsData = await storage.getClaims(orgId);
+      
+      let claimsData = role === "super_admin"
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
 
-      const billing = await storage.getBillingAccountByOrg(orgId);
-      const agreement = await storage.getFounderAgreement(orgId);
-      if (shouldMask(billing?.planType || null, !!agreement)) {
-        claimsData = maskClaims(claimsData);
+      const unmaskedRequested = req.query.unmasked === "true";
+      const canSeeUnmasked = canViewUnmasked(role);
+
+      if (canSeeUnmasked && unmaskedRequested) {
+        await storage.createAuditLog({
+          organizationId: orgId,
+          actorUserId: req.auth!.userId,
+          actorRole: role,
+          actionType: "PII_UNMASK_VIEW",
+          entityType: "claims",
+          ipAddress: getClientIp(req),
+        });
+      } else {
+        claimsData = applyPiiMaskingToList(claimsData, role);
       }
 
       res.json(claimsData);
@@ -223,14 +238,35 @@ export async function registerRoutes(
 
   app.get("/api/claims/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
+      const role = req.auth!.role;
       const orgId = req.auth!.organizationId;
-      let claim = await storage.getClaim(req.params.id, orgId);
+      
+      let claim = role === "super_admin"
+        ? await storage.getClaim(req.params.id as string, orgId)
+        : await storage.getClaim(req.params.id as string, orgId);
+
+      if (!claim && role === "super_admin") {
+        const allClaims = await storage.getAllClaimsAcrossTenants();
+        claim = allClaims.find(c => c.id === req.params.id) || undefined;
+      }
+      
       if (!claim) return res.status(404).json({ message: "Claim not found" });
 
-      const billing = await storage.getBillingAccountByOrg(orgId);
-      const agreement = await storage.getFounderAgreement(orgId);
-      if (shouldMask(billing?.planType || null, !!agreement)) {
-        claim = maskClaim(claim);
+      const unmaskedRequested = req.query.unmasked === "true";
+      const canSeeUnmasked = canViewUnmasked(role);
+
+      if (canSeeUnmasked && unmaskedRequested) {
+        await storage.createAuditLog({
+          organizationId: claim.organizationId,
+          actorUserId: req.auth!.userId,
+          actorRole: role,
+          actionType: "PII_UNMASK_VIEW",
+          entityType: "claim",
+          entityId: claim.id,
+          ipAddress: getClientIp(req),
+        });
+      } else {
+        claim = applyPiiMasking(claim, role);
       }
 
       res.json(claim);
@@ -332,7 +368,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/claims/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+  app.delete("/api/claims/:id", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
       const existing = await storage.getClaim(req.params.id, orgId);
@@ -360,7 +396,10 @@ export async function registerRoutes(
 
   app.get("/api/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const adjustersList = await storage.getAdjusters(req.auth!.organizationId);
+      const role = req.auth!.role;
+      const adjustersList = role === "super_admin"
+        ? await storage.getAllAdjustersAcrossTenants()
+        : await storage.getAdjusters(req.auth!.organizationId);
       res.json(adjustersList);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -575,7 +614,7 @@ export async function registerRoutes(
       await storage.createAuditLog({
         organizationId: targetUser.organizationId,
         actorUserId: req.auth!.userId,
-        actorRole: "platform_owner",
+        actorRole: "super_admin",
         isImpersonation: true,
         impersonatorUserId: req.auth!.userId,
         targetUserId: targetUser.id,
@@ -608,7 +647,7 @@ export async function registerRoutes(
       await storage.createAuditLog({
         organizationId: req.auth!.organizationId,
         actorUserId: req.auth!.impersonatorUserId,
-        actorRole: "platform_owner",
+        actorRole: "super_admin",
         isImpersonation: true,
         impersonatorUserId: req.auth!.impersonatorUserId,
         targetUserId: req.auth!.userId,

@@ -1,0 +1,200 @@
+1. CORE OBJECTS
+
+Everything in the system revolves around five entities:
+
+Tenant
+Client
+Claim
+Adjuster
+Supplement
+
+Nothing else exists until these are defined.
+
+⸻
+
+2. TENANT
+
+Represents a company or workspace.
+
+Fields:
+
+id
+name
+plan
+createdAt
+
+Every other entity must include tenantId.
+
+⸻
+
+3. CLIENT (Homeowner)
+
+This is separate from Claim.
+
+Client fields:
+
+id
+tenantId
+firstName
+lastName
+phone
+email
+streetAddress
+city
+state
+zip
+createdAt
+
+No intelligence yet.
+Just structured storage.
+
+⸻
+
+4. ADJUSTER
+
+Fields:
+
+id
+tenantId
+name
+carrier
+phone
+email
+createdAt
+
+No friction modeling yet.
+Just structure.
+
+⸻
+
+5. CLAIM
+
+Fields:
+
+id
+tenantId
+clientId
+adjusterId
+dateOfLoss
+claimNumber
+policyNumber
+roofType
+shingleType
+rcvTotal
+acvTotal
+deductible
+status
+createdAt
+
+This is the intelligence anchor.
+
+⸻
+
+6. SUPPLEMENT
+
+Fields:
+
+id
+claimId
+amountRequested
+amountApproved
+amountDenied
+dateSubmitted
+dateResolved
+status
+createdAt
+
+⸻
+
+7. DOCUMENTS
+
+Fields:
+
+id
+claimId
+fileName
+fileType
+fileUrl
+uploadedBy
+createdAt
+
+⸻
+
+8. EMAILS
+
+Fields:
+
+id
+claimId
+direction (incoming/outgoing)
+subject
+body
+createdAt
+
+⸻
+
+9. AI ASSISTANCE LAYER
+
+This sits on top of structured data.
+
+Not stored in raw chat form.
+
+Create table:
+
+AIInsights
+
+id
+claimId
+insightType
+confidenceScore
+summary
+createdAt
+
+Examples:
+	•	High Friction Detected
+	•	Supplement Resistance Pattern
+	•	Escalation Recommended
+	•	Depreciation Anomaly
+
+⸻
+
+10. DATA ANALYSIS FOUNDATION
+
+Now that objects exist, intelligence can exist.
+
+Claim Intelligence requires:
+
+Claim
+Supplements
+Adjuster behavior
+Timeline
+
+No modeling happens until data exists.
+
+⸻
+
+11. BUILD ORDER
+
+Step 1: Create tables
+Step 2: Create createClient endpoint
+Step 3: Create createAdjuster endpoint
+Step 4: Create createClaim endpoint
+Step 5: Create addSupplement endpoint
+Step 6: Create listClaims endpoint
+Step 7: Create claimDetail endpoint
+
+No friction modeling yet.
+
+Just CRUD + tenant isolation.
+
+⸻
+
+12. THEN INTELLIGENCE LAYER
+
+After data exists:
+
+Add frictionScore
+Add escalationCategory
+Add approvalProbability
+
+Add recalculation logic on claim update.

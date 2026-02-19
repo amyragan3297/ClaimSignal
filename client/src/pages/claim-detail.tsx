@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import type { Claim } from "@shared/schema";
 import {
   ArrowLeft,
@@ -16,6 +19,7 @@ import {
   Trash2,
   AlertTriangle,
   Loader2,
+  Shield,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -23,9 +27,20 @@ export default function ClaimDetailPage() {
   const [, params] = useRoute("/claims/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { data: authData } = useAuth();
+  const userRole = authData?.user?.role || "standard";
+  const canToggleUnmasked = userRole === "super_admin" || userRole === "team_owner";
+  const [showUnmasked, setShowUnmasked] = useState(false);
 
   const { data: claim, isLoading } = useQuery<Claim>({
-    queryKey: ["/api/claims", params?.id],
+    queryKey: ["/api/claims", params?.id, { unmasked: showUnmasked && canToggleUnmasked }],
+    queryFn: async () => {
+      const url = showUnmasked && canToggleUnmasked 
+        ? `/api/claims/${params?.id}?unmasked=true` 
+        : `/api/claims/${params?.id}`;
+      const res = await apiRequest("GET", url);
+      return res.json();
+    },
     enabled: !!params?.id,
   });
 
@@ -89,7 +104,7 @@ export default function ClaimDetailPage() {
             <h1 className="text-xl font-bold tracking-tight" data-testid="text-claim-title">
               {claim.claimNumber}
             </h1>
-            <p className="text-sm text-muted-foreground">{claim.insuredName}</p>
+            <p className="text-sm text-muted-foreground">{claim.insuredName || "\u2014"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -114,6 +129,26 @@ export default function ClaimDetailPage() {
         </div>
       </div>
 
+      {canToggleUnmasked && (
+        <div className="flex items-center justify-between rounded-md border border-border bg-card p-3">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium" data-testid="text-privacy-label-detail">Data Privacy Mode</p>
+              <p className="text-xs text-muted-foreground">PII is masked for non-privileged roles by default to protect homeowner privacy.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{showUnmasked ? "Showing full data" : "PII masked"}</span>
+            <Switch
+              checked={showUnmasked}
+              onCheckedChange={setShowUnmasked}
+              data-testid="switch-unmask-toggle-detail"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -124,8 +159,8 @@ export default function ClaimDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <InfoRow label="Claim Number" value={claim.claimNumber} testId="detail-claim-number" />
-            <InfoRow label="Insured Name" value={claim.insuredName} testId="detail-insured-name" />
-            <InfoRow label="Loss Type" value={claim.lossType || "—"} testId="detail-loss-type" />
+            <InfoRow label="Insured Name" value={claim.insuredName || "\u2014"} testId="detail-insured-name" />
+            <InfoRow label="Loss Type" value={claim.lossType || "\u2014"} testId="detail-loss-type" />
             <InfoRow label="Status" value={claim.status.replace("_", " ")} testId="detail-status" />
             {claim.frictionScore !== null && claim.frictionScore !== undefined && (
               <div className="flex items-center justify-between">
@@ -152,10 +187,10 @@ export default function ClaimDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <InfoRow label="Address" value={claim.address} testId="detail-address" />
-            <InfoRow label="City" value={claim.city} testId="detail-city" />
-            <InfoRow label="State" value={claim.state} testId="detail-state" />
-            <InfoRow label="ZIP Code" value={claim.zipCode || "—"} testId="detail-zip" />
+            <InfoRow label="Address" value={claim.address || "\u2014"} testId="detail-address" />
+            <InfoRow label="City" value={claim.city || "\u2014"} testId="detail-city" />
+            <InfoRow label="State" value={claim.state || "\u2014"} testId="detail-state" />
+            <InfoRow label="ZIP Code" value={claim.zipCode || "\u2014"} testId="detail-zip" />
           </CardContent>
         </Card>
 
@@ -169,12 +204,12 @@ export default function ClaimDetailPage() {
           <CardContent className="space-y-4">
             <InfoRow
               label="Claim Amount"
-              value={claim.claimAmount ? `$${claim.claimAmount.toLocaleString()}` : "—"}
+              value={claim.claimAmount ? `$${claim.claimAmount.toLocaleString()}` : "\u2014"}
               testId="detail-claim-amount"
             />
             <InfoRow
               label="Approved Amount"
-              value={claim.approvedAmount ? `$${claim.approvedAmount.toLocaleString()}` : "—"}
+              value={claim.approvedAmount ? `$${claim.approvedAmount.toLocaleString()}` : "\u2014"}
               testId="detail-approved-amount"
             />
           </CardContent>
@@ -190,12 +225,12 @@ export default function ClaimDetailPage() {
           <CardContent className="space-y-4">
             <InfoRow
               label="Loss Date"
-              value={claim.lossDate ? new Date(claim.lossDate).toLocaleDateString() : "—"}
+              value={claim.lossDate ? new Date(claim.lossDate).toLocaleDateString() : "\u2014"}
               testId="detail-loss-date"
             />
             <InfoRow
               label="Created"
-              value={claim.createdAt ? new Date(claim.createdAt).toLocaleDateString() : "—"}
+              value={claim.createdAt ? new Date(claim.createdAt).toLocaleDateString() : "\u2014"}
               testId="detail-created"
             />
             {claim.notes && (
@@ -204,6 +239,21 @@ export default function ClaimDetailPage() {
                 <p className="text-sm bg-muted/50 rounded-md p-3" data-testid="detail-notes">{claim.notes}</p>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary" />
+              Homeowner Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <InfoRow label="Homeowner Name" value={claim.homeownerName || "\u2014"} testId="detail-homeowner-name" />
+            <InfoRow label="Phone" value={claim.homeownerPhone || "\u2014"} testId="detail-homeowner-phone" />
+            <InfoRow label="Email" value={claim.homeownerEmail || "\u2014"} testId="detail-homeowner-email" />
+            <InfoRow label="Policy Number" value={claim.policyNumber || "\u2014"} testId="detail-policy-number" />
           </CardContent>
         </Card>
       </div>

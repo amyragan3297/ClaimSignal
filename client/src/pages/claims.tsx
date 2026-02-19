@@ -12,16 +12,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import type { Claim } from "@shared/schema";
-import { Plus, Search, FileText, Eye, Loader2, X } from "lucide-react";
+import { Plus, Search, FileText, Eye, Loader2, X, Shield } from "lucide-react";
 
 const createClaimSchema = z.object({
   claimNumber: z.string().min(1, "Claim number required"),
   carrier: z.string().optional(),
   propertyAddress: z.string().optional(),
+  homeownerName: z.string().optional(),
+  homeownerPhone: z.string().optional(),
+  homeownerEmail: z.string().optional(),
+  policyNumber: z.string().optional(),
+  insuredName: z.string().optional(),
+  lossType: z.string().optional(),
   status: z.string().default("open"),
   notes: z.string().optional(),
 });
@@ -39,9 +47,18 @@ export default function ClaimsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { data: authData } = useAuth();
+  const userRole = authData?.user?.role || "standard";
+  const canToggleUnmasked = userRole === "super_admin" || userRole === "team_owner";
+  const [showUnmasked, setShowUnmasked] = useState(false);
 
   const { data: claims, isLoading } = useQuery<Claim[]>({
-    queryKey: ["/api/claims"],
+    queryKey: ["/api/claims", { unmasked: showUnmasked && canToggleUnmasked }],
+    queryFn: async () => {
+      const url = showUnmasked && canToggleUnmasked ? "/api/claims?unmasked=true" : "/api/claims";
+      const res = await apiRequest("GET", url);
+      return res.json();
+    },
   });
 
   const form = useForm<z.infer<typeof createClaimSchema>>({
@@ -50,6 +67,12 @@ export default function ClaimsPage() {
       claimNumber: "",
       carrier: "",
       propertyAddress: "",
+      homeownerName: "",
+      homeownerPhone: "",
+      homeownerEmail: "",
+      policyNumber: "",
+      insuredName: "",
+      lossType: "",
       status: "open",
       notes: "",
     },
@@ -75,7 +98,8 @@ export default function ClaimsPage() {
     (c) =>
       (c.claimNumber || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (c.carrier || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.propertyAddress || "").toLowerCase().includes(searchQuery.toLowerCase())
+      (c.propertyAddress || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ((c as any).homeownerName || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -109,6 +133,34 @@ export default function ClaimsPage() {
               <div className="space-y-2">
                 <Label>Property Address</Label>
                 <Input placeholder="123 Main Street, Dallas TX" data-testid="input-address" {...form.register("propertyAddress")} />
+              </div>
+              <div className="space-y-2">
+                <Label>Homeowner Name</Label>
+                <Input placeholder="John Doe" data-testid="input-homeowner-name" {...form.register("homeownerName")} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Homeowner Phone</Label>
+                  <Input placeholder="555-0100" data-testid="input-homeowner-phone" {...form.register("homeownerPhone")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Homeowner Email</Label>
+                  <Input placeholder="john@example.com" data-testid="input-homeowner-email" {...form.register("homeownerEmail")} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Policy Number</Label>
+                  <Input placeholder="POL-12345" data-testid="input-policy-number" {...form.register("policyNumber")} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Loss Type</Label>
+                  <Input placeholder="Wind, Hail, Fire..." data-testid="input-loss-type" {...form.register("lossType")} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Insured Name</Label>
+                <Input placeholder="Insured party name" data-testid="input-insured-name" {...form.register("insuredName")} />
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
@@ -149,6 +201,26 @@ export default function ClaimsPage() {
         </div>
       </div>
 
+      {canToggleUnmasked && (
+        <div className="flex items-center justify-between rounded-md border border-border bg-card p-3">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium" data-testid="text-privacy-label">Data Privacy Mode</p>
+              <p className="text-xs text-muted-foreground">PII is masked for non-privileged roles by default to protect homeowner privacy.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{showUnmasked ? "Showing full data" : "PII masked"}</span>
+            <Switch
+              checked={showUnmasked}
+              onCheckedChange={setShowUnmasked}
+              data-testid="switch-unmask-toggle"
+            />
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -179,6 +251,7 @@ export default function ClaimsPage() {
                     <TableHead>Claim #</TableHead>
                     <TableHead>Carrier</TableHead>
                     <TableHead>Property</TableHead>
+                    <TableHead>Homeowner</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Risk Score</TableHead>
                     <TableHead className="w-10"></TableHead>
@@ -191,6 +264,9 @@ export default function ClaimsPage() {
                       <TableCell data-testid={`text-carrier-${claim.id}`}>{claim.carrier || "\u2014"}</TableCell>
                       <TableCell className="text-muted-foreground max-w-[200px] truncate" data-testid={`text-address-${claim.id}`}>
                         {claim.propertyAddress || "\u2014"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground" data-testid={`text-homeowner-${claim.id}`}>
+                        {(claim as any).homeownerName || "\u2014"}
                       </TableCell>
                       <TableCell>
                         <Badge

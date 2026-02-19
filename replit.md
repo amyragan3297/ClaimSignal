@@ -73,13 +73,27 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 5. Escalation Architecture Engine (levels 0-5)
 6. Outcome Migration Engine (monetization layer)
 
+### PII Masking & Data Privacy
+- **Role-based PII masking** enforced at API level (not UI)
+- **PII fields:** homeownerName, homeownerPhone, homeownerEmail, propertyAddress, claimNumber, policyNumber, insuredName
+- **Masking policy:** super_admin and team_owner see full PII; all other roles see masked PII by default
+- **Unmasked toggle:** `GET /api/claims?unmasked=true` — backend enforces role check, audits every unmask action
+- **Audit trail:** PII_UNMASK_VIEW logged with actorUserId, tenantId, timestamp for legal protection
+- **Masking ON by default** — no raw PII in dashboards, screenshots, or exports unless super_admin explicitly toggles
+- **Masking utility:** `server/masking.ts` — `applyPiiMasking()`, `applyPiiMaskingToList()`, `canViewUnmasked()`
+- **requireSuperAdmin middleware:** destructive routes (DELETE claims) require super_admin role
+- **Tenant isolation:** super_admin can see cross-tenant data; all other roles scoped to their organization
+
 ### Key API Routes
 - `POST /api/auth/register` - Create org + user + billing account
 - `POST /api/auth/login` - Authenticate and get tokens
 - `POST /api/auth/refresh` - Rotate refresh token
 - `GET /api/auth/me` - Current user, org, billing, founder agreement status
-- `GET/POST /api/claims` - CRUD claims with org isolation
-- `GET/POST /api/adjusters` - CRUD adjusters
+- `GET /api/claims` - List claims (tenant-scoped, super_admin cross-tenant, supports `?unmasked=true`)
+- `GET /api/claims/:id` - Get claim detail (tenant-scoped, super_admin cross-tenant, supports `?unmasked=true`)
+- `POST /api/claims` - Create claim with PII fields
+- `DELETE /api/claims/:id` - Soft delete (requireSuperAdmin only)
+- `GET/POST /api/adjusters` - CRUD adjusters (tenant-scoped, super_admin cross-tenant)
 - `POST /api/billing/checkout` - Create Stripe checkout session
 - `POST /api/legal/founder/sign` - Sign founder agreement
 - `GET /api/admin/overview` - Platform stats (owner only)
@@ -87,7 +101,7 @@ Key pages: Homepage (public), Login/Register, Dashboard, Claims, Adjusters, Bill
 
 ### Admin Access
 - Default platform owner: `admin@claimsignal.com` / `ClaimSignal2026!`
-- Auto-seeded on first startup
+- Auto-seeded on first startup with role: super_admin
 
 ## Recent Changes
 - 2026-02-19: Complete rebuild - all backend files rewritten for new 10-table schema

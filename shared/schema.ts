@@ -56,9 +56,24 @@ export const billingAccounts = pgTable("billing_accounts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const clients = pgTable("clients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  streetAddress: text("street_address"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const claims = pgTable("claims", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull(),
+  clientId: varchar("client_id"),
   claimNumber: text("claim_number").notNull(),
   carrier: text("carrier"),
   dateOfLoss: timestamp("date_of_loss"),
@@ -81,10 +96,64 @@ export const claims = pgTable("claims", {
   approvedAmount: real("approved_amount"),
   lossDate: timestamp("loss_date"),
   frictionScore: integer("friction_score"),
+  roofType: text("roof_type"),
+  shingleType: text("shingle_type"),
+  rcvTotal: real("rcv_total"),
+  acvTotal: real("acv_total"),
+  deductible: real("deductible"),
+  escalationCategory: text("escalation_category"),
+  approvalProbability: real("approval_probability"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   archivedAt: timestamp("archived_at"),
   deletedAt: timestamp("deleted_at"),
+});
+
+export const supplementStatusEnum = pgEnum("supplement_status", ["pending", "approved", "denied", "partial"]);
+
+export const supplements = pgTable("supplements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  claimId: varchar("claim_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  amountRequested: real("amount_requested"),
+  amountApproved: real("amount_approved"),
+  amountDenied: real("amount_denied"),
+  dateSubmitted: timestamp("date_submitted"),
+  dateResolved: timestamp("date_resolved"),
+  status: text("status").notNull().default("pending"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const documents = pgTable("documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  claimId: varchar("claim_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type"),
+  fileUrl: text("file_url"),
+  uploadedBy: varchar("uploaded_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const emails = pgTable("emails", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  claimId: varchar("claim_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  direction: text("direction").notNull().default("incoming"),
+  subject: text("subject"),
+  body: text("body"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const aiInsights = pgTable("ai_insights", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  claimId: varchar("claim_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  insightType: text("insight_type").notNull(),
+  confidenceScore: real("confidence_score"),
+  summary: text("summary"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const claimVersions = pgTable("claim_versions", {
@@ -157,10 +226,15 @@ export const insertOrganizationSchema = createInsertSchema(organizations).omit({
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertUserSessionSchema = createInsertSchema(userSessions).omit({ id: true, createdAt: true, lastUsedAt: true });
 export const insertBillingAccountSchema = createInsertSchema(billingAccounts).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertClientSchema = createInsertSchema(clients).omit({ id: true, createdAt: true });
 export const insertClaimSchema = createInsertSchema(claims).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClaimVersionSchema = createInsertSchema(claimVersions).omit({ id: true, changedAt: true });
 export const insertAdjusterSchema = createInsertSchema(adjusters).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAdjusterMetricsSchema = createInsertSchema(adjusterMetrics).omit({ id: true, lastUpdated: true });
+export const insertSupplementSchema = createInsertSchema(supplements).omit({ id: true, createdAt: true });
+export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
+export const insertEmailSchema = createInsertSchema(emails).omit({ id: true, createdAt: true });
+export const insertAiInsightSchema = createInsertSchema(aiInsights).omit({ id: true, createdAt: true });
 export const insertFounderAgreementSchema = createInsertSchema(founderAgreements).omit({ id: true, signedAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, timestamp: true });
 
@@ -186,11 +260,21 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UserSession = typeof userSessions.$inferSelect;
 export type BillingAccount = typeof billingAccounts.$inferSelect;
 export type InsertBillingAccount = z.infer<typeof insertBillingAccountSchema>;
+export type Client = typeof clients.$inferSelect;
+export type InsertClient = z.infer<typeof insertClientSchema>;
 export type Claim = typeof claims.$inferSelect;
 export type InsertClaim = z.infer<typeof insertClaimSchema>;
 export type ClaimVersion = typeof claimVersions.$inferSelect;
 export type Adjuster = typeof adjusters.$inferSelect;
 export type InsertAdjuster = z.infer<typeof insertAdjusterSchema>;
 export type AdjusterMetrics = typeof adjusterMetrics.$inferSelect;
+export type Supplement = typeof supplements.$inferSelect;
+export type InsertSupplement = z.infer<typeof insertSupplementSchema>;
+export type Document = typeof documents.$inferSelect;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Email = typeof emails.$inferSelect;
+export type InsertEmail = z.infer<typeof insertEmailSchema>;
+export type AiInsight = typeof aiInsights.$inferSelect;
+export type InsertAiInsight = z.infer<typeof insertAiInsightSchema>;
 export type FounderAgreement = typeof founderAgreements.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;

@@ -50,6 +50,7 @@ export interface IStorage {
   getAllBillingAccounts(): Promise<BillingAccount[]>;
 
   getClaims(orgId: string): Promise<Claim[]>;
+  getAllClaimsAcrossTenants(): Promise<Claim[]>;
   getClaim(id: string, orgId: string): Promise<Claim | undefined>;
   createClaim(claim: InsertClaim): Promise<Claim>;
   updateClaim(id: string, orgId: string, data: Partial<InsertClaim>): Promise<Claim | undefined>;
@@ -70,6 +71,7 @@ export interface IStorage {
   getLatestVersionNumber(claimId: string): Promise<number>;
 
   getAdjusters(orgId: string): Promise<Adjuster[]>;
+  getAllAdjustersAcrossTenants(): Promise<Adjuster[]>;
   getAdjuster(id: string, orgId: string): Promise<Adjuster | undefined>;
   createAdjuster(adjuster: InsertAdjuster): Promise<Adjuster>;
   updateAdjuster(id: string, orgId: string, data: Partial<InsertAdjuster>): Promise<Adjuster | undefined>;
@@ -228,6 +230,10 @@ export class DatabaseStorage implements IStorage {
     ).orderBy(desc(claims.createdAt));
   }
 
+  async getAllClaimsAcrossTenants(): Promise<Claim[]> {
+    return db.select().from(claims).where(isNull(claims.deletedAt)).orderBy(desc(claims.createdAt));
+  }
+
   async getClaim(id: string, orgId: string): Promise<Claim | undefined> {
     const [claim] = await db.select().from(claims).where(
       and(eq(claims.id, id), eq(claims.organizationId, orgId), isNull(claims.deletedAt))
@@ -299,6 +305,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAdjusters(orgId: string): Promise<Adjuster[]> {
     return db.select().from(adjusters).where(eq(adjusters.organizationId, orgId));
+  }
+
+  async getAllAdjustersAcrossTenants(): Promise<Adjuster[]> {
+    return db.select().from(adjusters);
   }
 
   async getAdjuster(id: string, orgId: string): Promise<Adjuster | undefined> {

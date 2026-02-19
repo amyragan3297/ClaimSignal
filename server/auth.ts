@@ -174,6 +174,14 @@ export function requirePlatformOwner(req: AuthRequest, res: Response, next: Next
   next();
 }
 
+export function requireSuperAdmin(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.auth) return res.status(401).json({ message: "Not authenticated" });
+  if (req.auth.role !== "super_admin") {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  next();
+}
+
 export function blockDuringImpersonation(req: AuthRequest, res: Response, next: NextFunction) {
   if (req.auth?.isImpersonation) {
     return res.status(403).json({ message: "Not allowed during impersonation" });
