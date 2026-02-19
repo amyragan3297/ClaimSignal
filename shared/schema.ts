@@ -18,7 +18,7 @@ export const users = pgTable("users", {
   organizationId: varchar("organization_id").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: userRoleEnum("role").notNull().default("standard"),
+  role: userRoleEnum("role").notNull().default("founder"),
   founderFlag: boolean("founder_flag").default(false),
   isPlatformOwner: boolean("is_platform_owner").default(false),
   fullName: text("full_name").notNull(),
@@ -87,10 +87,13 @@ export const claimVersions = pgTable("claim_versions", {
 export const adjusters = pgTable("adjusters", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull(),
-  name: text("name").notNull(),
+  fullName: text("full_name").notNull(),
   carrier: text("carrier"),
+  licenseNumber: text("license_number"),
+  region: text("region"),
   email: text("email"),
   phone: text("phone"),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -153,6 +156,8 @@ export const signupSchema = z.object({
   fullName: z.string().min(2, "Full name required"),
   orgName: z.string().min(2, "Organization name required"),
 });
+
+export const registerSchema = signupSchema;
 
 export const loginSchema = z.object({
   email: z.string().email("Valid email required"),

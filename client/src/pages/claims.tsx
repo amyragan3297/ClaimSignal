@@ -3,40 +3,27 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { Claim } from "@shared/schema";
-import {
-  Plus,
-  Search,
-  FileText,
-  Eye,
-  Loader2,
-  X,
-} from "lucide-react";
+import { Plus, Search, FileText, Eye, Loader2, X } from "lucide-react";
 
 const createClaimSchema = z.object({
   claimNumber: z.string().min(1, "Claim number required"),
-  insuredName: z.string().min(1, "Insured name required"),
-  address: z.string().min(1, "Address required"),
-  city: z.string().min(1, "City required"),
-  state: z.string().min(1, "State required"),
-  zipCode: z.string().optional(),
+  carrier: z.string().optional(),
+  propertyAddress: z.string().optional(),
   status: z.string().default("open"),
-  lossType: z.string().optional(),
   notes: z.string().optional(),
-  claimAmount: z.coerce.number().optional(),
 });
 
 const statusColors: Record<string, string> = {
@@ -53,9 +40,6 @@ export default function ClaimsPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-  const shouldOpenNew = searchParams.get("new") === "true";
-
   const { data: claims, isLoading } = useQuery<Claim[]>({
     queryKey: ["/api/claims"],
   });
@@ -64,13 +48,9 @@ export default function ClaimsPage() {
     resolver: zodResolver(createClaimSchema),
     defaultValues: {
       claimNumber: "",
-      insuredName: "",
-      address: "",
-      city: "",
-      state: "",
-      zipCode: "",
+      carrier: "",
+      propertyAddress: "",
       status: "open",
-      lossType: "",
       notes: "",
     },
   });
@@ -93,9 +73,9 @@ export default function ClaimsPage() {
 
   const filteredClaims = claims?.filter(
     (c) =>
-      c.claimNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.insuredName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.city.toLowerCase().includes(searchQuery.toLowerCase())
+      (c.claimNumber || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.carrier || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.propertyAddress || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -105,12 +85,7 @@ export default function ClaimsPage() {
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-claims-title">Claims</h1>
           <p className="text-sm text-muted-foreground">Manage and track property claims</p>
         </div>
-        <Dialog open={dialogOpen || shouldOpenNew} onOpenChange={(v) => {
-          setDialogOpen(v);
-          if (!v && shouldOpenNew) {
-            setLocation("/claims");
-          }
-        }}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-new-claim">
               <Plus className="w-4 h-4" />
@@ -122,46 +97,18 @@ export default function ClaimsPage() {
               <DialogTitle>Create New Claim</DialogTitle>
             </DialogHeader>
             <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Claim Number</Label>
-                  <Input placeholder="CLM-00001" data-testid="input-claim-number" {...form.register("claimNumber")} />
-                  {form.formState.errors.claimNumber && <p className="text-xs text-destructive">{form.formState.errors.claimNumber.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label>Loss Type</Label>
-                  <Input placeholder="Wind, Hail, Fire..." data-testid="input-loss-type" {...form.register("lossType")} />
-                </div>
+              <div className="space-y-2">
+                <Label>Claim Number</Label>
+                <Input placeholder="CLM-00001" data-testid="input-claim-number" {...form.register("claimNumber")} />
+                {form.formState.errors.claimNumber && <p className="text-xs text-destructive">{form.formState.errors.claimNumber.message}</p>}
               </div>
               <div className="space-y-2">
-                <Label>Insured Name</Label>
-                <Input placeholder="John Smith" data-testid="input-insured-name" {...form.register("insuredName")} />
-                {form.formState.errors.insuredName && <p className="text-xs text-destructive">{form.formState.errors.insuredName.message}</p>}
+                <Label>Carrier</Label>
+                <Input placeholder="State Farm, Allstate..." data-testid="input-carrier" {...form.register("carrier")} />
               </div>
               <div className="space-y-2">
-                <Label>Address</Label>
-                <Input placeholder="123 Main Street" data-testid="input-address" {...form.register("address")} />
-                {form.formState.errors.address && <p className="text-xs text-destructive">{form.formState.errors.address.message}</p>}
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>City</Label>
-                  <Input placeholder="Dallas" data-testid="input-city" {...form.register("city")} />
-                  {form.formState.errors.city && <p className="text-xs text-destructive">{form.formState.errors.city.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label>State</Label>
-                  <Input placeholder="TX" data-testid="input-state" {...form.register("state")} />
-                  {form.formState.errors.state && <p className="text-xs text-destructive">{form.formState.errors.state.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label>ZIP</Label>
-                  <Input placeholder="75001" data-testid="input-zip" {...form.register("zipCode")} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Claim Amount ($)</Label>
-                <Input type="number" placeholder="15000" data-testid="input-claim-amount" {...form.register("claimAmount")} />
+                <Label>Property Address</Label>
+                <Input placeholder="123 Main Street, Dallas TX" data-testid="input-address" {...form.register("propertyAddress")} />
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
@@ -230,11 +177,10 @@ export default function ClaimsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Claim #</TableHead>
-                    <TableHead>Insured</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Amount</TableHead>
+                    <TableHead>Carrier</TableHead>
+                    <TableHead>Property</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Risk Score</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -242,15 +188,9 @@ export default function ClaimsPage() {
                   {filteredClaims.map((claim) => (
                     <TableRow key={claim.id} className="hover-elevate cursor-pointer" onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`row-claim-${claim.id}`}>
                       <TableCell className="font-mono text-sm" data-testid={`text-claim-number-${claim.id}`}>{claim.claimNumber}</TableCell>
-                      <TableCell data-testid={`text-insured-${claim.id}`}>{claim.insuredName}</TableCell>
-                      <TableCell className="text-muted-foreground" data-testid={`text-location-${claim.id}`}>
-                        {claim.city}, {claim.state}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{claim.lossType || "—"}</TableCell>
-                      <TableCell>
-                        {claim.claimAmount
-                          ? `$${claim.claimAmount.toLocaleString()}`
-                          : "—"}
+                      <TableCell data-testid={`text-carrier-${claim.id}`}>{claim.carrier || "\u2014"}</TableCell>
+                      <TableCell className="text-muted-foreground max-w-[200px] truncate" data-testid={`text-address-${claim.id}`}>
+                        {claim.propertyAddress || "\u2014"}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -259,6 +199,13 @@ export default function ClaimsPage() {
                         >
                           {claim.status.replace("_", " ")}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {claim.riskScore !== null ? (
+                          <Badge variant={claim.riskScore > 70 ? "destructive" : claim.riskScore > 40 ? "secondary" : "outline"} className="text-xs">
+                            {claim.riskScore}
+                          </Badge>
+                        ) : "\u2014"}
                       </TableCell>
                       <TableCell>
                         <Eye className="w-4 h-4 text-muted-foreground" />

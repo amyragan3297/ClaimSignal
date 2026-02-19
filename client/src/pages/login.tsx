@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { Shield, ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { loginSchema, registerSchema } from "@shared/schema";
+import { loginSchema, signupSchema } from "@shared/schema";
 
 export default function LoginPage() {
   const { login, register: registerUser } = useAuth();
@@ -27,8 +27,8 @@ export default function LoginPage() {
     defaultValues: { email: "", password: "" },
   });
 
-  const registerForm = useForm<z.infer<typeof registerSchema>>({
-    resolver: zodResolver(registerSchema),
+  const registerForm = useForm<z.infer<typeof signupSchema>>({
+    resolver: zodResolver(signupSchema),
     defaultValues: { email: "", password: "", fullName: "", orgName: "" },
   });
 
@@ -47,7 +47,7 @@ export default function LoginPage() {
     }
   }
 
-  async function onRegister(data: z.infer<typeof registerSchema>) {
+  async function onRegister(data: z.infer<typeof signupSchema>) {
     try {
       setRegisterLoading(true);
       await registerUser(data);
@@ -73,7 +73,9 @@ export default function LoginPage() {
           </Link>
           <div className="flex items-center justify-center gap-2 mb-2">
             <Shield className="w-7 h-7 text-primary" />
-            <span className="text-xl font-bold tracking-tight">ClaimSignal</span>
+            <span className="text-xl font-bold tracking-tight">
+              CLAIM<span className="text-primary">SIGNAL</span>
+            </span>
           </div>
           <p className="text-sm text-muted-foreground">Operational Intelligence Platform</p>
         </div>
@@ -175,10 +177,10 @@ export default function LoginPage() {
                   </div>
                   <Button type="submit" className="w-full" disabled={registerLoading} data-testid="button-register-submit">
                     {registerLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Create Account
+                    Start 14-Day Trial
                   </Button>
                   <p className="text-xs text-center text-muted-foreground">
-                    By registering, you agree to our Terms of Service.
+                    All signups receive Founder pricing. 14-day free trial included.
                   </p>
                 </form>
               </TabsContent>

@@ -17,7 +17,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   LayoutDashboard,
   FileText,
@@ -26,18 +25,20 @@ import {
   LogOut,
   Loader2,
   Lock,
+  Users,
+  AlertTriangle,
 } from "lucide-react";
 
 const navItems = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, adminOnly: false },
-  { title: "Claims", href: "/claims", icon: FileText, adminOnly: false },
-  { title: "Billing", href: "/billing", icon: CreditCard, adminOnly: false },
-  { title: "Founder Agreement", href: "/legal/founder", icon: Shield, adminOnly: false },
-  { title: "Admin", href: "/admin", icon: Lock, adminOnly: true },
+  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { title: "Claims", href: "/claims", icon: FileText },
+  { title: "Adjusters", href: "/adjusters", icon: Users },
+  { title: "Billing", href: "/billing", icon: CreditCard },
+  { title: "Founder Agreement", href: "/legal/founder", icon: Shield },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const { user, isLoading, logout } = useAuth();
+  const { data, isLoading, logout, stopImpersonation } = useAuth();
   const [location] = useLocation();
 
   if (isLoading) {
@@ -48,8 +49,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user) {
+  if (!data) {
     return <Redirect to="/login" />;
+  }
+
+  const billing = data.billing;
+  const isActive = billing?.subscriptionStatus === "active";
+  const isTrialing = billing?.subscriptionStatus === "trialing" && billing.trialEndDate && new Date(billing.trialEndDate) > new Date();
+  const hasAccess = isActive || isTrialing || data.isPlatformOwner;
+
+  if (!hasAccess && location !== "/billing") {
+    return <Redirect to="/billing" />;
   }
 
   const style = {
@@ -57,12 +67,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     "--sidebar-width-icon": "3rem",
   };
 
-  const initials = user.user.fullName
+  const initials = data.user.fullName
     .split(" ")
     .map((n) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  const daysLeft = billing?.trialEndDate
+    ? Math.max(0, Math.ceil((new Date(billing.trialEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
@@ -71,20 +85,22 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <SidebarHeader className="p-4">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-primary" />
-              <span className="font-semibold text-sm tracking-tight">ClaimSignal</span>
+              <span className="font-semibold text-sm tracking-tight">
+                CLAIM<span className="text-primary">SIGNAL</span>
+              </span>
             </div>
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {navItems.filter((item) => !item.adminOnly || user?.isAdmin).map((item) => {
-                    const isActive = location === item.href || location.startsWith(item.href + "/");
+                  {navItems.map((item) => {
+                    const isActiveRoute = location === item.href || location.startsWith(item.href + "/");
                     return (
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton
                           asChild
-                          isActive={isActive}
+                          isActive={isActiveRoute}
                           data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
                         >
                           <Link href={item.href}>
@@ -95,6 +111,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       </SidebarMenuItem>
                     );
                   })}
+                  {data.isPlatformOwner && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === "/admin"}
+                        data-testid="nav-admin"
+                      >
+                        <Link href="/admin">
+                          <Lock className="w-4 h-4" />
+                          <span>Admin</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -107,8 +137,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{user.user.fullName}</p>
-                <p className="text-xs text-muted-foreground truncate">{user.org.name}</p>
+                <p className="text-sm font-medium truncate">{data.user.fullName}</p>
+                <p className="text-xs text-muted-foreground truncate">{data.org.name}</p>
               </div>
             </div>
             <Button
@@ -125,11 +155,32 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </Sidebar>
 
         <div className="flex flex-col flex-1 min-w-0">
+          {data.isImpersonation && (
+            <div className="bg-destructive/10 border-b border-destructive/30 px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 text-sm">
+                <AlertTriangle className="w-4 h-4 text-destructive" />
+                <span className="font-medium text-destructive">Impersonating: {data.user.fullName} ({data.org.name})</span>
+              </div>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => stopImpersonation()}
+                data-testid="button-stop-impersonation"
+              >
+                Stop Impersonation
+              </Button>
+            </div>
+          )}
           <header className="flex items-center gap-2 p-3 border-b border-border/50 sticky top-0 z-50 bg-background/80 backdrop-blur-xl">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="ml-auto flex items-center gap-2">
-              <Badge variant="outline" className="capitalize text-xs" data-testid="badge-header-tier">
-                {user.subscription?.tier || "pro"}
+              {billing?.subscriptionStatus === "trialing" && daysLeft !== null && (
+                <Badge variant="outline" className="text-xs" data-testid="badge-trial-days">
+                  {daysLeft} days left in trial
+                </Badge>
+              )}
+              <Badge variant="outline" className="text-xs" data-testid="badge-header-plan">
+                Founder
               </Badge>
             </div>
           </header>

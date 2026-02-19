@@ -3,43 +3,40 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Building2, CreditCard, FileText, Shield, Loader2 } from "lucide-react";
+import { Users, Building2, CreditCard, FileText, Shield, Loader2, Eye } from "lucide-react";
 import { Redirect } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { setAccessToken } from "@/lib/queryClient";
 
 interface AdminOverview {
   totalUsers: number;
   totalOrgs: number;
-  totalSubscriptions: number;
+  totalBillingAccounts: number;
   totalClaims: number;
-  founderCount: number;
-  founderMax: number;
+  trialingCount: number;
+  activeCount: number;
+  canceledCount: number;
 }
 
 interface AdminUser {
   id: string;
   email: string;
   fullName: string;
-  isAdmin: boolean;
-  createdAt: string;
+  isPlatformOwner: boolean | null;
+  createdAt: string | null;
+  organizationId: string;
   orgName: string | null;
-  orgId: string | null;
-  role: string | null;
-  tier: string | null;
+  role: string;
   subscriptionStatus: string | null;
+  trialEndDate: string | null;
+  planType: string | null;
 }
 
 export default function AdminPage() {
-  const { user } = useAuth();
+  const { data: auth, refetch } = useAuth();
   const { toast } = useToast();
 
   const { data: overview, isLoading: overviewLoading } = useQuery<AdminOverview>({
@@ -50,28 +47,30 @@ export default function AdminPage() {
     queryKey: ["/api/admin/users"],
   });
 
-  const tierMutation = useMutation({
-    mutationFn: async ({ userId, tier }: { userId: string; tier: string }) => {
-      await apiRequest("PATCH", `/api/admin/users/${userId}/tier`, { tier });
+  const impersonateMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("POST", `/api/admin/impersonate/${userId}`);
+      const data = await res.json();
+      setAccessToken(data.accessToken);
+      await refetch();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/overview"] });
-      toast({ title: "Tier updated" });
+      toast({ title: "Now impersonating user" });
+      window.location.href = "/dashboard";
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Impersonation failed", description: err.message, variant: "destructive" });
     },
   });
 
-  if (!user?.isAdmin) {
+  if (!auth?.isPlatformOwner) {
     return <Redirect to="/dashboard" />;
   }
 
   const statCards = [
     { label: "Total Users", value: overview?.totalUsers, icon: Users },
     { label: "Organizations", value: overview?.totalOrgs, icon: Building2 },
-    { label: "Subscriptions", value: overview?.totalSubscriptions, icon: CreditCard },
+    { label: "Active", value: overview?.activeCount, icon: CreditCard },
     { label: "Total Claims", value: overview?.totalClaims, icon: FileText },
   ];
 
@@ -80,7 +79,7 @@ export default function AdminPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-admin-title">Admin Panel</h1>
         <p className="text-sm text-muted-foreground">
-          Manage all users, organizations, and subscriptions
+          Platform owner controls and user management
         </p>
       </div>
 
@@ -106,70 +105,67 @@ export default function AdminPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-          <CardTitle className="text-base font-semibold">Founder Slots</CardTitle>
-          <Badge variant="outline" data-testid="badge-founder-slots">
-            {overview?.founderCount ?? 0} / {overview?.founderMax ?? 3} used
-          </Badge>
+          <CardTitle className="text-base font-semibold">Subscription Breakdown</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="w-full bg-muted rounded-full h-2">
-            <div
-              className="bg-primary h-2 rounded-full transition-all"
-              style={{ width: `${((overview?.founderCount ?? 0) / (overview?.founderMax ?? 3)) * 100}%` }}
-            />
+        <CardContent className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Trialing</span>
+            <Badge variant="secondary">{overview?.trialingCount ?? 0}</Badge>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Active</span>
+            <Badge variant="default">{overview?.activeCount ?? 0}</Badge>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Canceled</span>
+            <Badge variant="destructive">{overview?.canceledCount ?? 0}</Badge>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base font-semibold">All Signups</CardTitle>
+          <CardTitle className="text-base font-semibold">All Users</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {usersLoading ? (
-            <div className="space-y-3">
+            <div className="p-6 space-y-3">
               {[1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-14 w-full" />
               ))}
             </div>
           ) : !users?.length ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No signups yet</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">No users yet</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    <th className="text-left py-2 pr-4 text-xs font-medium text-muted-foreground">Name</th>
-                    <th className="text-left py-2 pr-4 text-xs font-medium text-muted-foreground">Email</th>
-                    <th className="text-left py-2 pr-4 text-xs font-medium text-muted-foreground">Organization</th>
-                    <th className="text-left py-2 pr-4 text-xs font-medium text-muted-foreground">Tier</th>
-                    <th className="text-left py-2 pr-4 text-xs font-medium text-muted-foreground">Status</th>
-                    <th className="text-left py-2 pr-4 text-xs font-medium text-muted-foreground">Signed Up</th>
-                    <th className="text-left py-2 text-xs font-medium text-muted-foreground">Change Tier</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Organization</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Joined</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {users.map((u) => (
-                    <tr key={u.id} className="border-b border-border/30" data-testid={`row-admin-user-${u.id}`}>
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2">
+                    <TableRow key={u.id} data-testid={`row-admin-user-${u.id}`}>
+                      <TableCell>
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium">{u.fullName}</span>
-                          {u.isAdmin && (
+                          {u.isPlatformOwner && (
                             <Badge variant="outline" className="text-xs">
-                              <Shield className="w-3 h-3 mr-1" />
-                              Admin
+                              <Shield className="w-3 h-3" />
+                              Owner
                             </Badge>
                           )}
                         </div>
-                      </td>
-                      <td className="py-3 pr-4 text-muted-foreground">{u.email}</td>
-                      <td className="py-3 pr-4">{u.orgName || "—"}</td>
-                      <td className="py-3 pr-4">
-                        <Badge variant="outline" className="capitalize text-xs">
-                          {u.tier || "none"}
-                        </Badge>
-                      </td>
-                      <td className="py-3 pr-4">
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                      <TableCell>{u.orgName || "\u2014"}</TableCell>
+                      <TableCell>
                         <Badge
                           variant="outline"
                           className={`capitalize text-xs ${
@@ -179,36 +175,33 @@ export default function AdminPage() {
                             ""
                           }`}
                         >
-                          {u.subscriptionStatus || "—"}
+                          {u.subscriptionStatus || "\u2014"}
                         </Badge>
-                      </td>
-                      <td className="py-3 pr-4 text-muted-foreground text-xs">
-                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
-                      </td>
-                      <td className="py-3">
-                        {u.orgId && !u.isAdmin ? (
-                          <Select
-                            value={u.tier || "pro"}
-                            onValueChange={(tier) => tierMutation.mutate({ userId: u.id, tier })}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "\u2014"}
+                      </TableCell>
+                      <TableCell>
+                        {!u.isPlatformOwner && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => impersonateMutation.mutate(u.id)}
+                            disabled={impersonateMutation.isPending}
+                            data-testid={`button-impersonate-${u.id}`}
                           >
-                            <SelectTrigger className="w-[120px]" data-testid={`select-tier-${u.id}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="founder">Founder</SelectItem>
-                              <SelectItem value="pro">Pro</SelectItem>
-                              <SelectItem value="team">Team</SelectItem>
-                              <SelectItem value="enterprise">Enterprise</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                            {impersonateMutation.isPending && impersonateMutation.variables === u.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </Button>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>

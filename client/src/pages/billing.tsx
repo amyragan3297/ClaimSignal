@@ -1,183 +1,119 @@
 import { useAuth } from "@/lib/auth";
-import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Badge } from "@/components/ui/badge";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Shield, Zap, Users, Building2, Loader2 } from "lucide-react";
-
-const tiers = [
-  {
-    id: "founder",
-    name: "Founder",
-    price: "$149",
-    period: "/mo",
-    icon: Shield,
-    description: "Full unmasked access with founder benefits.",
-    features: [
-      "Full unmasked data access",
-      "All intelligence modules",
-      "12-day free trial",
-      "Priority support",
-      "Founder advisory input",
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "$79",
-    period: "/mo",
-    icon: Zap,
-    description: "Essential claim management.",
-    features: [
-      "Masked data access",
-      "Friction scoring",
-      "Claims management",
-      "Basic reporting",
-      "Email support",
-    ],
-  },
-  {
-    id: "team",
-    name: "Team",
-    price: "$199",
-    period: "/mo",
-    icon: Users,
-    description: "For growing teams.",
-    features: [
-      "Up to 10 seats",
-      "Masked data access",
-      "All intelligence modules",
-      "Team analytics",
-      "Priority support",
-    ],
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: "Custom",
-    period: "",
-    icon: Building2,
-    description: "Dedicated infrastructure.",
-    features: [
-      "Unlimited seats",
-      "Custom data policies",
-      "Dedicated infrastructure",
-      "SLA guarantee",
-      "Custom integrations",
-    ],
-  },
-];
+import { CreditCard, Shield, Clock, Loader2 } from "lucide-react";
+import { useState } from "react";
 
 export default function BillingPage() {
-  const { user, refetch } = useAuth();
+  const { data: auth, refetch } = useAuth();
   const { toast } = useToast();
-  const currentTier = user?.subscription?.tier || "pro";
+  const [loading, setLoading] = useState(false);
 
-  const upgradeMutation = useMutation({
-    mutationFn: async (tier: string) => {
-      const res = await apiRequest("POST", "/api/billing/checkout-session", { tier });
+  const billing = auth?.billing;
+  const daysLeft = billing?.trialEndDate
+    ? Math.max(0, Math.ceil((new Date(billing.trialEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
+
+  const isActive = billing?.subscriptionStatus === "active";
+  const isTrialing = billing?.subscriptionStatus === "trialing" && billing.trialEndDate && new Date(billing.trialEndDate) > new Date();
+  const needsPayment = !isActive && !isTrialing;
+
+  async function handleCheckout() {
+    try {
+      setLoading(true);
+      const res = await apiRequest("POST", "/api/billing/checkout");
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
-        return;
+      } else if (data.fallback) {
+        toast({ title: "Development Mode", description: data.message });
+        await refetch();
       }
-      if (data.fallback) {
-        queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-        refetch();
-      }
-    },
-    onSuccess: () => {
-      toast({ title: "Subscription updated" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Billing error", description: err.message, variant: "destructive" });
-    },
-  });
+    } catch (err: any) {
+      toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-billing-title">Billing</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your subscription and billing details
-        </p>
+        <p className="text-sm text-muted-foreground">Manage your subscription and payment</p>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-          <CardTitle className="text-base font-semibold">Current Plan</CardTitle>
-          <Badge variant="outline" className="capitalize" data-testid="badge-current-tier">{currentTier}</Badge>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Status</span>
-            <Badge variant="outline" className="text-xs capitalize" data-testid="badge-subscription-status">
-              {user?.subscription?.status || "active"}
-            </Badge>
-          </div>
-          {user?.subscription?.trialEnd && (
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle className="text-base">Subscription Status</CardTitle>
+            <CreditCard className="w-4 h-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Trial Ends</span>
-              <span className="text-sm font-medium" data-testid="text-trial-end">
-                {new Date(user.subscription.trialEnd).toLocaleDateString()}
-              </span>
+              <span className="text-sm text-muted-foreground">Status</span>
+              <Badge
+                variant={isActive ? "default" : isTrialing ? "secondary" : "destructive"}
+                className="capitalize"
+                data-testid="badge-subscription-status"
+              >
+                {billing?.subscriptionStatus || "inactive"}
+              </Badge>
             </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Seat Limit</span>
-            <span className="text-sm font-medium" data-testid="text-seat-limit">
-              {user?.subscription?.seatLimit || 1}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Plan</span>
+              <span className="text-sm font-medium capitalize" data-testid="text-plan-type">{billing?.planType || "None"}</span>
+            </div>
+            {isTrialing && daysLeft !== null && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Trial Remaining</span>
+                <span className="text-sm font-medium" data-testid="text-trial-days">{daysLeft} days</span>
+              </div>
+            )}
+            {billing?.trialEndDate && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Trial Ends</span>
+                <span className="text-sm text-muted-foreground">{new Date(billing.trialEndDate).toLocaleDateString()}</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {tiers.map((tier) => {
-          const isCurrent = tier.id === currentTier;
-          return (
-            <Card
-              key={tier.id}
-              className={isCurrent ? "border-primary" : ""}
-              data-testid={`card-billing-tier-${tier.id}`}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <tier.icon className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold">{tier.name}</h3>
-                </div>
-                <p className="text-xs text-muted-foreground mb-4">{tier.description}</p>
-                <div className="mb-4">
-                  <span className="text-2xl font-bold">{tier.price}</span>
-                  <span className="text-sm text-muted-foreground">{tier.period}</span>
-                </div>
-                <div className="space-y-2 mb-6">
-                  {tier.features.map((f) => (
-                    <div key={f} className="flex items-center gap-2 text-sm">
-                      <Check className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <span className="text-muted-foreground">{f}</span>
-                    </div>
-                  ))}
-                </div>
-                <Button
-                  className="w-full"
-                  variant={isCurrent ? "secondary" : "outline"}
-                  disabled={isCurrent || tier.id === "enterprise" || upgradeMutation.isPending}
-                  onClick={() => upgradeMutation.mutate(tier.id)}
-                  data-testid={`button-select-tier-${tier.id}`}
-                >
-                  {upgradeMutation.isPending && upgradeMutation.variables === tier.id && (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  )}
-                  {isCurrent ? "Current Plan" : tier.id === "enterprise" ? "Contact Sales" : "Select Plan"}
-                </Button>
-              </CardContent>
-            </Card>
-          );
-        })}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle className="text-base">Founder Plan</CardTitle>
+            <Shield className="w-4 h-4 text-primary" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              All ClaimSignal users are Founders. Your pricing is locked in permanently.
+            </p>
+            <ul className="text-sm space-y-1 text-muted-foreground">
+              <li className="flex items-center gap-2"><Clock className="w-3 h-3 text-primary" /> 14-day free trial</li>
+              <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Full platform access</li>
+              <li className="flex items-center gap-2"><CreditCard className="w-3 h-3 text-primary" /> Locked founder pricing</li>
+            </ul>
+          </CardContent>
+        </Card>
       </div>
+
+      {needsPayment && (
+        <Card className="border-primary/30">
+          <CardContent className="p-6 text-center space-y-4">
+            <h3 className="text-lg font-semibold">Subscription Required</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Your trial has expired or no payment method is on file. Complete checkout to continue using ClaimSignal.
+            </p>
+            <Button onClick={handleCheckout} disabled={loading} data-testid="button-checkout">
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Complete Checkout
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

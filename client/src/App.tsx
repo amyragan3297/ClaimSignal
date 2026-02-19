@@ -7,13 +7,12 @@ import { AuthProvider } from "@/lib/auth";
 import NotFound from "@/pages/not-found";
 import Homepage from "@/pages/homepage";
 import LoginPage from "@/pages/login";
-import InvestorPage from "@/pages/investor";
 import DashboardPage from "@/pages/dashboard";
 import ClaimsPage from "@/pages/claims";
-import ClaimDetailPage from "@/pages/claim-detail";
 import BillingPage from "@/pages/billing";
 import FounderLegalPage from "@/pages/founder-legal";
 import AdminPage from "@/pages/admin";
+import AdjustersPage from "@/pages/adjusters";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -23,7 +22,7 @@ function AppRoutes() {
       <Switch>
         <Route path="/dashboard" component={DashboardPage} />
         <Route path="/claims" component={ClaimsPage} />
-        <Route path="/claims/:id" component={ClaimDetailPage} />
+        <Route path="/adjusters" component={AdjustersPage} />
         <Route path="/billing" component={BillingPage} />
         <Route path="/legal/founder" component={FounderLegalPage} />
         <Route path="/admin" component={AdminPage} />
@@ -38,7 +37,6 @@ function Router() {
     <Switch>
       <Route path="/" component={Homepage} />
       <Route path="/login" component={LoginPage} />
-      <Route path="/investor" component={InvestorPage} />
       <Route>
         <AppRoutes />
       </Route>

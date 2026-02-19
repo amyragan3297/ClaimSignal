@@ -1,130 +1,89 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import session from "express-session";
 import bcrypt from "bcryptjs";
-import { registerSchema, loginSchema, insertClaimSchema } from "@shared/schema";
-import { shouldMask, maskClaim, maskClaims } from "./masking";
-import { createCheckoutSession, handleWebhookEvent, isStripeConfigured } from "./billing";
-import { createHash, randomBytes } from "crypto";
-import connectPgSimple from "connect-pg-simple";
-import { pool } from "./db";
-
-declare module "express-session" {
-  interface SessionData {
-    userId: string;
-    orgId: string;
-    impersonationToken?: string;
-    realUserId?: string;
-    realOrgId?: string;
-  }
-}
-
-function getClientIp(req: Request): string {
-  return (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
-}
-
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.session.userId || !req.session.orgId) {
-    return res.status(401).json({ message: "Not authenticated" });
-  }
-  next();
-}
-
-async function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const adminId = req.session.realUserId || req.session.userId;
-  if (!adminId) {
-    return res.status(401).json({ message: "Not authenticated" });
-  }
-  const user = await storage.getUser(adminId);
-  if (!user || !user.isAdmin) {
-    return res.status(403).json({ message: "Admin access required" });
-  }
-  next();
-}
-
-async function requirePlatformOwner(req: Request, res: Response, next: NextFunction) {
-  const ownerId = req.session.realUserId || req.session.userId;
-  if (!ownerId) {
-    return res.status(401).json({ message: "Not authenticated" });
-  }
-  const user = await storage.getUser(ownerId);
-  if (!user || !user.isPlatformOwner) {
-    return res.status(403).json({ message: "Platform owner access required" });
-  }
-  next();
-}
-
-function blockDuringImpersonation(req: Request, res: Response, next: NextFunction) {
-  if (req.session.impersonationToken) {
-    return res.status(403).json({ message: "Billing actions are not allowed during impersonation" });
-  }
-  next();
-}
+import cookieParser from "cookie-parser";
+import { signupSchema, loginSchema } from "@shared/schema";
+import { shouldMask, maskClaims, maskClaim } from "./masking";
+import { createFounderCheckoutSession, handleWebhookEvent } from "./billing";
+import { createHash } from "crypto";
+import {
+  type AuthRequest,
+  requireAuth,
+  requireActiveSubscription,
+  requirePlatformOwner,
+  blockDuringImpersonation,
+  createAuthSession,
+  refreshAuthSession,
+  setRefreshTokenCookie,
+  clearRefreshTokenCookie,
+  getClientIp,
+  hashToken,
+} from "./auth";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  const PgSession = connectPgSimple(session);
-
-  app.use(
-    session({
-      store: new PgSession({
-        pool,
-        tableName: "session",
-        createTableIfMissing: true,
-      }),
-      secret: process.env.SESSION_SECRET || "claimsignal-dev-secret",
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-        httpOnly: true,
-        secure: false,
-        sameSite: "lax",
-      },
-    })
-  );
+  app.use(cookieParser());
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
   });
 
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", async (req: AuthRequest, res) => {
     try {
-      const data = registerSchema.parse(req.body);
+      const data = signupSchema.parse(req.body);
       const existing = await storage.getUserByEmail(data.email);
       if (existing) {
         return res.status(400).json({ message: "Email already registered" });
       }
 
-      const hashedPassword = await bcrypt.hash(data.password, 10);
+      const passwordHash = await bcrypt.hash(data.password, 12);
+      const org = await storage.createOrganization({ name: data.orgName });
+
       const user = await storage.createUser({
         email: data.email,
-        password: hashedPassword,
+        passwordHash,
         fullName: data.fullName,
+        organizationId: org.id,
+        role: "founder",
+        founderFlag: true,
       });
 
-      const org = await storage.createOrg({ name: data.orgName, type: "individual" });
-      await storage.addOrgMember(org.id, user.id, "owner");
-      await storage.createSubscription({
-        orgId: org.id,
-        tier: "pro",
-        status: "active",
-        seatLimit: 1,
+      const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      await storage.createBillingAccount({
+        organizationId: org.id,
+        subscriptionStatus: "trialing",
+        planType: "founder",
+        trialStartDate: new Date(),
+        trialEndDate: trialEnd,
       });
 
-      req.session.userId = user.id;
-      req.session.orgId = org.id;
+      await storage.createAuditLog({
+        organizationId: org.id,
+        actorUserId: user.id,
+        actorRole: "founder",
+        actionType: "USER_REGISTERED",
+        entityType: "user",
+        entityId: user.id,
+        afterJson: { email: data.email, orgName: data.orgName },
+        ipAddress: getClientIp(req),
+      });
 
-      res.json({ message: "Registered successfully" });
+      const { accessToken, refreshToken } = await createAuthSession(
+        user.id, org.id,
+        { ipAddress: getClientIp(req), userAgent: req.headers["user-agent"] }
+      );
+
+      setRefreshTokenCookie(res, refreshToken);
+      res.json({ accessToken, user: sanitizeUser(user), orgId: org.id });
     } catch (err: any) {
       res.status(400).json({ message: err.message });
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", async (req: AuthRequest, res) => {
     try {
       const data = loginSchema.parse(req.body);
       const user = await storage.getUserByEmail(data.email);
@@ -132,81 +91,110 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      const validPassword = await bcrypt.compare(data.password, user.password);
-      if (!validPassword) {
+      const valid = await bcrypt.compare(data.password, user.passwordHash);
+      if (!valid) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      const member = await findUserOrg(user.id);
-      if (!member) {
-        return res.status(500).json({ message: "No organization found" });
-      }
+      const { accessToken, refreshToken } = await createAuthSession(
+        user.id, user.organizationId,
+        { ipAddress: getClientIp(req), userAgent: req.headers["user-agent"] }
+      );
 
-      req.session.userId = user.id;
-      req.session.orgId = member.orgId;
+      await storage.createAuditLog({
+        organizationId: user.organizationId,
+        actorUserId: user.id,
+        actorRole: user.role,
+        actionType: "USER_LOGIN",
+        entityType: "user",
+        entityId: user.id,
+        ipAddress: getClientIp(req),
+      });
 
-      res.json({ message: "Logged in" });
+      setRefreshTokenCookie(res, refreshToken);
+      res.json({ accessToken, user: sanitizeUser(user), orgId: user.organizationId });
     } catch (err: any) {
       res.status(400).json({ message: err.message });
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy(() => {
-      res.json({ message: "Logged out" });
-    });
+  app.post("/api/auth/refresh", async (req: AuthRequest, res) => {
+    try {
+      const token = req.cookies?.refresh_token;
+      if (!token) {
+        return res.status(401).json({ message: "No refresh token" });
+      }
+
+      const result = await refreshAuthSession(token);
+      if (!result) {
+        clearRefreshTokenCookie(res);
+        return res.status(401).json({ message: "Invalid refresh token" });
+      }
+
+      setRefreshTokenCookie(res, result.refreshToken);
+      res.json({ accessToken: result.accessToken });
+    } catch (err: any) {
+      res.status(401).json({ message: "Refresh failed" });
+    }
   });
 
-  app.get("/api/auth/me", requireAuth, async (req, res) => {
+  app.post("/api/auth/logout", requireAuth, async (req: AuthRequest, res) => {
     try {
-      const user = await storage.getUser(req.session.userId!);
+      if (req.auth?.sessionId) {
+        await storage.revokeSession(req.auth.sessionId);
+      }
+      clearRefreshTokenCookie(res);
+      res.json({ message: "Logged out" });
+    } catch {
+      res.json({ message: "Logged out" });
+    }
+  });
+
+  app.get("/api/auth/me", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const user = await storage.getUser(req.auth!.userId);
       if (!user) return res.status(401).json({ message: "User not found" });
 
-      const org = await storage.getOrg(req.session.orgId!);
-      if (!org) return res.status(401).json({ message: "Org not found" });
+      const org = await storage.getOrganization(req.auth!.organizationId);
+      if (!org) return res.status(401).json({ message: "Organization not found" });
 
-      const membership = await storage.getOrgMember(org.id, user.id);
-      const subscription = await storage.getSubscriptionByOrg(org.id);
+      const billing = await storage.getBillingAccountByOrg(org.id);
       const founderAgreement = await storage.getFounderAgreement(org.id);
 
-      const { password, ...safeUser } = user;
-
       res.json({
-        user: safeUser,
+        user: sanitizeUser(user),
         org,
-        membership: membership ? { role: membership.role } : { role: "member" },
-        subscription: subscription || null,
+        billing: billing || null,
         founderAgreement: founderAgreement || null,
-        isAdmin: !!user.isAdmin,
+        isPlatformOwner: !!user.isPlatformOwner,
+        isImpersonation: req.auth!.isImpersonation,
       });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
+  app.get("/api/dashboard/stats", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const orgId = req.session.orgId!;
-      const [totalClaims, openClaims, totalCarriers, totalAdjusters] = await Promise.all([
+      const orgId = req.auth!.organizationId;
+      const [totalClaims, openClaims, totalAdjusters] = await Promise.all([
         storage.getClaimCount(orgId),
         storage.getOpenClaimCount(orgId),
-        storage.getCarrierCount(orgId),
         storage.getAdjusterCount(orgId),
       ]);
-      res.json({ totalClaims, openClaims, totalCarriers, totalAdjusters });
+      res.json({ totalClaims, openClaims, totalAdjusters });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.get("/api/claims", requireAuth, async (req, res) => {
+  app.get("/api/claims", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const orgId = req.session.orgId!;
+      const orgId = req.auth!.organizationId;
       let claimsData = await storage.getClaims(orgId);
 
-      const subscription = await storage.getSubscriptionByOrg(orgId);
       const agreement = await storage.getFounderAgreement(orgId);
-      if (shouldMask(subscription?.tier || null, !!agreement)) {
+      if (shouldMask(!!agreement)) {
         claimsData = maskClaims(claimsData);
       }
 
@@ -216,15 +204,14 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/claims/:id", requireAuth, async (req, res) => {
+  app.get("/api/claims/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const orgId = req.session.orgId!;
+      const orgId = req.auth!.organizationId;
       let claim = await storage.getClaim(req.params.id, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
 
-      const subscription = await storage.getSubscriptionByOrg(orgId);
       const agreement = await storage.getFounderAgreement(orgId);
-      if (shouldMask(subscription?.tier || null, !!agreement)) {
+      if (shouldMask(!!agreement)) {
         claim = maskClaim(claim);
       }
 
@@ -234,93 +221,178 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/claims", requireAuth, async (req, res) => {
+  app.get("/api/claims/:id/versions", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const orgId = req.session.orgId!;
-      const data = {
+      const orgId = req.auth!.organizationId;
+      const versions = await storage.getClaimVersions(req.params.id, orgId);
+      res.json(versions);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/claims", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const claim = await storage.createClaim({
         ...req.body,
-        orgId,
-        claimAmount: req.body.claimAmount ? Number(req.body.claimAmount) : undefined,
-      };
-      const claim = await storage.createClaim(data);
+        organizationId: orgId,
+      });
+
+      await storage.createClaimVersion({
+        claimId: claim.id,
+        organizationId: orgId,
+        versionNumber: 1,
+        changedByUserId: req.auth!.userId,
+        changeReason: "Initial creation",
+        snapshotJson: claim,
+      });
+
+      await storage.createAuditLog({
+        organizationId: orgId,
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation,
+        impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "CLAIM_CREATED",
+        entityType: "claim",
+        entityId: claim.id,
+        afterJson: claim,
+        ipAddress: getClientIp(req),
+      });
+
       res.json(claim);
     } catch (err: any) {
       res.status(400).json({ message: err.message });
     }
   });
 
-  app.patch("/api/claims/:id", requireAuth, async (req, res) => {
+  app.patch("/api/claims/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const orgId = req.session.orgId!;
+      const orgId = req.auth!.organizationId;
+      const existing = await storage.getClaim(req.params.id, orgId);
+      if (!existing) return res.status(404).json({ message: "Claim not found" });
+
+      if (existing.status === "closed") {
+        const lockedFields = ["claimNumber", "carrier", "dateOfLoss", "propertyAddress"];
+        const attempted = Object.keys(req.body).filter(k => lockedFields.includes(k));
+        if (attempted.length > 0) {
+          return res.status(400).json({ message: `Cannot modify locked fields on closed claim: ${attempted.join(", ")}` });
+        }
+      }
+
       const claim = await storage.updateClaim(req.params.id, orgId, req.body);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+      const versionNumber = (await storage.getLatestVersionNumber(claim.id)) + 1;
+      await storage.createClaimVersion({
+        claimId: claim.id,
+        organizationId: orgId,
+        versionNumber,
+        changedByUserId: req.auth!.userId,
+        changeReason: req.body.changeReason || "Updated",
+        snapshotJson: claim,
+      });
+
+      await storage.createAuditLog({
+        organizationId: orgId,
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation,
+        impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "CLAIM_UPDATED",
+        entityType: "claim",
+        entityId: claim.id,
+        beforeJson: existing,
+        afterJson: claim,
+        ipAddress: getClientIp(req),
+      });
+
       res.json(claim);
     } catch (err: any) {
       res.status(400).json({ message: err.message });
     }
   });
 
-  app.delete("/api/claims/:id", requireAuth, async (req, res) => {
+  app.delete("/api/claims/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const orgId = req.session.orgId!;
-      const deleted = await storage.deleteClaim(req.params.id, orgId);
+      const orgId = req.auth!.organizationId;
+      const existing = await storage.getClaim(req.params.id, orgId);
+      if (!existing) return res.status(404).json({ message: "Claim not found" });
+
+      const deleted = await storage.softDeleteClaim(req.params.id, orgId);
       if (!deleted) return res.status(404).json({ message: "Claim not found" });
+
+      await storage.createAuditLog({
+        organizationId: orgId,
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "CLAIM_DELETED",
+        entityType: "claim",
+        entityId: req.params.id,
+        beforeJson: existing,
+        ipAddress: getClientIp(req),
+      });
+
       res.json({ message: "Deleted" });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.get("/api/carriers", requireAuth, async (req, res) => {
+  app.get("/api/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const carriers = await storage.getCarriers(req.session.orgId!);
-      res.json(carriers);
+      const adjustersList = await storage.getAdjusters(req.auth!.organizationId);
+      res.json(adjustersList);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.post("/api/carriers", requireAuth, async (req, res) => {
+  app.post("/api/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const carrier = await storage.createCarrier({ ...req.body, orgId: req.session.orgId! });
-      res.json(carrier);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
-    }
-  });
+      const adjuster = await storage.createAdjuster({
+        ...req.body,
+        organizationId: req.auth!.organizationId,
+      });
 
-  app.get("/api/adjusters", requireAuth, async (req, res) => {
-    try {
-      const adjusters = await storage.getAdjusters(req.session.orgId!);
-      res.json(adjusters);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId,
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "ADJUSTER_CREATED",
+        entityType: "adjuster",
+        entityId: adjuster.id,
+        afterJson: adjuster,
+        ipAddress: getClientIp(req),
+      });
 
-  app.post("/api/adjusters", requireAuth, async (req, res) => {
-    try {
-      const adjuster = await storage.createAdjuster({ ...req.body, orgId: req.session.orgId! });
       res.json(adjuster);
     } catch (err: any) {
       res.status(400).json({ message: err.message });
     }
   });
 
-  app.post("/api/billing/checkout-session", requireAuth, async (req, res) => {
+  app.get("/api/adjusters/:id/metrics", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
-      const orgId = req.session.orgId!;
-      const userId = req.session.userId!;
-      const { tier } = req.body;
+      const metrics = await storage.getAdjusterMetrics(req.params.id, req.auth!.organizationId);
+      res.json(metrics || null);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
+  app.post("/api/billing/checkout", requireAuth, blockDuringImpersonation, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const userId = req.auth!.userId;
       const user = await storage.getUser(userId);
       if (!user) return res.status(401).json({ message: "User not found" });
 
-      const result = await createCheckoutSession(orgId, userId, tier, user.email);
-
+      const result = await createFounderCheckoutSession(orgId, userId, user.email);
       if ("error" in result) {
-        if (result.error.includes("not configured") || result.error.includes("development")) {
-          return res.json({ message: result.error, tier, fallback: true });
+        if (result.error.includes("not configured")) {
+          return res.json({ message: result.error, fallback: true });
         }
         return res.status(400).json({ message: result.error });
       }
@@ -337,45 +409,38 @@ export async function registerRoutes(
       if (!signature) {
         return res.status(400).json({ message: "Missing stripe-signature header" });
       }
-
       const result = await handleWebhookEvent(req.body, signature);
       if (!result.received) {
         return res.status(400).json({ message: result.error });
       }
-
       res.json({ received: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.get("/api/billing/status", requireAuth, async (req, res) => {
+  app.get("/api/billing/status", requireAuth, async (req: AuthRequest, res) => {
     try {
-      const subscription = await storage.getSubscriptionByOrg(req.session.orgId!);
-      res.json(subscription || { tier: "pro", status: "active" });
+      const billing = await storage.getBillingAccountByOrg(req.auth!.organizationId);
+      res.json(billing || null);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.get("/api/legal/founder", requireAuth, async (req, res) => {
+  app.get("/api/legal/founder", requireAuth, async (req: AuthRequest, res) => {
     try {
-      const agreement = await storage.getFounderAgreement(req.session.orgId!);
+      const agreement = await storage.getFounderAgreement(req.auth!.organizationId);
       res.json(agreement || null);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.post("/api/legal/founder/sign", requireAuth, async (req, res) => {
+  app.post("/api/legal/founder/sign", requireAuth, blockDuringImpersonation, async (req: AuthRequest, res) => {
     try {
-      const orgId = req.session.orgId!;
-      const userId = req.session.userId!;
-
-      const subscription = await storage.getSubscriptionByOrg(orgId);
-      if (!subscription || subscription.tier !== "founder") {
-        return res.status(403).json({ message: "Only founder tier can sign this agreement" });
-      }
+      const orgId = req.auth!.organizationId;
+      const userId = req.auth!.userId;
 
       const existing = await storage.getFounderAgreement(orgId);
       if (existing) {
@@ -383,67 +448,68 @@ export async function registerRoutes(
       }
 
       const version = req.body.version || "1.0";
-      const ip = req.ip || req.headers["x-forwarded-for"] as string || "unknown";
+      const ip = getClientIp(req);
       const hash = createHash("sha256").update(`${orgId}-${userId}-${version}-${Date.now()}`).digest("hex");
 
       const agreement = await storage.createFounderAgreement(orgId, userId, ip, version, hash);
+
+      await storage.createAuditLog({
+        organizationId: orgId,
+        actorUserId: userId,
+        actorRole: req.auth!.role,
+        actionType: "FOUNDER_AGREEMENT_SIGNED",
+        entityType: "founder_agreement",
+        entityId: agreement.id,
+        afterJson: agreement,
+        ipAddress: ip,
+      });
+
       res.json(agreement);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.get("/api/founder/count", async (_req, res) => {
+  // --- Platform Owner / Admin routes ---
+  app.get("/api/admin/overview", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
     try {
-      const count = await storage.getFounderCount();
-      res.json({ count, max: 3, available: count < 3 });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  // --- Admin routes ---
-  app.get("/api/admin/overview", requireAdmin, async (_req, res) => {
-    try {
-      const [allUsers, allOrgs, allSubs, totalClaims, founderCount] = await Promise.all([
+      const [allUsers, allOrgs, allBilling, totalClaims] = await Promise.all([
         storage.getAllUsers(),
-        storage.getAllOrgs(),
-        storage.getAllSubscriptions(),
+        storage.getAllOrganizations(),
+        storage.getAllBillingAccounts(),
         storage.getTotalClaimCount(),
-        storage.getFounderCount(),
       ]);
       res.json({
         totalUsers: allUsers.length,
         totalOrgs: allOrgs.length,
-        totalSubscriptions: allSubs.length,
+        totalBillingAccounts: allBilling.length,
         totalClaims,
-        founderCount,
-        founderMax: 3,
+        trialingCount: allBilling.filter(b => b.subscriptionStatus === "trialing").length,
+        activeCount: allBilling.filter(b => b.subscriptionStatus === "active").length,
+        canceledCount: allBilling.filter(b => b.subscriptionStatus === "canceled").length,
       });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.get("/api/admin/users", requireAdmin, async (_req, res) => {
+  app.get("/api/admin/users", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
     try {
       const allUsers = await storage.getAllUsers();
-      const allMembers = await storage.getAllOrgMembers();
-      const allOrgs = await storage.getAllOrgs();
-      const allSubs = await storage.getAllSubscriptions();
+      const allOrgs = await storage.getAllOrganizations();
+      const allBilling = await storage.getAllBillingAccounts();
 
       const enriched = allUsers.map((u) => {
-        const { password, ...safeUser } = u;
-        const membership = allMembers.find((m) => m.userId === u.id);
-        const org = membership ? allOrgs.find((o) => o.id === membership.orgId) : null;
-        const subscription = org ? allSubs.find((s) => s.orgId === org.id) : null;
+        const org = allOrgs.find((o) => o.id === u.organizationId);
+        const billing = allBilling.find((b) => b.organizationId === u.organizationId);
         return {
-          ...safeUser,
+          ...sanitizeUser(u),
           orgName: org?.name || null,
-          orgId: org?.id || null,
-          role: membership?.role || null,
-          tier: subscription?.tier || null,
-          subscriptionStatus: subscription?.status || null,
+          subscriptionStatus: billing?.subscriptionStatus || null,
+          trialEndDate: billing?.trialEndDate || null,
+          trialStartDate: billing?.trialStartDate || null,
+          planType: billing?.planType || null,
+          stripeCustomerId: billing?.stripeCustomerId || null,
         };
       });
 
@@ -453,94 +519,127 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/subscriptions", requireAdmin, async (_req, res) => {
+  app.get("/api/admin/audit-logs", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
     try {
-      const allSubs = await storage.getAllSubscriptions();
-      const allOrgs = await storage.getAllOrgs();
-
-      const enriched = allSubs.map((s) => {
-        const org = allOrgs.find((o) => o.id === s.orgId);
-        return {
-          ...s,
-          orgName: org?.name || "Unknown",
-        };
-      });
-
-      res.json(enriched);
+      const logs = await storage.getAuditLogs();
+      res.json(logs);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.patch("/api/admin/users/:id/tier", requireAdmin, async (req, res) => {
+  app.post("/api/admin/impersonate/:userId", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
     try {
-      const { tier } = req.body;
-      if (!["founder", "pro", "team", "enterprise"].includes(tier)) {
-        return res.status(400).json({ message: "Invalid tier" });
-      }
+      const targetUser = await storage.getUser(req.params.userId);
+      if (!targetUser) return res.status(404).json({ message: "User not found" });
 
-      if (tier === "founder") {
-        const founderCount = await storage.getFounderCount();
-        if (founderCount >= 3) {
-          return res.status(400).json({ message: "Founder tier is at capacity (3/3)" });
+      const { accessToken, refreshToken } = await createAuthSession(
+        targetUser.id,
+        targetUser.organizationId,
+        {
+          ipAddress: getClientIp(req),
+          userAgent: req.headers["user-agent"],
+          isImpersonation: true,
+          impersonatorUserId: req.auth!.userId,
         }
-      }
+      );
 
-      const members = await storage.getAllOrgMembers();
-      const membership = members.find((m) => m.userId === req.params.id);
-      if (!membership) {
-        return res.status(404).json({ message: "User org not found" });
-      }
+      await storage.createAuditLog({
+        organizationId: targetUser.organizationId,
+        actorUserId: req.auth!.userId,
+        actorRole: "platform_owner",
+        isImpersonation: true,
+        impersonatorUserId: req.auth!.userId,
+        targetUserId: targetUser.id,
+        actionType: "IMPERSONATION_START",
+        entityType: "user",
+        entityId: targetUser.id,
+        ipAddress: getClientIp(req),
+      });
 
-      const updated = await storage.updateUserTier(membership.orgId, tier);
-      res.json(updated);
+      setRefreshTokenCookie(res, refreshToken);
+      res.json({ accessToken, user: sanitizeUser(targetUser), orgId: targetUser.organizationId });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  // Seed admin account on startup
-  seedAdmin();
+  app.post("/api/admin/stop-impersonation", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.auth!.isImpersonation || !req.auth!.impersonatorUserId) {
+        return res.status(400).json({ message: "Not currently impersonating" });
+      }
+
+      if (req.auth!.sessionId) {
+        await storage.revokeSession(req.auth!.sessionId);
+      }
+
+      const owner = await storage.getUser(req.auth!.impersonatorUserId);
+      if (!owner) return res.status(500).json({ message: "Owner not found" });
+
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId,
+        actorUserId: req.auth!.impersonatorUserId,
+        actorRole: "platform_owner",
+        isImpersonation: true,
+        impersonatorUserId: req.auth!.impersonatorUserId,
+        targetUserId: req.auth!.userId,
+        actionType: "IMPERSONATION_END",
+        entityType: "user",
+        entityId: req.auth!.userId,
+        ipAddress: getClientIp(req),
+      });
+
+      const { accessToken, refreshToken } = await createAuthSession(
+        owner.id, owner.organizationId,
+        { ipAddress: getClientIp(req), userAgent: req.headers["user-agent"] }
+      );
+
+      setRefreshTokenCookie(res, refreshToken);
+      res.json({ accessToken, user: sanitizeUser(owner), orgId: owner.organizationId });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  seedPlatformOwner();
 
   return httpServer;
 }
 
-async function seedAdmin() {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  if (!adminEmail || !adminPassword) return;
+function sanitizeUser(user: any) {
+  const { passwordHash, ...safe } = user;
+  return safe;
+}
 
-  const existing = await storage.getUserByEmail(adminEmail);
+async function seedPlatformOwner() {
+  const email = process.env.ADMIN_EMAIL || "admin@claimsignal.com";
+  const password = process.env.ADMIN_PASSWORD || "ClaimSignal2026!";
+
+  const existing = await storage.getUserByEmail(email);
   if (existing) {
-    if (!existing.isAdmin) {
-      await storage.setUserAdmin(existing.id, true);
+    if (!existing.isPlatformOwner) {
+      await storage.updateUser(existing.id, { isPlatformOwner: true });
     }
     return;
   }
 
-  const hashedPassword = await bcrypt.hash(adminPassword, 10);
-  const user = await storage.createUser({
-    email: adminEmail,
-    password: hashedPassword,
-    fullName: "ClaimSignal Admin",
+  const passwordHash = await bcrypt.hash(password, 12);
+  const org = await storage.createOrganization({ name: "ClaimSignal Platform" });
+
+  await storage.createUser({
+    email,
+    passwordHash,
+    fullName: "Platform Owner",
+    organizationId: org.id,
+    role: "admin",
+    isPlatformOwner: true,
+    founderFlag: false,
   });
-  await storage.setUserAdmin(user.id, true);
 
-  const org = await storage.createOrg({ name: "ClaimSignal", type: "individual" });
-  await storage.addOrgMember(org.id, user.id, "owner");
-  await storage.createSubscription({
-    orgId: org.id,
-    tier: "enterprise",
-    status: "active",
-    seatLimit: 999,
+  await storage.createBillingAccount({
+    organizationId: org.id,
+    subscriptionStatus: "active",
+    planType: "founder",
   });
-}
-
-async function findUserOrg(userId: string) {
-  const { db } = await import("./db");
-  const { orgMembers } = await import("@shared/schema");
-  const { eq } = await import("drizzle-orm");
-
-  const [member] = await db.select().from(orgMembers).where(eq(orgMembers.userId, userId));
-  return member;
 }
