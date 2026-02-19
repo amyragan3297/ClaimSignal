@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { registerSchema, loginSchema, insertClaimSchema } from "@shared/schema";
 import { shouldMask, maskClaim, maskClaims } from "./masking";
 import { createCheckoutSession, handleWebhookEvent, isStripeConfigured } from "./billing";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 
@@ -14,7 +14,14 @@ declare module "express-session" {
   interface SessionData {
     userId: string;
     orgId: string;
+    impersonationToken?: string;
+    realUserId?: string;
+    realOrgId?: string;
   }
+}
+
+function getClientIp(req: Request): string {
+  return (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -25,12 +32,32 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 async function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.session.userId) {
+  const adminId = req.session.realUserId || req.session.userId;
+  if (!adminId) {
     return res.status(401).json({ message: "Not authenticated" });
   }
-  const user = await storage.getUser(req.session.userId);
+  const user = await storage.getUser(adminId);
   if (!user || !user.isAdmin) {
     return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+}
+
+async function requirePlatformOwner(req: Request, res: Response, next: NextFunction) {
+  const ownerId = req.session.realUserId || req.session.userId;
+  if (!ownerId) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  const user = await storage.getUser(ownerId);
+  if (!user || !user.isPlatformOwner) {
+    return res.status(403).json({ message: "Platform owner access required" });
+  }
+  next();
+}
+
+function blockDuringImpersonation(req: Request, res: Response, next: NextFunction) {
+  if (req.session.impersonationToken) {
+    return res.status(403).json({ message: "Billing actions are not allowed during impersonation" });
   }
   next();
 }
