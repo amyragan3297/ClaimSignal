@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum, json, real, date } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum, json, real, date, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -7,6 +7,8 @@ export const userRoleEnum = pgEnum("user_role", ["super_admin", "admin", "team_o
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["trialing", "active", "past_due", "canceled"]);
 export const planTypeEnum = pgEnum("plan_type", ["founder", "pro", "team", "enterprise", "individual"]);
 export const organizationTypeEnum = pgEnum("organization_type", ["contractor", "roofing_firm", "enterprise_operator", "carrier", "tpa"]);
+export const eventSourceTypeEnum = pgEnum("event_source_type", ["document", "transcript", "email", "manual", "system"]);
+export const eventCategoryEnum = pgEnum("event_category", ["denial", "payment", "supplement", "irc_trigger", "communication_signal", "lifecycle", "escalation"]);
 
 export const claimPhaseEnum = pgEnum("claim_phase", [
   "pre_claim", "filed", "inspected", "initial_determination",
@@ -505,6 +507,22 @@ export const scoringWeights = pgTable("scoring_weights", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const intelligenceEvents = pgTable("intelligence_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull(),
+  claimId: varchar("claim_id").notNull(),
+  adjusterId: varchar("adjuster_id"),
+  sourceType: eventSourceTypeEnum("source_type").notNull(),
+  eventCategory: eventCategoryEnum("event_category").notNull(),
+  eventType: text("event_type").notNull(),
+  metricValue: numeric("metric_value"),
+  weightApplied: numeric("weight_applied").notNull(),
+  confidenceScore: numeric("confidence_score").notNull(),
+  severityLevel: integer("severity_level").notNull(),
+  metadata: json("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertUserSessionSchema = createInsertSchema(userSessions).omit({ id: true, createdAt: true, lastUsedAt: true });
@@ -534,6 +552,7 @@ export const insertAdjusterIrcBehaviorSchema = createInsertSchema(adjusterIrcBeh
 export const insertCommunicationSignalSchema = createInsertSchema(communicationSignals).omit({ id: true, createdAt: true });
 export const insertPlaybookInsightSchema = createInsertSchema(playbookInsights).omit({ id: true, createdAt: true });
 export const insertScoringWeightSchema = createInsertSchema(scoringWeights).omit({ id: true, createdAt: true });
+export const insertIntelligenceEventSchema = createInsertSchema(intelligenceEvents).omit({ id: true, createdAt: true });
 
 export const signupSchema = z.object({
   email: z.string().email("Valid email required"),
@@ -605,3 +624,5 @@ export type PlaybookInsight = typeof playbookInsights.$inferSelect;
 export type InsertPlaybookInsight = z.infer<typeof insertPlaybookInsightSchema>;
 export type ScoringWeight = typeof scoringWeights.$inferSelect;
 export type InsertScoringWeight = z.infer<typeof insertScoringWeightSchema>;
+export type IntelligenceEvent = typeof intelligenceEvents.$inferSelect;
+export type InsertIntelligenceEvent = z.infer<typeof insertIntelligenceEventSchema>;

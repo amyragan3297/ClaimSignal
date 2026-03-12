@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import type { Claim, Adjuster, CommunicationSignal, SupplementIntelligence } from "@shared/schema";
+import type { Claim, Adjuster, CommunicationSignal, SupplementIntelligence, IntelligenceEvent } from "@shared/schema";
 import type { ScoringWeight } from "@shared/schema";
 
 let cachedWeights: Map<string, number> | null = null;
@@ -245,6 +245,7 @@ export function computeLifecycleVelocity(
 
 export async function computeFullClaimScoring(claimId: string, orgId: string): Promise<{
   claimFrictionScore: number;
+  claimFrictionScoreEventDriven: number;
   supplementResistanceScore: number;
   communicationRiskScore: number;
   lifecycleVelocityScore: number | null;
@@ -281,10 +282,184 @@ export async function computeFullClaimScoring(claimId: string, orgId: string): P
     determinationDeltaVariance,
   }, dbWeights);
 
+  const claimEvents = await storage.getIntelligenceEventsByClaim(claimId, orgId);
+  const claimFrictionScoreEventDriven = computeClaimFrictionFromEvents(claimEvents);
+
   return {
     claimFrictionScore,
+    claimFrictionScoreEventDriven,
     supplementResistanceScore,
     communicationRiskScore,
     lifecycleVelocityScore,
   };
+}
+
+export function computeClaimFrictionFromEvents(events: IntelligenceEvent[]): number {
+  if (events.length === 0) return 0;
+  const windowMs = 90 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - windowMs;
+  const activeEvents = events.filter(e => {
+    const ts = e.createdAt ? new Date(e.createdAt).getTime() : 0;
+    return ts >= cutoff;
+  });
+  if (activeEvents.length === 0) return 0;
+  const total = activeEvents.reduce((sum, e) => sum + parseFloat(String(e.weightApplied)), 0);
+  return Math.round(Math.min(Math.max(total * 100, 0), 100));
+}
+
+export function computeAdjusterFrictionFromEvents(events: IntelligenceEvent[]): number {
+  if (events.length === 0) return 0;
+  const windowMs = 90 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - windowMs;
+  const activeEvents = events.filter(e => {
+    const ts = e.createdAt ? new Date(e.createdAt).getTime() : 0;
+    return ts >= cutoff;
+  });
+  if (activeEvents.length === 0) return 0;
+  const total = activeEvents.reduce((sum, e) => {
+    return sum + (parseFloat(String(e.weightApplied)) * e.severityLevel);
+  }, 0);
+  const normalized = total / activeEvents.length;
+  return Math.round(Math.min(Math.max(normalized * 20, 0), 100));
+}
+
+export function generatePlaybookFromEvents(events: IntelligenceEvent[]): {
+  patterns: Array<{ eventType: string; frequency: number; avgSeverity: number }>;
+  recommendation: string;
+} {
+  const freq = new Map<string, { count: number; totalSeverity: number }>();
+  for (const e of events) {
+    const existing = freq.get(e.eventType) || { count: 0, totalSeverity: 0 };
+    existing.count++;
+    existing.totalSeverity += e.severityLevel;
+    freq.set(e.eventType, existing);
+  }
+
+  const patterns = Array.from(freq.entries())
+    .map(([eventType, data]) => ({
+      eventType,
+      frequency: data.count,
+      avgSeverity: Math.round((data.totalSeverity / data.count) * 10) / 10,
+    }))
+    .sort((a, b) => b.frequency - a.frequency)
+    .slice(0, 5);
+
+  const topPatterns = patterns.slice(0, 3);
+  const parts: string[] = [];
+
+  for (const p of topPatterns) {
+    if (p.eventType.includes("delay_language")) {
+      parts.push("expect delay language and escalate earlier");
+    } else if (p.eventType.includes("irc_rejection") || p.eventType.includes("irc_")) {
+      parts.push("include IRC citation and full photo density upfront");
+    } else if (p.eventType.includes("supplement_reduction")) {
+      parts.push("document all line items with manufacturer specs before submission");
+    } else if (p.eventType.includes("deflection")) {
+      parts.push("maintain written communication trail for accountability");
+    } else if (p.eventType.includes("escalation_resistance")) {
+      parts.push("prepare formal escalation with supporting documentation");
+    } else if (p.eventType.includes("denial") || p.eventType.includes("full_denial")) {
+      parts.push("prepare rebuttal with code references and photo evidence");
+    } else if (p.eventType.includes("policy_limitation")) {
+      parts.push("request specific policy language citations in writing");
+    } else {
+      parts.push(`monitor ${p.eventType.replace(/_/g, " ")} patterns`);
+    }
+  }
+
+  const recommendation = parts.length > 0
+    ? `When engaging this adjuster, ${parts.join(". Also, ")}.`
+    : "No significant behavioral patterns detected yet.";
+
+  return { patterns, recommendation };
+}
+
+interface SupplementDepthEvent {
+  organizationId: string;
+  claimId: string;
+  adjusterId?: string;
+  sourceType: string;
+  eventCategory: string;
+  eventType: string;
+  metricValue: string;
+  weightApplied: string;
+  confidenceScore: string;
+  severityLevel: number;
+  metadata: Record<string, unknown>;
+}
+
+export function createSupplementDepthEvents(params: {
+  organizationId: string;
+  claimId: string;
+  adjusterId?: string;
+  amountRequested: number;
+  amountApproved: number;
+  reductionThreshold?: number;
+}): SupplementDepthEvent[] {
+  const threshold = params.reductionThreshold ?? 0.3;
+  const reductionRatio = params.amountRequested > 0
+    ? (params.amountRequested - params.amountApproved) / params.amountRequested
+    : 0;
+
+  const events: SupplementDepthEvent[] = [];
+
+  events.push({
+    organizationId: params.organizationId,
+    claimId: params.claimId,
+    adjusterId: params.adjusterId,
+    sourceType: "system",
+    eventCategory: "supplement",
+    eventType: "supplement_submitted",
+    metricValue: String(params.amountRequested),
+    weightApplied: "0.10",
+    confidenceScore: "1.00",
+    severityLevel: 1,
+    metadata: { amountRequested: params.amountRequested },
+  });
+
+  events.push({
+    organizationId: params.organizationId,
+    claimId: params.claimId,
+    adjusterId: params.adjusterId,
+    sourceType: "system",
+    eventCategory: "supplement",
+    eventType: "supplement_amount_approved",
+    metricValue: String(params.amountApproved),
+    weightApplied: "0.05",
+    confidenceScore: "1.00",
+    severityLevel: 1,
+    metadata: { amountApproved: params.amountApproved },
+  });
+
+  events.push({
+    organizationId: params.organizationId,
+    claimId: params.claimId,
+    adjusterId: params.adjusterId,
+    sourceType: "system",
+    eventCategory: "supplement",
+    eventType: "supplement_reduction_ratio",
+    metricValue: String(Math.round(reductionRatio * 100) / 100),
+    weightApplied: String(Math.round(Math.min(reductionRatio * 0.5, 0.25) * 100) / 100),
+    confidenceScore: "1.00",
+    severityLevel: reductionRatio > 0.5 ? 4 : reductionRatio > threshold ? 3 : 2,
+    metadata: { reductionRatio, amountRequested: params.amountRequested, amountApproved: params.amountApproved },
+  });
+
+  if (reductionRatio > threshold) {
+    events.push({
+      organizationId: params.organizationId,
+      claimId: params.claimId,
+      adjusterId: params.adjusterId,
+      sourceType: "system",
+      eventCategory: "supplement",
+      eventType: "high_reduction_flag",
+      metricValue: String(Math.round(reductionRatio * 100) / 100),
+      weightApplied: "0.20",
+      confidenceScore: "0.95",
+      severityLevel: reductionRatio > 0.5 ? 4 : 3,
+      metadata: { reductionRatio, threshold, flagReason: "Supplement reduction exceeds threshold" },
+    });
+  }
+
+  return events;
 }

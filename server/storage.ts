@@ -28,6 +28,7 @@ import {
   type CommunicationSignal, type InsertCommunicationSignal,
   type PlaybookInsight, type InsertPlaybookInsight,
   type ScoringWeight, type InsertScoringWeight,
+  type IntelligenceEvent, type InsertIntelligenceEvent,
   organizations, users, userSessions, billingAccounts,
   claims, claimVersions, adjusters,
   clients, supplements, documents, emails, aiInsights,
@@ -36,7 +37,7 @@ import {
   adjusterPlaybooks, ircCodes, supplementTriggers, piiAccessLogs,
   adjusterAggregatedMetrics,
   supplementIntelligence, adjusterIrcBehavior, communicationSignals, playbookInsights,
-  scoringWeights,
+  scoringWeights, intelligenceEvents,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, count, desc, gt, isNull, sql } from "drizzle-orm";
@@ -209,6 +210,13 @@ export interface IStorage {
   // Scoring Weights
   getScoringWeights(activeVersion?: string): Promise<ScoringWeight[]>;
   upsertScoringWeight(data: InsertScoringWeight): Promise<ScoringWeight>;
+
+  // Intelligence Events
+  createIntelligenceEvent(event: InsertIntelligenceEvent): Promise<IntelligenceEvent>;
+  getIntelligenceEventsByClaim(claimId: string, orgId: string): Promise<IntelligenceEvent[]>;
+  getIntelligenceEventsByAdjuster(adjusterId: string, orgId: string): Promise<IntelligenceEvent[]>;
+  getIntelligenceEventsByAdjusterAllOrgs(adjusterId: string): Promise<IntelligenceEvent[]>;
+  getIntelligenceEventsByCategory(claimId: string, orgId: string, category: string): Promise<IntelligenceEvent[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -795,6 +803,39 @@ export class DatabaseStorage implements IStorage {
   async upsertScoringWeight(data: InsertScoringWeight): Promise<ScoringWeight> {
     const [created] = await db.insert(scoringWeights).values(data).returning();
     return created;
+  }
+
+  async createIntelligenceEvent(event: InsertIntelligenceEvent): Promise<IntelligenceEvent> {
+    const [created] = await db.insert(intelligenceEvents).values(event).returning();
+    return created;
+  }
+
+  async getIntelligenceEventsByClaim(claimId: string, orgId: string): Promise<IntelligenceEvent[]> {
+    return db.select().from(intelligenceEvents).where(
+      and(eq(intelligenceEvents.claimId, claimId), eq(intelligenceEvents.organizationId, orgId))
+    ).orderBy(desc(intelligenceEvents.createdAt));
+  }
+
+  async getIntelligenceEventsByAdjuster(adjusterId: string, orgId: string): Promise<IntelligenceEvent[]> {
+    return db.select().from(intelligenceEvents).where(
+      and(eq(intelligenceEvents.adjusterId, adjusterId), eq(intelligenceEvents.organizationId, orgId))
+    ).orderBy(desc(intelligenceEvents.createdAt));
+  }
+
+  async getIntelligenceEventsByAdjusterAllOrgs(adjusterId: string): Promise<IntelligenceEvent[]> {
+    return db.select().from(intelligenceEvents).where(
+      eq(intelligenceEvents.adjusterId, adjusterId)
+    ).orderBy(desc(intelligenceEvents.createdAt));
+  }
+
+  async getIntelligenceEventsByCategory(claimId: string, orgId: string, category: string): Promise<IntelligenceEvent[]> {
+    return db.select().from(intelligenceEvents).where(
+      and(
+        eq(intelligenceEvents.claimId, claimId),
+        eq(intelligenceEvents.organizationId, orgId),
+        eq(intelligenceEvents.eventCategory, category as any)
+      )
+    ).orderBy(desc(intelligenceEvents.createdAt));
   }
 }
 
