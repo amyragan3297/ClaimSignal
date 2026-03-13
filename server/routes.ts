@@ -156,7 +156,7 @@ export async function registerRoutes(
       setRefreshTokenCookie(res, result.refreshToken);
       res.json({ accessToken: result.accessToken });
     } catch (err: any) {
-      res.status(401).json({ message: "Refresh failed" });
+      return res.status(401).json({ message: "Refresh failed" });
     }
   });
 
