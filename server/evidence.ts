@@ -297,7 +297,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     });
   } catch (err: any) {
     console.error("Evidence upload error:", err);
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -308,7 +308,7 @@ router.get("/files", async (req: AuthRequest, res: Response) => {
     const files = await storage.getEvidenceFiles(req.auth.organizationId, claimId);
     res.json(files);
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -319,7 +319,7 @@ router.get("/files/:id", async (req: AuthRequest, res: Response) => {
     if (!file) return res.status(404).json({ message: "File not found" });
     res.json(file);
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -329,7 +329,7 @@ router.get("/files/:id/entities", async (req: AuthRequest, res: Response) => {
     const entities = await storage.getExtractedEntities(req.params.id);
     res.json(entities);
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -356,7 +356,7 @@ router.post("/files/:id/match", async (req: AuthRequest, res: Response) => {
     
     res.json({ matched: true, claimId });
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -366,7 +366,7 @@ router.get("/drafts", async (req: AuthRequest, res: Response) => {
     const drafts = await storage.getClaimDrafts(req.auth.organizationId);
     res.json(drafts);
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -377,7 +377,7 @@ router.patch("/drafts/:id", async (req: AuthRequest, res: Response) => {
     if (!updated) return res.status(404).json({ message: "Draft not found" });
     res.json(updated);
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -387,7 +387,7 @@ router.get("/timeline/:claimId", async (req: AuthRequest, res: Response) => {
     const events = await storage.getTimelineEvents(req.params.claimId, req.auth.organizationId);
     res.json(events);
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
