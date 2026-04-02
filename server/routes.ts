@@ -797,7 +797,7 @@ async function seedPlatformOwner() {
     });
   }
 
-  const testEmail = "user@claimsignal";
+  const testEmail = "user@claimsignal.test";
   const testPassword = "password123";
   const testExisting = await storage.getUserByEmail(testEmail);
   if (!testExisting) {
