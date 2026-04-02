@@ -817,7 +817,12 @@ async function seedPlatformOwner() {
     await storage.createBillingAccount({
       organizationId: testOrg.id,
       subscriptionStatus: "active",
-      planType: "founder",
+      planType: "pro",
     });
+  } else {
+    const billing = await storage.getBillingAccountByOrg(testExisting.organizationId);
+    if (billing && billing.planType === "founder") {
+      await storage.updateBillingAccount(billing.id, { planType: "pro" });
+    }
   }
 }
