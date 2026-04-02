@@ -776,25 +776,48 @@ async function seedPlatformOwner() {
     if (!existing.isPlatformOwner || existing.role !== "super_admin") {
       await storage.updateUser(existing.id, { isPlatformOwner: true, role: "super_admin" });
     }
-    return;
+  } else {
+    const passwordHash = await bcrypt.hash(password, 12);
+    const org = await storage.createOrganization({ name: "ClaimSignal Platform" });
+
+    await storage.createUser({
+      email,
+      passwordHash,
+      fullName: "Platform Owner",
+      organizationId: org.id,
+      role: "super_admin",
+      isPlatformOwner: true,
+      founderFlag: false,
+    });
+
+    await storage.createBillingAccount({
+      organizationId: org.id,
+      subscriptionStatus: "active",
+      planType: "founder",
+    });
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
-  const org = await storage.createOrganization({ name: "ClaimSignal Platform" });
+  const testEmail = "user@claimsignal";
+  const testPassword = "password123";
+  const testExisting = await storage.getUserByEmail(testEmail);
+  if (!testExisting) {
+    const testPasswordHash = await bcrypt.hash(testPassword, 12);
+    const testOrg = await storage.createOrganization({ name: "Test Organization" });
 
-  await storage.createUser({
-    email,
-    passwordHash,
-    fullName: "Platform Owner",
-    organizationId: org.id,
-    role: "super_admin",
-    isPlatformOwner: true,
-    founderFlag: false,
-  });
+    await storage.createUser({
+      email: testEmail,
+      passwordHash: testPasswordHash,
+      fullName: "Test User",
+      organizationId: testOrg.id,
+      role: "super_admin",
+      isPlatformOwner: true,
+      founderFlag: false,
+    });
 
-  await storage.createBillingAccount({
-    organizationId: org.id,
-    subscriptionStatus: "active",
-    planType: "founder",
-  });
+    await storage.createBillingAccount({
+      organizationId: testOrg.id,
+      subscriptionStatus: "active",
+      planType: "founder",
+    });
+  }
 }
