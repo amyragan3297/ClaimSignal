@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
-import { Shield, ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import logoImg from "@assets/claimsignal-logo.png";
 import { loginSchema, signupSchema } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -79,10 +80,7 @@ export default function LoginPage() {
             Back to home
           </Link>
           <div className="flex items-center justify-center gap-2 mb-2">
-            <Shield className="w-7 h-7 text-primary" />
-            <span className="text-xl font-bold tracking-tight">
-              CLAIM<span className="text-primary">SIGNAL</span>
-            </span>
+            <img src={logoImg} alt="ClaimSignal" className="h-8 w-auto object-contain" data-testid="img-login-logo" />
           </div>
           <p className="text-sm text-muted-foreground">Operational Intelligence Platform</p>
         </div>

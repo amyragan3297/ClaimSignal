@@ -21,7 +21,6 @@ import {
   LayoutDashboard,
   FileText,
   CreditCard,
-  Shield,
   LogOut,
   Loader2,
   Lock,
@@ -30,6 +29,7 @@ import {
   AlertTriangle,
   FileSearch,
 } from "lucide-react";
+import logoImg from "@assets/claimsignal-logo.png";
 
 const baseNavItems = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -86,12 +86,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen w-full">
         <Sidebar>
           <SidebarHeader className="p-4">
-            <div className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" />
-              <span className="font-semibold text-sm tracking-tight">
-                CLAIM<span className="text-primary">SIGNAL</span>
-              </span>
-            </div>
+            <Link href="/" className="flex items-center gap-2">
+              <img src={logoImg} alt="ClaimSignal" className="h-6 w-auto object-contain" data-testid="img-sidebar-logo" />
+            </Link>
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
