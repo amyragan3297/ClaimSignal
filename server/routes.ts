@@ -204,7 +204,20 @@ export async function registerRoutes(
         storage.getOpenClaimCount(orgId),
         storage.getAdjusterCount(orgId),
       ]);
-      res.json({ totalClaims, openClaims, totalAdjusters });
+      const claims = await storage.getClaims(orgId);
+      const highRiskClaims = claims.filter(c => (c.riskScore ?? 0) >= 5).length;
+      const overturnedDenials = claims.filter(c => c.status === "resolved" && (c.outcomeMigrationDelta ?? 0) > 0).length;
+      const avgSupplementOpp = claims.length > 0
+        ? claims.reduce((sum, c) => sum + (c.supplementAmountTotal ?? 0), 0) / claims.length
+        : 0;
+      res.json({
+        totalClaims,
+        openClaims,
+        totalAdjusters,
+        highRiskClaims,
+        overturnedDenials,
+        avgSupplementOpp: Math.round(avgSupplementOpp * 100) / 100,
+      });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

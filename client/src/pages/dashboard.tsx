@@ -13,6 +13,8 @@ import {
   ArrowRight,
   Shield,
   AlertTriangle,
+  DollarSign,
+  RotateCcw,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -22,6 +24,9 @@ export default function DashboardPage() {
     totalClaims: number;
     openClaims: number;
     totalAdjusters: number;
+    highRiskClaims: number;
+    overturnedDenials: number;
+    avgSupplementOpp: number;
   }>({
     queryKey: ["/api/dashboard/stats"],
   });
@@ -33,9 +38,11 @@ export default function DashboardPage() {
     : null;
 
   const statCards = [
-    { label: "Total Claims", value: stats?.totalClaims ?? 0, icon: FileText, color: "text-primary" },
-    { label: "Open Claims", value: stats?.openClaims ?? 0, icon: Clock, color: "text-chart-3" },
-    { label: "Adjusters", value: stats?.totalAdjusters ?? 0, icon: Users, color: "text-chart-4" },
+    { label: "Total Claims Reviewed", value: stats?.totalClaims ?? 0, icon: FileText, color: "text-primary" },
+    { label: "High Risk Claims", value: stats?.highRiskClaims ?? 0, icon: AlertTriangle, color: "text-destructive" },
+    { label: "Overturned Denials", value: stats?.overturnedDenials ?? 0, icon: RotateCcw, color: "text-green-500" },
+    { label: "Adjuster Profiles", value: stats?.totalAdjusters ?? 0, icon: Users, color: "text-chart-4" },
+    { label: "Avg Supplement Opportunity", value: stats?.avgSupplementOpp ? `$${stats.avgSupplementOpp.toLocaleString()}` : "$0", icon: DollarSign, color: "text-chart-3" },
   ];
 
   return (
@@ -81,7 +88,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {statCards.map((stat) => (
           <Card key={stat.label} data-testid={`card-stat-${stat.label.toLowerCase().replace(/\s+/g, "-")}`}>
             <CardContent className="p-5">
