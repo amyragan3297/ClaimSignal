@@ -758,6 +758,7 @@ export async function registerRoutes(
 
   seedPlatformOwner();
   seedDefaultWeights().catch(console.error);
+  seedDemoData().catch(console.error);
 
   return httpServer;
 }
@@ -825,4 +826,145 @@ async function seedPlatformOwner() {
       await storage.updateBillingAccount(billing.id, { planType: "pro" });
     }
   }
+}
+
+async function seedDemoData() {
+  const testEmail = "user@claimsignal.test";
+  const testUser = await storage.getUserByEmail(testEmail);
+  if (!testUser) {
+    console.log("[seedDemoData] test user not found, skipping");
+    return;
+  }
+
+  const orgId = testUser.organizationId;
+  const userId = testUser.id;
+
+  const existingClaims = await storage.getClaims(orgId);
+  if (existingClaims.length > 0) {
+    console.log("[seedDemoData] claims already exist, skipping");
+    return;
+  }
+
+  const adjuster = await storage.createAdjuster({
+    organizationId: orgId,
+    carrierName: "StateFarm Mutual",
+    adjusterName: "Michael Carter",
+    adjusterEmail: "m.carter@statefarm.example.com",
+    adjusterPhone: "214-555-0192",
+    region: "Dallas/Fort Worth",
+    ladderAssistVendor: "EagleView",
+    isFieldAdjuster: true,
+    isDeskAdjuster: false,
+    avgResponseTimeHours: 18,
+    avgDaysToInitialDetermination: 5.2,
+    supplementAcceptanceRate: 0.38,
+    reinspectionRate: 0.22,
+    denialRate: 0.14,
+    escalationTriggerRate: 0.09,
+    totalClaimsTracked: 47,
+    totalDenials: 7,
+    totalReinspections: 11,
+    totalSupplementsRequested: 19,
+    totalSupplementsApproved: 7,
+    frictionScore: 6.2,
+    integrityScore: 7.1,
+    escalationScore: 5.4,
+    outcomeMigrationScore: 4.8,
+    denialRatio: 0.14,
+    partialApprovalRatio: 0.41,
+    supplementReductionRatio: 0.63,
+    transcriptDelayLanguageRate: 0.08,
+    transcriptDeflectionLanguageRate: 0.12,
+    ircRejectionRate: 0.06,
+    paymentUnderScopeRatio: 0.18,
+  });
+
+  const dateOfLoss = new Date("2026-04-12");
+  const inspectionDate = new Date("2026-04-18");
+  const determinationDate = new Date("2026-04-25");
+
+  const claim = await storage.createClaim({
+    organizationId: orgId,
+    adjusterId: adjuster.id,
+    claimNumber: "SF-2026-0412897",
+    carrier: "StateFarm Mutual",
+    policyNumber: "TX-H-8847291-A",
+    homeownerName: "J. S***",
+    homeownerPhone: "21****92",
+    homeownerEmail: "js****@example.com",
+    insuredName: "J. S***",
+    propertyAddress: "**** Oak Ave, Dallas, TX 75201",
+    address: "1234 Oak Avenue",
+    city: "Dallas",
+    state: "TX",
+    zipCode: "75201",
+    lossType: "Hail / Wind",
+    roofType: "Asphalt Shingle",
+    shingleType: "GAF Timberline HDZ",
+    notes: "Hail damage to roof and gutters. Initial inspection completed April 18. Determination issued April 25 with partial approval. Supplement submitted May 3 for gutter replacement and siding. Awaiting reinspection.",
+    status: "open",
+    currentPhase: "supplement_submitted",
+    dateOfLoss,
+    inspectionDate,
+    determinationDate,
+    rcvAmount: 28450.0,
+    acvAmount: 22100.0,
+    deductible: 2500.0,
+    supplementAmountTotal: 4200.0,
+    finalPaidAmount: 0,
+    claimAmount: 28450.0,
+    approvedAmount: 19600.0,
+    rcvTotal: 28450.0,
+    acvTotal: 22100.0,
+    lifecycleVelocityScore: 62.0,
+    scopeDeltaScore: 48.0,
+    escalationLevel: 2,
+    outcomeMigrationDelta: 0.18,
+    frictionScore: 6,
+    approvalProbability: 0.71,
+    escalationCategory: "supplement_resistance",
+    riskScore: 5,
+    lossDate: dateOfLoss,
+    aiClaimSummary: "Hail damage claim with partial approval. Supplement pending for gutter and siding scope. Reinspection likely required.",
+    adjusterFrictionScore: 6.2,
+    supplementProbabilityScore: 0.73,
+    ircComplianceRiskScore: 3.2,
+  });
+
+  await storage.createSupplement({
+    claimId: claim.id,
+    organizationId: orgId,
+    amountRequested: 4200.0,
+    amountApproved: 0,
+    amountDenied: 0,
+    dateSubmitted: new Date("2026-05-03"),
+    status: "pending",
+    notes: "Gutter replacement and siding repair scope delta. Supporting photos included.",
+  });
+
+  await storage.createDocument({
+    claimId: claim.id,
+    organizationId: orgId,
+    fileName: "SF_Initial_Determination_2026-04-25.pdf",
+    fileType: "pdf",
+    fileUrl: "#demo",
+  });
+
+  await storage.createAiInsight({
+    claimId: claim.id,
+    organizationId: orgId,
+    insightType: "escalation_risk",
+    confidenceScore: 0.78,
+    summary: "Adjuster Carter has below-average supplement acceptance rate (38%). Historical pattern shows 63% supplement reduction ratio. Recommend detailed scope documentation and photo evidence to counter depreciation disputes.",
+  });
+
+  await storage.createAiInsight({
+    claimId: claim.id,
+    organizationId: orgId,
+    insightType: "friction_pattern",
+    confidenceScore: 0.82,
+    summary: "Response velocity within normal range (18h avg), but deflection language detected in transcripts. 12% deflection rate above carrier average. Escalation to desk supervisor may be warranted if supplement is reduced again.",
+  });
+
+  console.log("[seedDemoData] demo data seeded successfully");
 }
