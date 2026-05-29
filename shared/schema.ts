@@ -554,6 +554,33 @@ export const insertPlaybookInsightSchema = createInsertSchema(playbookInsights).
 export const insertScoringWeightSchema = createInsertSchema(scoringWeights).omit({ id: true, createdAt: true });
 export const insertIntelligenceEventSchema = createInsertSchema(intelligenceEvents).omit({ id: true, createdAt: true });
 
+// Storm Event Lookup — roadmap MVP module (manual entry, no external API)
+export const stormEventTypeEnum = pgEnum("storm_event_type", ["hail", "wind", "hail_and_wind", "other"]);
+export const stormReportSourceEnum = pgEnum("storm_report_source", ["noaa", "spc", "ncei", "radar_report", "contractor_observation", "homeowner_statement", "other"]);
+export const locationMatchConfidenceEnum = pgEnum("location_match_confidence", ["high", "medium", "low"]);
+
+export const stormEvents = pgTable("storm_events", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: text("organization_id").notNull(),
+  claimId: text("claim_id"),
+  dateOfLoss: date("date_of_loss"),
+  propertyLocation: text("property_location"),
+  eventType: stormEventTypeEnum("event_type"),
+  reportSource: stormReportSourceEnum("report_source"),
+  hailSize: text("hail_size"),
+  windSpeed: text("wind_speed"),
+  distanceFromProperty: text("distance_from_property"),
+  locationMatchConfidence: locationMatchConfidenceEnum("location_match_confidence"),
+  weatherEvidenceUploaded: boolean("weather_evidence_uploaded").default(false),
+  notes: text("notes"),
+  createdByUserId: text("created_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertStormEventSchema = createInsertSchema(stormEvents).omit({ id: true, createdAt: true });
+export type StormEvent = typeof stormEvents.$inferSelect;
+export type InsertStormEvent = z.infer<typeof insertStormEventSchema>;
+
 export const signupSchema = z.object({
   email: z.string().email("Valid email required"),
   password: z.string().min(8, "Password must be at least 8 characters"),

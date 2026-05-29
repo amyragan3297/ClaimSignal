@@ -29,12 +29,14 @@ import {
   UserCircle,
   AlertTriangle,
   FileSearch,
+  CloudLightning,
 } from "lucide-react";
 
 const baseNavItems = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Claims", href: "/claims", icon: FileText },
   { title: "Evidence", href: "/evidence", icon: FileSearch },
+  { title: "Storm Events", href: "/storm-events", icon: CloudLightning },
   { title: "Clients", href: "/clients", icon: UserCircle },
   { title: "Adjusters", href: "/adjusters", icon: Users },
   { title: "Billing", href: "/billing", icon: CreditCard },

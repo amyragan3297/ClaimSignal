@@ -1,4 +1,5 @@
 import {
+  type StormEvent, type InsertStormEvent,
   type Organization, type InsertOrganization,
   type User, type InsertUser,
   type UserSession,
@@ -37,7 +38,7 @@ import {
   adjusterPlaybooks, ircCodes, supplementTriggers, piiAccessLogs,
   adjusterAggregatedMetrics,
   supplementIntelligence, adjusterIrcBehavior, communicationSignals, playbookInsights,
-  scoringWeights, intelligenceEvents,
+  scoringWeights, intelligenceEvents, stormEvents,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, count, desc, gt, isNull, sql } from "drizzle-orm";
@@ -217,6 +218,14 @@ export interface IStorage {
   getIntelligenceEventsByAdjuster(adjusterId: string, orgId: string): Promise<IntelligenceEvent[]>;
   getIntelligenceEventsByAdjusterAllOrgs(adjusterId: string): Promise<IntelligenceEvent[]>;
   getIntelligenceEventsByCategory(claimId: string, orgId: string, category: string): Promise<IntelligenceEvent[]>;
+
+  // Storm Events
+  createStormEvent(event: InsertStormEvent): Promise<StormEvent>;
+  getStormEvents(orgId: string): Promise<StormEvent[]>;
+  getStormEventsByClaim(claimId: string, orgId: string): Promise<StormEvent[]>;
+  getStormEvent(id: string, orgId: string): Promise<StormEvent | undefined>;
+  updateStormEvent(id: string, orgId: string, data: Partial<InsertStormEvent>): Promise<StormEvent | undefined>;
+  deleteStormEvent(id: string, orgId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -836,6 +845,42 @@ export class DatabaseStorage implements IStorage {
         eq(intelligenceEvents.eventCategory, category as any)
       )
     ).orderBy(desc(intelligenceEvents.createdAt));
+  }
+
+  async createStormEvent(event: InsertStormEvent): Promise<StormEvent> {
+    const [created] = await db.insert(stormEvents).values(event).returning();
+    return created;
+  }
+
+  async getStormEvents(orgId: string): Promise<StormEvent[]> {
+    return db.select().from(stormEvents)
+      .where(eq(stormEvents.organizationId, orgId))
+      .orderBy(desc(stormEvents.createdAt));
+  }
+
+  async getStormEventsByClaim(claimId: string, orgId: string): Promise<StormEvent[]> {
+    return db.select().from(stormEvents)
+      .where(and(eq(stormEvents.claimId, claimId), eq(stormEvents.organizationId, orgId)))
+      .orderBy(desc(stormEvents.createdAt));
+  }
+
+  async getStormEvent(id: string, orgId: string): Promise<StormEvent | undefined> {
+    const [event] = await db.select().from(stormEvents)
+      .where(and(eq(stormEvents.id, id), eq(stormEvents.organizationId, orgId)));
+    return event;
+  }
+
+  async updateStormEvent(id: string, orgId: string, data: Partial<InsertStormEvent>): Promise<StormEvent | undefined> {
+    const [updated] = await db.update(stormEvents)
+      .set(data)
+      .where(and(eq(stormEvents.id, id), eq(stormEvents.organizationId, orgId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteStormEvent(id: string, orgId: string): Promise<void> {
+    await db.delete(stormEvents)
+      .where(and(eq(stormEvents.id, id), eq(stormEvents.organizationId, orgId)));
   }
 }
 

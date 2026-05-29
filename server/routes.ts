@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
-import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema } from "@shared/schema";
+import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema } from "@shared/schema";
 import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked } from "./masking";
 import { createCheckoutSession, handleWebhookEvent } from "./billing";
 import exportsRouter from "./exports";
@@ -769,6 +769,69 @@ export async function registerRoutes(
     }
   });
 
+  // ── Storm Events (Roadmap MVP module) ──────────────────────────────────────
+  app.get("/api/storm-events", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const events = await storage.getStormEvents(req.auth!.organizationId);
+      res.json(events);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/storm-events/claim/:claimId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const events = await storage.getStormEventsByClaim(req.params.claimId as string, req.auth!.organizationId);
+      res.json(events);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/storm-events/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const event = await storage.getStormEvent(req.params.id as string, req.auth!.organizationId);
+      if (!event) return res.status(404).json({ message: "Storm event not found" });
+      res.json(event);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/storm-events", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const parsed = insertStormEventSchema.safeParse({
+        ...req.body,
+        organizationId: req.auth!.organizationId,
+        createdByUserId: req.auth!.userId,
+      });
+      if (!parsed.success) return res.status(400).json({ message: "Validation error", errors: parsed.error.flatten() });
+      const event = await storage.createStormEvent(parsed.data);
+      res.status(201).json(event);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/storm-events/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const updated = await storage.updateStormEvent(req.params.id as string, req.auth!.organizationId, req.body);
+      if (!updated) return res.status(404).json({ message: "Storm event not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/storm-events/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      await storage.deleteStormEvent(req.params.id as string, req.auth!.organizationId);
+      res.json({ deleted: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   seedPlatformOwner();
   seedDefaultWeights().catch(console.error);
   seedDemoData().catch(console.error);
@@ -955,12 +1018,80 @@ async function seedDemoData() {
     notes: "Gutter replacement and siding repair scope delta. Supporting photos included.",
   });
 
-  await storage.createDocument({
+  const evidenceFile = await storage.createEvidenceFile({
     claimId: claim.id,
     organizationId: orgId,
+    uploadedByUserId: userId,
     fileName: "SF_Initial_Determination_2026-04-25.pdf",
     fileType: "pdf",
-    fileUrl: "#demo",
+    storageUrl: "#demo",
+    sha256: "demo-sha256-determination",
+    docCategory: "payment_letter",
+    extractionStatus: "complete",
+    confidence: 0.88,
+    carrierName: "StateFarm Mutual",
+    extractedJson: {
+      claimNumber: "SF-2026-0412897",
+      policyNumber: "TX-H-8847291-A",
+      rcv: "28450.00",
+      acv: "22100.00",
+      deductible: "2500.00",
+      netClaim: "19600.00",
+    },
+  });
+
+  const evidenceFile2 = await storage.createEvidenceFile({
+    claimId: claim.id,
+    organizationId: orgId,
+    uploadedByUserId: userId,
+    fileName: "Xactimate_Estimate_Roof_2026-04-18.pdf",
+    fileType: "pdf",
+    storageUrl: "#demo",
+    sha256: "demo-sha256-estimate",
+    docCategory: "estimate",
+    extractionStatus: "complete",
+    confidence: 0.91,
+    carrierName: "StateFarm Mutual",
+    extractedJson: {
+      claimNumber: "SF-2026-0412897",
+      rcv: "28450.00",
+      acv: "22100.00",
+      deductible: "2500.00",
+      roofingSquares: "24.2",
+      opIncluded: false,
+    },
+  });
+
+  await storage.createTimelineEvent({
+    claimId: claim.id,
+    organizationId: orgId,
+    eventType: "doc_uploaded",
+    eventDate: new Date("2026-04-25T10:15:00"),
+    title: "Initial Determination Letter Received",
+    description: "StateFarm issued partial approval. ACV: $22,100 — Deductible: $2,500 — Net: $19,600.",
+    evidenceFileId: evidenceFile.id,
+    createdByUserId: userId,
+  });
+
+  await storage.createTimelineEvent({
+    claimId: claim.id,
+    organizationId: orgId,
+    eventType: "doc_uploaded",
+    eventDate: new Date("2026-04-18T09:30:00"),
+    title: "Xactimate Estimate Uploaded",
+    description: "Carrier estimate for roof replacement: RCV $28,450 / ACV $22,100. Scope gaps identified: O&P, drip edge, permit.",
+    evidenceFileId: evidenceFile2.id,
+    createdByUserId: userId,
+  });
+
+  await storage.createTimelineEvent({
+    claimId: claim.id,
+    organizationId: orgId,
+    eventType: "supplement_filed",
+    eventDate: new Date("2026-05-03T14:00:00"),
+    title: "Supplement Filed — Gutters & Siding",
+    description: "Supplement submitted for $4,200 covering gutter replacement and siding repair not included in initial scope.",
+    createdByUserId: userId,
   });
 
   await storage.createAiInsight({
