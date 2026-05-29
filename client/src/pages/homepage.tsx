@@ -17,8 +17,8 @@ import {
   Target,
   ArrowRight,
   Check,
+  Shield,
 } from "lucide-react";
-import logoImg from "@assets/claimsignal-logo.png";
 
 const intelligenceLayers = [
   {
@@ -75,7 +75,10 @@ export default function Homepage() {
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap px-6 py-4">
           <Link href="/" className="flex items-center gap-2">
-            <img src={logoImg} alt="ClaimSignal" className="h-8 w-auto object-contain" data-testid="img-logo" />
+            <div className="flex items-center gap-2" data-testid="img-logo">
+              <Shield className="h-8 w-8 text-blue-500" />
+              <span className="text-xl font-bold tracking-tight">ClaimSignal</span>
+            </div>
           </Link>
           <div className="flex items-center gap-3 flex-wrap">
             <Link href="/login">
@@ -364,7 +367,10 @@ export default function Homepage() {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2">
-              <img src={logoImg} alt="ClaimSignal" className="h-5 w-auto object-contain" />
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-blue-500" />
+                <span className="text-sm font-bold tracking-tight">ClaimSignal</span>
+              </div>
             </div>
             <div className="flex items-center gap-6 flex-wrap text-sm text-muted-foreground">
               <a href="#pricing" className="hover-elevate px-2 py-1 rounded-md">Pricing</a>

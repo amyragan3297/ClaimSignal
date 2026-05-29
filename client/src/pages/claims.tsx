@@ -137,7 +137,7 @@ export default function ClaimsPage() {
       (c.carrier || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (c.propertyAddress || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       ((c as any).homeownerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      formatPhase(c.currentPhase).toLowerCase().includes(searchQuery.toLowerCase())
+      formatPhase(c.currentPhase || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -357,11 +357,11 @@ export default function ClaimsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant={(phaseColors[claim.currentPhase] as any) || "outline"}
+                          variant={(phaseColors[claim.currentPhase || ""] as any) || "outline"}
                           className="text-xs"
                           data-testid={`badge-phase-${claim.id}`}
                         >
-                          {formatPhase(claim.currentPhase)}
+                          {formatPhase(claim.currentPhase || "")}
                         </Badge>
                       </TableCell>
                       <TableCell>

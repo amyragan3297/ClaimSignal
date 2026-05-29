@@ -296,7 +296,7 @@ export async function registerRoutes(
   app.get("/api/claims/:id/versions", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
-      const versions = await storage.getClaimVersions(req.params.id, orgId);
+      const versions = await storage.getClaimVersions(req.params.id as string, orgId);
       res.json(versions);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -342,7 +342,7 @@ export async function registerRoutes(
   app.patch("/api/claims/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
-      const existing = await storage.getClaim(req.params.id, orgId);
+      const existing = await storage.getClaim(req.params.id as string, orgId);
       if (!existing) return res.status(404).json({ message: "Claim not found" });
 
       if (existing.status === "closed") {
@@ -353,7 +353,7 @@ export async function registerRoutes(
         }
       }
 
-      const claim = await storage.updateClaim(req.params.id, orgId, req.body);
+      const claim = await storage.updateClaim(req.params.id as string, orgId, req.body);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
 
       const velocity = computeLifecycleVelocity(
@@ -363,7 +363,7 @@ export async function registerRoutes(
         claim.resolutionDate ? new Date(claim.resolutionDate) : null
       );
       if (velocity !== null && velocity !== claim.lifecycleVelocityScore) {
-        await storage.updateClaim(req.params.id, orgId, { lifecycleVelocityScore: velocity });
+        await storage.updateClaim(req.params.id as string, orgId, { lifecycleVelocityScore: velocity });
       }
 
       const versionNumber = (await storage.getLatestVersionNumber(claim.id)) + 1;
@@ -399,10 +399,10 @@ export async function registerRoutes(
   app.delete("/api/claims/:id", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
-      const existing = await storage.getClaim(req.params.id, orgId);
+      const existing = await storage.getClaim(req.params.id as string, orgId);
       if (!existing) return res.status(404).json({ message: "Claim not found" });
 
-      const deleted = await storage.softDeleteClaim(req.params.id, orgId);
+      const deleted = await storage.softDeleteClaim(req.params.id as string, orgId);
       if (!deleted) return res.status(404).json({ message: "Claim not found" });
 
       await storage.createAuditLog({
@@ -411,7 +411,7 @@ export async function registerRoutes(
         actorRole: req.auth!.role,
         actionType: "CLAIM_DELETED",
         entityType: "claim",
-        entityId: req.params.id,
+        entityId: req.params.id as string,
         beforeJson: existing,
         ipAddress: getClientIp(req),
       });
@@ -697,7 +697,7 @@ export async function registerRoutes(
 
   app.post("/api/admin/impersonate/:userId", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
     try {
-      const targetUser = await storage.getUser(req.params.userId);
+      const targetUser = await storage.getUser(req.params.userId as string);
       if (!targetUser) return res.status(404).json({ message: "User not found" });
 
       const { accessToken, refreshToken } = await createAuthSession(

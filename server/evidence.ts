@@ -315,7 +315,7 @@ router.get("/files", async (req: AuthRequest, res: Response) => {
 router.get("/files/:id", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
-    const file = await storage.getEvidenceFile(req.params.id, req.auth.organizationId);
+    const file = await storage.getEvidenceFile(req.params.id as string, req.auth.organizationId);
     if (!file) return res.status(404).json({ message: "File not found" });
     res.json(file);
   } catch (err: any) {
@@ -326,7 +326,7 @@ router.get("/files/:id", async (req: AuthRequest, res: Response) => {
 router.get("/files/:id/entities", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
-    const entities = await storage.getExtractedEntities(req.params.id);
+    const entities = await storage.getExtractedEntities(req.params.id as string);
     res.json(entities);
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
@@ -339,16 +339,16 @@ router.post("/files/:id/match", async (req: AuthRequest, res: Response) => {
     const { claimId } = req.body;
     if (!claimId) return res.status(400).json({ message: "claimId required" });
     
-    const file = await storage.getEvidenceFile(req.params.id, req.auth.organizationId);
+    const file = await storage.getEvidenceFile(req.params.id as string, req.auth.organizationId);
     if (!file) return res.status(404).json({ message: "File not found" });
     
-    await storage.updateEvidenceFile(req.params.id, req.auth.organizationId, { claimId });
+    await storage.updateEvidenceFile(req.params.id as string, req.auth.organizationId, { claimId });
     
-    const entities = await storage.getExtractedEntities(req.params.id);
+    const entities = await storage.getExtractedEntities(req.params.id as string);
     await generateTimelineEvents(
-      claimId, 
+      claimId as string, 
       req.auth.organizationId, 
-      req.params.id, 
+      req.params.id as string, 
       file.docCategory || "unknown",
       entities.map(e => ({ entityType: e.entityType, rawValue: e.rawValue, confidence: e.confidence || 0 })),
       req.auth.userId
@@ -373,7 +373,7 @@ router.get("/drafts", async (req: AuthRequest, res: Response) => {
 router.patch("/drafts/:id", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
-    const updated = await storage.updateClaimDraft(req.params.id, req.auth.organizationId, req.body);
+    const updated = await storage.updateClaimDraft(req.params.id as string, req.auth.organizationId, req.body);
     if (!updated) return res.status(404).json({ message: "Draft not found" });
     res.json(updated);
   } catch (err: any) {
@@ -384,7 +384,7 @@ router.patch("/drafts/:id", async (req: AuthRequest, res: Response) => {
 router.get("/timeline/:claimId", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
-    const events = await storage.getTimelineEvents(req.params.claimId, req.auth.organizationId);
+    const events = await storage.getTimelineEvents(req.params.claimId as string, req.auth.organizationId);
     res.json(events);
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
