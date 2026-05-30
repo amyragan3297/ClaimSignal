@@ -41,11 +41,21 @@ const createClaimSchema = z.object({
 });
 
 const statusColors: Record<string, string> = {
+  draft: "outline",
   open: "default",
+  active: "default",
   in_progress: "secondary",
+  inspection_scheduled: "secondary",
+  inspected: "secondary",
+  supplement_pending: "secondary",
+  carrier_review: "secondary",
   approved: "default",
+  partially_approved: "secondary",
   denied: "destructive",
+  escalated: "destructive",
+  overturned: "default",
   closed: "outline",
+  archived: "outline",
 };
 
 const phaseColors: Record<string, string> = {

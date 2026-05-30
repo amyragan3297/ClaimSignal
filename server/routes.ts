@@ -462,6 +462,87 @@ export async function registerRoutes(
   app.use("/api/evidence", requireAuth, requireActiveSubscription, evidenceRouter);
   app.use("/api/intelligence", requireAuth, requireActiveSubscription, intelligenceRouter);
 
+  // Audio recordings
+  app.get("/api/audio", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const recordings = await storage.getAudioRecordingsByOrg(req.auth!.organizationId);
+      res.json(recordings);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/audio/claim/:claimId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const recordings = await storage.getAudioRecordings(req.params.claimId as string, req.auth!.organizationId);
+      res.json(recordings);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/audio", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const recording = await storage.createAudioRecording({
+        organizationId: req.auth!.organizationId,
+        uploadedByUserId: req.auth!.userId,
+        claimId: req.body.claimId || null,
+        fileUrl: req.body.fileUrl || null,
+        durationSeconds: req.body.durationSeconds ? Number(req.body.durationSeconds) : null,
+        transcriptText: req.body.transcriptText || null,
+      });
+      res.json(recording);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/audio/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const updated = await storage.updateAudioRecording(req.params.id as string, req.auth!.organizationId, req.body);
+      if (!updated) return res.status(404).json({ message: "Recording not found" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Communications (emails table)
+  app.get("/api/communications", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const comms = await storage.getEmailsByOrg(req.auth!.organizationId);
+      res.json(comms);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/communications/claim/:claimId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const comms = await storage.getEmails(req.params.claimId as string, req.auth!.organizationId);
+      res.json(comms);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/communications", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      if (!req.body.claimId) return res.status(400).json({ message: "claimId is required" });
+      if (!req.body.body) return res.status(400).json({ message: "body is required" });
+      const comm = await storage.createEmail({
+        claimId: req.body.claimId,
+        organizationId: req.auth!.organizationId,
+        direction: req.body.direction || "incoming",
+        subject: req.body.subject || "other",
+        body: req.body.body,
+      });
+      res.json(comm);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.use("/api", exportsRouter);
 
   app.get("/api/clients", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {

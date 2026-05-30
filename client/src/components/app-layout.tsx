@@ -6,6 +6,7 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -30,17 +31,21 @@ import {
   AlertTriangle,
   FileSearch,
   CloudLightning,
+  Brain,
+  Zap,
+  Mic,
+  MessageSquare,
+  BarChart2,
 } from "lucide-react";
 
-const baseNavItems = [
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { title: "Claims", href: "/claims", icon: FileText },
-  { title: "Evidence", href: "/evidence", icon: FileSearch },
-  { title: "Storm Events", href: "/storm-events", icon: CloudLightning },
-  { title: "Clients", href: "/clients", icon: UserCircle },
-  { title: "Adjusters", href: "/adjusters", icon: Users },
-  { title: "Billing", href: "/billing", icon: CreditCard },
-];
+const ROLE_LABEL: Record<string, string> = {
+  super_admin: "Master",
+  admin: "Admin",
+  team_owner: "Team Admin",
+  founder: "Founder",
+  standard: "Individual",
+  carrier_analyst: "Executive",
+};
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { data, isLoading, logout, stopImpersonation } = useAuth();
@@ -67,6 +72,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return <Redirect to="/billing" />;
   }
 
+  const role = data.user?.role ?? "standard";
+  const isMaster = role === "super_admin" || data.isPlatformOwner;
+  const isExecutive = role === "carrier_analyst";
+  const roleLabel = ROLE_LABEL[role] ?? role;
+
+  const planLabel = billing?.planType === "founder"
+    ? "Founder"
+    : billing?.planType
+      ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1)
+      : "Free";
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -83,6 +99,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     ? Math.max(0, Math.ceil((new Date(billing.trialEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : null;
 
+  const isActive2 = (href: string) => location === href || location.startsWith(href + "/");
+
+  const navItem = (title: string, href: string, Icon: any, testId?: string) => (
+    <SidebarMenuItem key={title}>
+      <SidebarMenuButton asChild isActive={isActive2(href)} data-testid={testId ?? `nav-${title.toLowerCase().replace(/\s+/g, "-")}`}>
+        <Link href={href}>
+          <Icon className="w-4 h-4" />
+          <span>{title}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex min-h-screen w-full">
@@ -95,45 +124,63 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </div>
             </Link>
           </SidebarHeader>
+
           <SidebarContent>
+            {/* Core */}
             <SidebarGroup>
+              <SidebarGroupLabel>Core</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {[...baseNavItems, ...(billing?.planType === "founder" ? [{ title: "Founding Partner Agreement", href: "/legal/founder", icon: Shield }] : [])].map((item) => {
-                    const isActiveRoute = location === item.href || location.startsWith(item.href + "/");
-                    return (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={isActiveRoute}
-                          data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
-                        >
-                          <Link href={item.href}>
-                            <item.icon className="w-4 h-4" />
-                            <span>{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                  {(data.isPlatformOwner || data.user?.role === "super_admin") && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={location === "/admin"}
-                        data-testid="nav-admin"
-                      >
-                        <Link href="/admin">
-                          <Lock className="w-4 h-4" />
-                          <span>Admin</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
+                  {navItem("Dashboard", "/dashboard", LayoutDashboard)}
+                  {!isExecutive && navItem("Claims", "/claims", FileText)}
+                  {!isExecutive && navItem("Evidence", "/evidence", FileSearch)}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {/* Intelligence */}
+            {!isExecutive && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Intelligence</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {navItem("Claim Intelligence", "/intelligence", Brain)}
+                    {navItem("Signal Engine", "/signal-engine", Zap)}
+                    {navItem("Adjusters", "/adjusters", Users)}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+
+            {/* Workflow */}
+            {!isExecutive && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Workflow</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {navItem("Audio / Transcripts", "/audio", Mic)}
+                    {navItem("Communications", "/communications", MessageSquare)}
+                    {navItem("Storm Events", "/storm-events", CloudLightning)}
+                    {navItem("Clients", "/clients", UserCircle)}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+
+            {/* Account */}
+            <SidebarGroup>
+              <SidebarGroupLabel>Account</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {navItem("Billing", "/billing", CreditCard)}
+                  {(isMaster || isExecutive) && navItem("Executive Metrics", "/admin", BarChart2, "nav-executive-metrics")}
+                  {isMaster && navItem("Admin", "/admin", Lock, "nav-admin")}
+                  {billing?.planType === "founder" && navItem("Founder Agreement", "/legal/founder", Shield)}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
+
           <SidebarFooter className="p-4">
             <div className="flex items-center gap-3 mb-3">
               <Avatar className="w-8 h-8">
@@ -143,7 +190,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{data.user.fullName}</p>
-                <p className="text-xs text-muted-foreground truncate">{data.org.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{roleLabel} · {data.org.name}</p>
               </div>
             </div>
             <Button
@@ -185,7 +232,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs" data-testid="badge-header-plan">
-                {billing?.planType === "founder" ? "Founding Partner" : billing?.planType ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1) : 'Free'}
+                {planLabel} · {roleLabel}
               </Badge>
             </div>
           </header>

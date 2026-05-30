@@ -1,0 +1,301 @@
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery as useAuthQuery } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
+import {
+  Mic, Upload, Clock, CheckCircle, AlertCircle, FileAudio,
+  MessageSquare, Plus, ChevronDown, ChevronUp,
+} from "lucide-react";
+
+interface AudioRecording {
+  id: string;
+  claimId?: string;
+  fileUrl?: string;
+  durationSeconds?: number;
+  transcriptText?: string;
+  transcriptConfidence?: number;
+  hostilityScore?: number;
+  delayLanguageDetected?: boolean;
+  denialPreLanguageDetected?: boolean;
+  processedAt?: string;
+  createdAt: string;
+}
+
+function formatDuration(seconds?: number) {
+  if (!seconds) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function TranscriptToggle({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        className="flex items-center gap-1 text-xs text-primary hover:underline"
+        onClick={() => setOpen(v => !v)}
+        data-testid="button-toggle-transcript"
+      >
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        {open ? "Hide transcript" : "View transcript"}
+      </button>
+      {open && (
+        <div className="mt-2 p-3 rounded-md bg-muted/50 text-xs leading-relaxed text-muted-foreground border border-border/50" data-testid="text-transcript">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function AudioPage() {
+  const { toast } = useToast();
+  const { data: auth } = useAuth();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedClaimId, setSelectedClaimId] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [duration, setDuration] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const { data: recordings, isLoading } = useQuery<AudioRecording[]>({
+    queryKey: ["/api/audio"],
+  });
+
+  const { data: claims } = useQuery<{ id: string; claimNumber: string }[]>({
+    queryKey: ["/api/claims"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/audio", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/audio"] });
+      toast({ title: "Audio recording logged" });
+      setDialogOpen(false);
+      setFileName("");
+      setDuration("");
+      setNotes("");
+      setSelectedClaimId("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to log recording", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fileName) {
+      toast({ title: "File name required", variant: "destructive" });
+      return;
+    }
+    createMutation.mutate({
+      claimId: selectedClaimId || undefined,
+      fileUrl: `#demo/${fileName}`,
+      durationSeconds: duration ? parseInt(duration) * 60 : undefined,
+      transcriptText: notes || undefined,
+    });
+  };
+
+  const getBehaviorBadge = (rec: AudioRecording) => {
+    if (rec.denialPreLanguageDetected) return <Badge variant="destructive" className="text-xs">Denial Pre-Language</Badge>;
+    if (rec.delayLanguageDetected) return <Badge variant="secondary" className="text-xs">Delay Language</Badge>;
+    if ((rec.hostilityScore ?? 0) > 0.6) return <Badge variant="secondary" className="text-xs">Elevated Tone</Badge>;
+    return null;
+  };
+
+  return (
+    <div className="space-y-6" data-testid="page-audio">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-audio-title">Audio & Transcriptions</h1>
+          <p className="text-sm text-muted-foreground">Upload, attach, and transcribe adjuster call recordings and voicemails</p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-add-audio">
+              <Plus className="w-4 h-4" />
+              Log Recording
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Log Audio Recording</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label>File Name / Recording Label</Label>
+                <Input
+                  placeholder="adjuster-call-2026-04-18.mp3"
+                  value={fileName}
+                  onChange={e => setFileName(e.target.value)}
+                  data-testid="input-audio-filename"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Link to Claim (optional)</Label>
+                <Select value={selectedClaimId} onValueChange={setSelectedClaimId}>
+                  <SelectTrigger data-testid="select-audio-claim">
+                    <SelectValue placeholder="Select claim..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No claim linked</SelectItem>
+                    {claims?.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.claimNumber}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Duration (minutes, optional)</Label>
+                <Input
+                  type="number"
+                  placeholder="12"
+                  value={duration}
+                  onChange={e => setDuration(e.target.value)}
+                  data-testid="input-audio-duration"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Transcript / Notes (optional)</Label>
+                <Textarea
+                  placeholder="Paste transcript or add notes about the call..."
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  rows={4}
+                  data-testid="input-audio-notes"
+                />
+              </div>
+              <div className="p-3 rounded-md bg-muted/50 border border-border/50">
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Clock className="w-3 h-3" />
+                  Live transcription (AI-powered) is pending backend integration. You can paste transcripts manually.
+                </p>
+              </div>
+              <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-audio">
+                {createMutation.isPending ? "Saving..." : "Log Recording"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Status banner */}
+      <Card className="border-border/50 bg-muted/30">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+              <Mic className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Transcription Engine</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                AI-powered transcription, behavioral scoring, and delay/deflection language detection are part of the ClaimSignal backend integration. Manual transcript entry is available now.
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs shrink-0">Demo Mode</Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recording list */}
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full" />)}
+        </div>
+      ) : !recordings?.length ? (
+        <Card>
+          <CardContent className="p-10 text-center">
+            <FileAudio className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm font-medium mb-1">No recordings yet</p>
+            <p className="text-xs text-muted-foreground mb-4">Log adjuster calls, voicemails, and inspection audio to track behavioral signals.</p>
+            <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)} data-testid="button-add-first-audio">
+              <Plus className="w-3 h-3" />
+              Log First Recording
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {recordings.map(rec => (
+            <Card key={rec.id} data-testid={`card-audio-${rec.id}`}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                      <FileAudio className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium" data-testid={`audio-filename-${rec.id}`}>
+                        {rec.fileUrl?.replace("#demo/", "") ?? "Recording"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {rec.claimId ? `Claim linked` : "No claim linked"} · {formatDuration(rec.durationSeconds)} · {new Date(rec.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {getBehaviorBadge(rec)}
+                    {rec.transcriptText ? (
+                      <Badge variant="outline" className="text-xs text-green-500 border-green-500/30" data-testid={`badge-transcript-status-${rec.id}`}>
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Transcript Available
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs" data-testid={`badge-transcript-status-${rec.id}`}>
+                        <Clock className="w-3 h-3 mr-1" />
+                        Transcription Pending
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {rec.transcriptText && (
+                  <div className="mt-2">
+                    <TranscriptToggle text={rec.transcriptText} />
+                  </div>
+                )}
+
+                {(rec.hostilityScore != null || rec.delayLanguageDetected || rec.denialPreLanguageDetected) && (
+                  <div className="mt-3 grid grid-cols-3 gap-3 pt-3 border-t border-border/30">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Hostility Score</p>
+                      <p className="text-sm font-medium" data-testid={`audio-hostility-${rec.id}`}>
+                        {rec.hostilityScore != null ? (rec.hostilityScore * 10).toFixed(1) : "—"}/10
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Delay Language</p>
+                      <p className="text-sm font-medium" data-testid={`audio-delay-${rec.id}`}>
+                        {rec.delayLanguageDetected ? "Detected" : "Not detected"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Denial Pre-Language</p>
+                      <p className="text-sm font-medium" data-testid={`audio-denial-pre-${rec.id}`}>
+                        {rec.denialPreLanguageDetected ? "Detected" : "Not detected"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

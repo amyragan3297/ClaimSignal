@@ -17,6 +17,10 @@ import AdminPage from "@/pages/admin";
 import AdjustersPage from "@/pages/adjusters";
 import EvidencePage from "@/pages/evidence";
 import StormEventsPage from "@/pages/storm-events";
+import SignalEnginePage from "@/pages/signal-engine";
+import AudioPage from "@/pages/audio";
+import CommunicationsPage from "@/pages/communications";
+import IntelligencePage from "@/pages/intelligence";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -29,6 +33,10 @@ function AppRoutes() {
         <Route path="/claims/:id" component={ClaimDetailPage} />
         <Route path="/evidence" component={EvidencePage} />
         <Route path="/storm-events" component={StormEventsPage} />
+        <Route path="/intelligence" component={IntelligencePage} />
+        <Route path="/signal-engine" component={SignalEnginePage} />
+        <Route path="/audio" component={AudioPage} />
+        <Route path="/communications" component={CommunicationsPage} />
         <Route path="/clients" component={ClientsPage} />
         <Route path="/adjusters" component={AdjustersPage} />
         <Route path="/billing" component={BillingPage} />

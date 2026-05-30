@@ -118,6 +118,7 @@ export interface IStorage {
   createDocument(doc: InsertDocument): Promise<Document>;
 
   getEmails(claimId: string, orgId: string): Promise<Email[]>;
+  getEmailsByOrg(orgId: string): Promise<Email[]>;
   createEmail(email: InsertEmail): Promise<Email>;
 
   getAiInsights(claimId: string, orgId: string): Promise<AiInsight[]>;
@@ -160,6 +161,7 @@ export interface IStorage {
   updateClaimDraft(id: string, orgId: string, data: Partial<ClaimDraft>): Promise<ClaimDraft | undefined>;
 
   getAudioRecordings(claimId: string, orgId: string): Promise<AudioRecording[]>;
+  getAudioRecordingsByOrg(orgId: string): Promise<AudioRecording[]>;
   createAudioRecording(recording: InsertAudioRecording): Promise<AudioRecording>;
   updateAudioRecording(id: string, orgId: string, data: Partial<AudioRecording>): Promise<AudioRecording | undefined>;
 
@@ -502,6 +504,10 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(emails).where(and(eq(emails.claimId, claimId), eq(emails.organizationId, orgId)));
   }
 
+  async getEmailsByOrg(orgId: string): Promise<Email[]> {
+    return db.select().from(emails).where(eq(emails.organizationId, orgId)).orderBy(desc(emails.createdAt));
+  }
+
   async createEmail(email: InsertEmail): Promise<Email> {
     const [created] = await db.insert(emails).values(email).returning();
     return created;
@@ -689,6 +695,12 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(audioRecordings).where(
       and(eq(audioRecordings.claimId, claimId), eq(audioRecordings.organizationId, orgId))
     );
+  }
+
+  async getAudioRecordingsByOrg(orgId: string): Promise<AudioRecording[]> {
+    return db.select().from(audioRecordings).where(
+      eq(audioRecordings.organizationId, orgId)
+    ).orderBy(desc(audioRecordings.createdAt));
   }
 
   async createAudioRecording(recording: InsertAudioRecording): Promise<AudioRecording> {
