@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema } from "@shared/schema";
-import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked } from "./masking";
+import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked, sanitizeSharedClaimList } from "./masking";
 import { createCheckoutSession, handleWebhookEvent } from "./billing";
 import exportsRouter from "./exports";
 import evidenceRouter from "./evidence";
@@ -227,28 +227,53 @@ export async function registerRoutes(
     try {
       const role = req.auth!.role;
       const orgId = req.auth!.organizationId;
-      
-      let claimsData = role === "super_admin"
+
+      // Master sees all claims across all tenants, always unmasked
+      // Non-Master sees only their own org's claims, always unmasked (own data)
+      const claimsData = role === "super_admin"
         ? await storage.getAllClaimsAcrossTenants()
         : await storage.getClaims(orgId);
 
-      const unmaskedRequested = req.query.unmasked === "true";
-      const canSeeUnmasked = canViewUnmasked(role);
-
-      if (canSeeUnmasked && unmaskedRequested) {
+      if (role === "super_admin") {
         await storage.createAuditLog({
           organizationId: orgId,
           actorUserId: req.auth!.userId,
           actorRole: role,
-          actionType: "PII_UNMASK_VIEW",
+          actionType: "CLAIM_LIST_ACCESS_UNMASKED",
           entityType: "claims",
           ipAddress: getClientIp(req),
         });
-      } else {
-        claimsData = applyPiiMaskingToList(claimsData, role);
       }
 
       res.json(claimsData);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Shared platform claim library — cross-tenant, masked for all non-Master roles
+  app.get("/api/claims/shared", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      const orgId = req.auth!.organizationId;
+
+      const allClaims = await storage.getAllClaimsAcrossTenants();
+
+      await storage.createAuditLog({
+        organizationId: orgId,
+        actorUserId: req.auth!.userId,
+        actorRole: role,
+        actionType: "SHARED_LIBRARY_ACCESS",
+        entityType: "claims",
+        ipAddress: getClientIp(req),
+      });
+
+      // Master always unmasked; everyone else receives sanitized/masked records
+      if (role === "super_admin") {
+        return res.json(allClaims);
+      }
+
+      res.json(sanitizeSharedClaimList(allClaims, role));
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -258,33 +283,29 @@ export async function registerRoutes(
     try {
       const role = req.auth!.role;
       const orgId = req.auth!.organizationId;
-      
-      let claim = role === "super_admin"
-        ? await storage.getClaim(req.params.id as string, orgId)
-        : await storage.getClaim(req.params.id as string, orgId);
+
+      // Try own org first; Master falls back to cross-tenant lookup
+      let claim = await storage.getClaim(req.params.id as string, orgId);
 
       if (!claim && role === "super_admin") {
         const allClaims = await storage.getAllClaimsAcrossTenants();
-        claim = allClaims.find(c => c.id === req.params.id) || undefined;
+        claim = allClaims.find((c) => c.id === req.params.id) || undefined;
       }
-      
+
       if (!claim) return res.status(404).json({ message: "Claim not found" });
 
-      const unmaskedRequested = req.query.unmasked === "true";
-      const canSeeUnmasked = canViewUnmasked(role);
-
-      if (canSeeUnmasked && unmaskedRequested) {
+      // Master: always unmasked, always audited
+      // Non-Master: own-org claim returned unmasked (they own this data)
+      if (role === "super_admin") {
         await storage.createAuditLog({
           organizationId: claim.organizationId,
           actorUserId: req.auth!.userId,
           actorRole: role,
-          actionType: "PII_UNMASK_VIEW",
+          actionType: "CLAIM_VIEW_UNMASKED",
           entityType: "claim",
           entityId: claim.id,
           ipAddress: getClientIp(req),
         });
-      } else {
-        claim = applyPiiMasking(claim, role);
       }
 
       res.json(claim);

@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -92,18 +91,14 @@ export default function ClaimDetailPage() {
   const { toast } = useToast();
   const { data: authData } = useAuth();
   const userRole = authData?.user?.role || "standard";
-  const canToggleUnmasked = userRole === "super_admin";
-  const [showUnmasked, setShowUnmasked] = useState(false);
+  const isMaster = userRole === "super_admin";
 
   const claimId = params?.id;
 
   const { data: claim, isLoading } = useQuery<Claim>({
-    queryKey: ["/api/claims", claimId, { unmasked: showUnmasked && canToggleUnmasked }],
+    queryKey: ["/api/claims", claimId],
     queryFn: async () => {
-      const url = showUnmasked && canToggleUnmasked
-        ? `/api/claims/${claimId}?unmasked=true`
-        : `/api/claims/${claimId}`;
-      const res = await apiRequest("GET", url);
+      const res = await apiRequest("GET", `/api/claims/${claimId}`);
       return res.json();
     },
     enabled: !!claimId,
@@ -261,7 +256,7 @@ export default function ClaimDetailPage() {
               <DropdownMenuItem onClick={() => handleExport("claim_packet_masked", "pdf")} data-testid="export-masked-pdf">
                 Claim Packet - Masked (PDF)
               </DropdownMenuItem>
-              {canToggleUnmasked && (
+              {isMaster && (
                 <DropdownMenuItem onClick={() => handleExport("claim_packet_unmasked", "pdf")} data-testid="export-unmasked-pdf">
                   Full Claim Packet - Unmasked (PDF)
                 </DropdownMenuItem>
@@ -272,7 +267,7 @@ export default function ClaimDetailPage() {
               <DropdownMenuItem onClick={() => handleExport("claim_packet_masked", "csv")} data-testid="export-masked-csv">
                 Claim Packet - Masked (CSV)
               </DropdownMenuItem>
-              {canToggleUnmasked && (
+              {isMaster && (
                 <DropdownMenuItem onClick={() => handleExport("claim_packet_unmasked", "csv")} data-testid="export-unmasked-csv">
                   Full Claim Packet - Unmasked (CSV)
                 </DropdownMenuItem>
@@ -336,23 +331,12 @@ export default function ClaimDetailPage() {
         </Card>
       )}
 
-      {canToggleUnmasked && (
-        <div className="flex items-center justify-between rounded-md border border-border bg-card p-3">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-muted-foreground" />
-            <div>
-              <p className="text-sm font-medium" data-testid="text-privacy-label-detail">Data Privacy Mode</p>
-              <p className="text-xs text-muted-foreground">PII is masked for non-privileged roles by default to protect homeowner privacy.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{showUnmasked ? "Showing full data" : "PII masked"}</span>
-            <Switch
-              checked={showUnmasked}
-              onCheckedChange={setShowUnmasked}
-              data-testid="switch-unmask-toggle-detail"
-            />
-          </div>
+      {isMaster && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-card/50 px-3 py-2">
+          <Eye className="w-4 h-4 text-amber-500" />
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-amber-500">Master view</span> — all PII visible and unmasked. Access is audited.
+          </p>
         </div>
       )}
 
