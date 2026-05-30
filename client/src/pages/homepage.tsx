@@ -120,7 +120,7 @@ export default function Homepage() {
           <Link href="/">
             <div className="flex items-center gap-2" data-testid="img-logo">
               <Shield className="h-7 w-7 text-blue-500" />
-              <span className="text-lg font-bold tracking-tight">ClaimSignal</span>
+              <span className="text-lg font-bold tracking-tight">ClaimSignal&#8482;</span>
             </div>
           </Link>
           <div className="flex items-center gap-3">
@@ -355,7 +355,7 @@ export default function Homepage() {
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-blue-500" />
-            <span className="text-sm font-bold tracking-tight">ClaimSignal</span>
+            <span className="text-sm font-bold tracking-tight">ClaimSignal&#8482;</span>
           </div>
           <nav className="flex items-center gap-6 text-xs text-muted-foreground">
             <a href="#platform" className="hover:text-foreground transition-colors">Platform</a>
