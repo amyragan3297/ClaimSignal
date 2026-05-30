@@ -228,6 +228,48 @@ export interface IStorage {
   getStormEvent(id: string, orgId: string): Promise<StormEvent | undefined>;
   updateStormEvent(id: string, orgId: string, data: Partial<InsertStormEvent>): Promise<StormEvent | undefined>;
   deleteStormEvent(id: string, orgId: string): Promise<void>;
+
+  // Governance — archive / restore / permanent delete
+  archiveClaim(id: string, orgId?: string): Promise<boolean>;
+  restoreClaim(id: string, orgId?: string): Promise<boolean>;
+  permanentDeleteClaim(id: string, orgId?: string): Promise<boolean>;
+  getArchivedClaims(orgId?: string): Promise<Claim[]>;
+
+  archiveAdjuster(id: string, orgId?: string): Promise<boolean>;
+  restoreAdjuster(id: string, orgId?: string): Promise<boolean>;
+  permanentDeleteAdjuster(id: string, orgId?: string): Promise<boolean>;
+  getArchivedAdjusters(orgId?: string): Promise<Adjuster[]>;
+
+  archiveClient(id: string, orgId?: string): Promise<boolean>;
+  restoreClient(id: string, orgId?: string): Promise<boolean>;
+  permanentDeleteClient(id: string, orgId?: string): Promise<boolean>;
+  getArchivedClients(orgId?: string): Promise<Client[]>;
+
+  archiveEvidenceFile(id: string, orgId?: string): Promise<boolean>;
+  restoreEvidenceFile(id: string, orgId?: string): Promise<boolean>;
+  permanentDeleteEvidenceFile(id: string, orgId?: string): Promise<boolean>;
+  getArchivedEvidenceFiles(orgId?: string): Promise<EvidenceFile[]>;
+
+  archiveAudioRecording(id: string, orgId?: string): Promise<boolean>;
+  restoreAudioRecording(id: string, orgId?: string): Promise<boolean>;
+  permanentDeleteAudioRecording(id: string, orgId?: string): Promise<boolean>;
+  getArchivedAudioRecordings(orgId?: string): Promise<AudioRecording[]>;
+
+  archiveEmail(id: string, orgId?: string): Promise<boolean>;
+  restoreEmail(id: string, orgId?: string): Promise<boolean>;
+  permanentDeleteEmail(id: string, orgId?: string): Promise<boolean>;
+  getArchivedEmails(orgId?: string): Promise<Email[]>;
+
+  permanentDeleteTimelineEvent(id: string, orgId: string): Promise<boolean>;
+
+  getGovernanceOverview(): Promise<{
+    claims: { active: number; archived: number };
+    adjusters: { active: number; archived: number };
+    clients: { active: number; archived: number };
+    evidenceFiles: { active: number; archived: number };
+    audioRecordings: { active: number; archived: number };
+    emails: { active: number; archived: number };
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -344,12 +386,12 @@ export class DatabaseStorage implements IStorage {
 
   async getClaims(orgId: string): Promise<Claim[]> {
     return db.select().from(claims).where(
-      and(eq(claims.organizationId, orgId), isNull(claims.deletedAt))
+      and(eq(claims.organizationId, orgId), isNull(claims.deletedAt), isNull(claims.archivedAt))
     ).orderBy(desc(claims.createdAt));
   }
 
   async getAllClaimsAcrossTenants(): Promise<Claim[]> {
-    return db.select().from(claims).where(isNull(claims.deletedAt)).orderBy(desc(claims.createdAt));
+    return db.select().from(claims).where(and(isNull(claims.deletedAt), isNull(claims.archivedAt))).orderBy(desc(claims.createdAt));
   }
 
   async getClaim(id: string, orgId: string): Promise<Claim | undefined> {
@@ -893,6 +935,227 @@ export class DatabaseStorage implements IStorage {
   async deleteStormEvent(id: string, orgId: string): Promise<void> {
     await db.delete(stormEvents)
       .where(and(eq(stormEvents.id, id), eq(stormEvents.organizationId, orgId)));
+  }
+
+  // ── Governance: Claims ────────────────────────────────────────────────────
+  async archiveClaim(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId
+      ? and(eq(claims.id, id), eq(claims.organizationId, orgId), isNull(claims.archivedAt), isNull(claims.deletedAt))
+      : and(eq(claims.id, id), isNull(claims.archivedAt), isNull(claims.deletedAt));
+    const result = await db.update(claims).set({ archivedAt: new Date() }).where(where!).returning();
+    return result.length > 0;
+  }
+
+  async restoreClaim(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(claims.id, id), eq(claims.organizationId, orgId)) : eq(claims.id, id);
+    const result = await db.update(claims).set({ archivedAt: null }).where(where).returning();
+    return result.length > 0;
+  }
+
+  async permanentDeleteClaim(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(claims.id, id), eq(claims.organizationId, orgId)) : eq(claims.id, id);
+    const result = await db.delete(claims).where(where).returning();
+    return result.length > 0;
+  }
+
+  async getArchivedClaims(orgId?: string): Promise<Claim[]> {
+    if (orgId) {
+      return db.select().from(claims).where(
+        and(eq(claims.organizationId, orgId), sql`${claims.archivedAt} IS NOT NULL`)
+      ).orderBy(desc(claims.archivedAt));
+    }
+    return db.select().from(claims).where(sql`${claims.archivedAt} IS NOT NULL`).orderBy(desc(claims.archivedAt));
+  }
+
+  // ── Governance: Adjusters ─────────────────────────────────────────────────
+  async archiveAdjuster(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId
+      ? and(eq(adjusters.id, id), eq(adjusters.organizationId, orgId), sql`${adjusters.archivedAt} IS NULL`)
+      : and(eq(adjusters.id, id), sql`${adjusters.archivedAt} IS NULL`);
+    const result = await db.update(adjusters).set({ archivedAt: new Date() } as any).where(where!).returning();
+    return result.length > 0;
+  }
+
+  async restoreAdjuster(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(adjusters.id, id), eq(adjusters.organizationId, orgId)) : eq(adjusters.id, id);
+    const result = await db.update(adjusters).set({ archivedAt: null } as any).where(where).returning();
+    return result.length > 0;
+  }
+
+  async permanentDeleteAdjuster(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(adjusters.id, id), eq(adjusters.organizationId, orgId)) : eq(adjusters.id, id);
+    const result = await db.delete(adjusters).where(where).returning();
+    return result.length > 0;
+  }
+
+  async getArchivedAdjusters(orgId?: string): Promise<Adjuster[]> {
+    if (orgId) {
+      return db.select().from(adjusters).where(
+        and(eq(adjusters.organizationId, orgId), sql`${adjusters.archivedAt} IS NOT NULL`)
+      ).orderBy(desc(adjusters.createdAt));
+    }
+    return db.select().from(adjusters).where(sql`${adjusters.archivedAt} IS NOT NULL`).orderBy(desc(adjusters.createdAt));
+  }
+
+  // ── Governance: Clients ───────────────────────────────────────────────────
+  async archiveClient(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId
+      ? and(eq(clients.id, id), eq(clients.organizationId, orgId), sql`${clients.archivedAt} IS NULL`)
+      : and(eq(clients.id, id), sql`${clients.archivedAt} IS NULL`);
+    const result = await db.update(clients).set({ archivedAt: new Date() } as any).where(where!).returning();
+    return result.length > 0;
+  }
+
+  async restoreClient(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(clients.id, id), eq(clients.organizationId, orgId)) : eq(clients.id, id);
+    const result = await db.update(clients).set({ archivedAt: null } as any).where(where).returning();
+    return result.length > 0;
+  }
+
+  async permanentDeleteClient(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(clients.id, id), eq(clients.organizationId, orgId)) : eq(clients.id, id);
+    const result = await db.delete(clients).where(where).returning();
+    return result.length > 0;
+  }
+
+  async getArchivedClients(orgId?: string): Promise<Client[]> {
+    if (orgId) {
+      return db.select().from(clients).where(
+        and(eq(clients.organizationId, orgId), sql`${clients.archivedAt} IS NOT NULL`)
+      ).orderBy(desc(clients.createdAt));
+    }
+    return db.select().from(clients).where(sql`${clients.archivedAt} IS NOT NULL`).orderBy(desc(clients.createdAt));
+  }
+
+  // ── Governance: Evidence Files ────────────────────────────────────────────
+  async archiveEvidenceFile(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId
+      ? and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId), sql`${evidenceFiles.archivedAt} IS NULL`)
+      : and(eq(evidenceFiles.id, id), sql`${evidenceFiles.archivedAt} IS NULL`);
+    const result = await db.update(evidenceFiles).set({ archivedAt: new Date() } as any).where(where!).returning();
+    return result.length > 0;
+  }
+
+  async restoreEvidenceFile(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId)) : eq(evidenceFiles.id, id);
+    const result = await db.update(evidenceFiles).set({ archivedAt: null } as any).where(where).returning();
+    return result.length > 0;
+  }
+
+  async permanentDeleteEvidenceFile(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId)) : eq(evidenceFiles.id, id);
+    const result = await db.delete(evidenceFiles).where(where).returning();
+    return result.length > 0;
+  }
+
+  async getArchivedEvidenceFiles(orgId?: string): Promise<EvidenceFile[]> {
+    if (orgId) {
+      return db.select().from(evidenceFiles).where(
+        and(eq(evidenceFiles.organizationId, orgId), sql`${evidenceFiles.archivedAt} IS NOT NULL`)
+      ).orderBy(desc(evidenceFiles.uploadedAt));
+    }
+    return db.select().from(evidenceFiles).where(sql`${evidenceFiles.archivedAt} IS NOT NULL`).orderBy(desc(evidenceFiles.uploadedAt));
+  }
+
+  // ── Governance: Audio Recordings ──────────────────────────────────────────
+  async archiveAudioRecording(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId
+      ? and(eq(audioRecordings.id, id), eq(audioRecordings.organizationId, orgId), sql`${audioRecordings.archivedAt} IS NULL`)
+      : and(eq(audioRecordings.id, id), sql`${audioRecordings.archivedAt} IS NULL`);
+    const result = await db.update(audioRecordings).set({ archivedAt: new Date() } as any).where(where!).returning();
+    return result.length > 0;
+  }
+
+  async restoreAudioRecording(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(audioRecordings.id, id), eq(audioRecordings.organizationId, orgId)) : eq(audioRecordings.id, id);
+    const result = await db.update(audioRecordings).set({ archivedAt: null } as any).where(where).returning();
+    return result.length > 0;
+  }
+
+  async permanentDeleteAudioRecording(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(audioRecordings.id, id), eq(audioRecordings.organizationId, orgId)) : eq(audioRecordings.id, id);
+    const result = await db.delete(audioRecordings).where(where).returning();
+    return result.length > 0;
+  }
+
+  async getArchivedAudioRecordings(orgId?: string): Promise<AudioRecording[]> {
+    if (orgId) {
+      return db.select().from(audioRecordings).where(
+        and(eq(audioRecordings.organizationId, orgId), sql`${audioRecordings.archivedAt} IS NOT NULL`)
+      ).orderBy(desc(audioRecordings.createdAt));
+    }
+    return db.select().from(audioRecordings).where(sql`${audioRecordings.archivedAt} IS NOT NULL`).orderBy(desc(audioRecordings.createdAt));
+  }
+
+  // ── Governance: Emails ────────────────────────────────────────────────────
+  async archiveEmail(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId
+      ? and(eq(emails.id, id), eq(emails.organizationId, orgId), sql`${emails.archivedAt} IS NULL`)
+      : and(eq(emails.id, id), sql`${emails.archivedAt} IS NULL`);
+    const result = await db.update(emails).set({ archivedAt: new Date() } as any).where(where!).returning();
+    return result.length > 0;
+  }
+
+  async restoreEmail(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(emails.id, id), eq(emails.organizationId, orgId)) : eq(emails.id, id);
+    const result = await db.update(emails).set({ archivedAt: null } as any).where(where).returning();
+    return result.length > 0;
+  }
+
+  async permanentDeleteEmail(id: string, orgId?: string): Promise<boolean> {
+    const where = orgId ? and(eq(emails.id, id), eq(emails.organizationId, orgId)) : eq(emails.id, id);
+    const result = await db.delete(emails).where(where).returning();
+    return result.length > 0;
+  }
+
+  async getArchivedEmails(orgId?: string): Promise<Email[]> {
+    if (orgId) {
+      return db.select().from(emails).where(
+        and(eq(emails.organizationId, orgId), sql`${emails.archivedAt} IS NOT NULL`)
+      ).orderBy(desc(emails.createdAt));
+    }
+    return db.select().from(emails).where(sql`${emails.archivedAt} IS NOT NULL`).orderBy(desc(emails.createdAt));
+  }
+
+  // ── Governance: Timeline Events ───────────────────────────────────────────
+  async permanentDeleteTimelineEvent(id: string, orgId: string): Promise<boolean> {
+    const result = await db.delete(timelineEvents).where(
+      and(eq(timelineEvents.id, id), eq(timelineEvents.organizationId, orgId))
+    ).returning();
+    return result.length > 0;
+  }
+
+  // ── Governance: Overview ──────────────────────────────────────────────────
+  async getGovernanceOverview() {
+    const [
+      activeClaims, archivedClaims,
+      activeAdj, archivedAdj,
+      activeClients, archivedClients,
+      activeEvidence, archivedEvidence,
+      activeAudio, archivedAudio,
+      activeEmails, archivedEmails,
+    ] = await Promise.all([
+      db.select({ count: count() }).from(claims).where(and(isNull(claims.archivedAt), isNull(claims.deletedAt))),
+      db.select({ count: count() }).from(claims).where(sql`${claims.archivedAt} IS NOT NULL`),
+      db.select({ count: count() }).from(adjusters).where(sql`${adjusters.archivedAt} IS NULL`),
+      db.select({ count: count() }).from(adjusters).where(sql`${adjusters.archivedAt} IS NOT NULL`),
+      db.select({ count: count() }).from(clients).where(sql`${clients.archivedAt} IS NULL`),
+      db.select({ count: count() }).from(clients).where(sql`${clients.archivedAt} IS NOT NULL`),
+      db.select({ count: count() }).from(evidenceFiles).where(sql`${evidenceFiles.archivedAt} IS NULL`),
+      db.select({ count: count() }).from(evidenceFiles).where(sql`${evidenceFiles.archivedAt} IS NOT NULL`),
+      db.select({ count: count() }).from(audioRecordings).where(sql`${audioRecordings.archivedAt} IS NULL`),
+      db.select({ count: count() }).from(audioRecordings).where(sql`${audioRecordings.archivedAt} IS NOT NULL`),
+      db.select({ count: count() }).from(emails).where(sql`${emails.archivedAt} IS NULL`),
+      db.select({ count: count() }).from(emails).where(sql`${emails.archivedAt} IS NOT NULL`),
+    ]);
+    return {
+      claims: { active: activeClaims[0]?.count ?? 0, archived: archivedClaims[0]?.count ?? 0 },
+      adjusters: { active: activeAdj[0]?.count ?? 0, archived: archivedAdj[0]?.count ?? 0 },
+      clients: { active: activeClients[0]?.count ?? 0, archived: archivedClients[0]?.count ?? 0 },
+      evidenceFiles: { active: activeEvidence[0]?.count ?? 0, archived: archivedEvidence[0]?.count ?? 0 },
+      audioRecordings: { active: activeAudio[0]?.count ?? 0, archived: archivedAudio[0]?.count ?? 0 },
+      emails: { active: activeEmails[0]?.count ?? 0, archived: archivedEmails[0]?.count ?? 0 },
+    };
   }
 }
 

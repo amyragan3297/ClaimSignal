@@ -93,6 +93,8 @@ export const clients = pgTable("clients", {
   state: text("state"),
   zip: text("zip"),
   createdAt: timestamp("created_at").defaultNow(),
+  archivedAt: timestamp("archived_at"),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const claims = pgTable("claims", {
@@ -180,6 +182,8 @@ export const documents = pgTable("documents", {
   fileUrl: text("file_url"),
   uploadedBy: varchar("uploaded_by"),
   createdAt: timestamp("created_at").defaultNow(),
+  archivedAt: timestamp("archived_at"),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const emails = pgTable("emails", {
@@ -190,6 +194,8 @@ export const emails = pgTable("emails", {
   subject: text("subject"),
   body: text("body"),
   createdAt: timestamp("created_at").defaultNow(),
+  archivedAt: timestamp("archived_at"),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const aiInsights = pgTable("ai_insights", {
@@ -248,6 +254,8 @@ export const adjusters = pgTable("adjusters", {
   paymentUnderScopeRatio: real("payment_under_scope_ratio").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  archivedAt: timestamp("archived_at"),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const adjusterAggregatedMetrics = pgTable("adjuster_aggregated_metrics", {
@@ -303,6 +311,8 @@ export const evidenceFiles = pgTable("evidence_files", {
   normalizedTextHash: text("normalized_text_hash"),
   uploadedAt: timestamp("uploaded_at").defaultNow(),
   processedAt: timestamp("processed_at"),
+  archivedAt: timestamp("archived_at"),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const extractedEntities = pgTable("extracted_entities", {
@@ -348,6 +358,8 @@ export const audioRecordings = pgTable("audio_recordings", {
   badFaithRiskIndicator: real("bad_faith_risk_indicator"),
   processedAt: timestamp("processed_at"),
   createdAt: timestamp("created_at").defaultNow(),
+  archivedAt: timestamp("archived_at"),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const timelineEvents = pgTable("timeline_events", {
@@ -363,6 +375,8 @@ export const timelineEvents = pgTable("timeline_events", {
   deepLinkTarget: json("deep_link_target"),
   createdByUserId: varchar("created_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  archivedAt: timestamp("archived_at"),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const triggerSourceEnum = pgEnum("trigger_source", ["estimate_delta", "transcript", "photo_flag", "denial_letter"]);

@@ -14,12 +14,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import type { Claim } from "@shared/schema";
-import { Plus, Search, FileText, Eye, Loader2, X, Shield } from "lucide-react";
+import { Plus, Search, FileText, Eye, Loader2, X, Shield, MoreHorizontal, Archive, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const createClaimSchema = z.object({
   claimNumber: z.string().min(1, "Claim number required"),
@@ -92,7 +94,13 @@ export default function ClaimsPage() {
   const { data: authData } = useAuth();
   const userRole = authData?.user?.role || "standard";
   const canToggleUnmasked = userRole === "super_admin";
+  const isMaster = userRole === "super_admin";
+  const canArchive = !["carrier_analyst"].includes(userRole);
   const [showUnmasked, setShowUnmasked] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    type: "archive" | "delete";
+    claim: Claim;
+  } | null>(null);
 
   const { data: claims, isLoading } = useQuery<Claim[]>({
     queryKey: ["/api/claims", { unmasked: showUnmasked && canToggleUnmasked }],
@@ -138,6 +146,34 @@ export default function ClaimsPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Failed to create claim", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (claimId: string) => {
+      await apiRequest("PATCH", `/api/claims/${claimId}/archive`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
+      toast({ title: "Claim archived" });
+      setConfirmDialog(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Archive failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: async (claimId: string) => {
+      await apiRequest("DELETE", `/api/claims/${claimId}/permanent`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
+      toast({ title: "Claim permanently deleted" });
+      setConfirmDialog(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -348,16 +384,16 @@ export default function ClaimsPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredClaims.map((claim) => (
-                    <TableRow key={claim.id} className="hover-elevate cursor-pointer" onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`row-claim-${claim.id}`}>
-                      <TableCell className="font-mono text-sm" data-testid={`text-claim-number-${claim.id}`}>{claim.claimNumber}</TableCell>
-                      <TableCell data-testid={`text-carrier-${claim.id}`}>{claim.carrier || "\u2014"}</TableCell>
-                      <TableCell className="text-muted-foreground max-w-[200px] truncate" data-testid={`text-address-${claim.id}`}>
+                    <TableRow key={claim.id} className="hover-elevate cursor-pointer" data-testid={`row-claim-${claim.id}`}>
+                      <TableCell className="font-mono text-sm" onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`text-claim-number-${claim.id}`}>{claim.claimNumber}</TableCell>
+                      <TableCell onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`text-carrier-${claim.id}`}>{claim.carrier || "\u2014"}</TableCell>
+                      <TableCell className="text-muted-foreground max-w-[200px] truncate" onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`text-address-${claim.id}`}>
                         {claim.propertyAddress || "\u2014"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground" data-testid={`text-homeowner-${claim.id}`}>
+                      <TableCell className="text-muted-foreground" onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`text-homeowner-${claim.id}`}>
                         {(claim as any).homeownerName || "\u2014"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
                         <Badge
                           variant={(statusColors[claim.status] as any) || "outline"}
                           className="text-xs capitalize"
@@ -365,7 +401,7 @@ export default function ClaimsPage() {
                           {claim.status.replace("_", " ")}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
                         <Badge
                           variant={(phaseColors[claim.currentPhase || ""] as any) || "outline"}
                           className="text-xs"
@@ -374,7 +410,7 @@ export default function ClaimsPage() {
                           {formatPhase(claim.currentPhase || "")}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
                         <Badge
                           variant={(escalationColors(claim.escalationLevel) as any) || "outline"}
                           className="text-xs"
@@ -383,7 +419,7 @@ export default function ClaimsPage() {
                           {claim.escalationLevel ?? "\u2014"}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
                         {claim.riskScore !== null ? (
                           <Badge variant={claim.riskScore > 70 ? "destructive" : claim.riskScore > 40 ? "secondary" : "outline"} className="text-xs">
                             {claim.riskScore}
@@ -391,7 +427,35 @@ export default function ClaimsPage() {
                         ) : "\u2014"}
                       </TableCell>
                       <TableCell>
-                        <Eye className="w-4 h-4 text-muted-foreground" />
+                        {canArchive && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" data-testid={`button-claim-menu-${claim.id}`} onClick={e => e.stopPropagation()}>
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "archive", claim }); }}
+                                data-testid={`menu-archive-claim-${claim.id}`}
+                              >
+                                <Archive className="w-4 h-4 mr-2" />
+                                Archive
+                              </DropdownMenuItem>
+                              {isMaster && (
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "delete", claim }); }}
+                                  data-testid={`menu-delete-claim-${claim.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete Permanently
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                        {!canArchive && <Eye className="w-4 h-4 text-muted-foreground" />}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -401,6 +465,30 @@ export default function ClaimsPage() {
           )}
         </CardContent>
       </Card>
+
+      {confirmDialog && (
+        <ConfirmDialog
+          open={!!confirmDialog}
+          onOpenChange={(o) => { if (!o) setConfirmDialog(null); }}
+          title={confirmDialog.type === "archive" ? "Archive Claim" : "Permanently Delete Claim"}
+          description={
+            confirmDialog.type === "archive"
+              ? `Archive claim "${confirmDialog.claim.claimNumber}"? It will be hidden from normal views and can be restored from the Admin Governance Hub.`
+              : `Permanently delete claim "${confirmDialog.claim.claimNumber}"? This cannot be undone and all data will be lost.`
+          }
+          confirmLabel={confirmDialog.type === "archive" ? "Archive" : "Delete Permanently"}
+          variant={confirmDialog.type === "delete" ? "destructive" : "default"}
+          isPending={archiveMutation.isPending || permanentDeleteMutation.isPending}
+          onConfirm={() => {
+            if (!confirmDialog) return;
+            if (confirmDialog.type === "archive") {
+              archiveMutation.mutate(confirmDialog.claim.id);
+            } else {
+              permanentDeleteMutation.mutate(confirmDialog.claim.id);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

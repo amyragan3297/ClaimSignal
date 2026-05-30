@@ -10,10 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import type { Client } from "@shared/schema";
-import { Plus, Search, Users, Loader2 } from "lucide-react";
+import { Plus, Search, Users, Loader2, MoreHorizontal, Archive, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const createClientSchema = z.object({
   firstName: z.string().min(1, "First name required"),
@@ -30,6 +33,11 @@ export default function ClientsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { data: authData } = useAuth();
+  const userRole = authData?.user?.role || "standard";
+  const isMaster = userRole === "super_admin";
+  const canArchive = !["carrier_analyst"].includes(userRole);
+  const [confirmDialog, setConfirmDialog] = useState<{ type: "archive" | "delete"; client: Client } | null>(null);
 
   const { data: clientsList, isLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
@@ -61,6 +69,34 @@ export default function ClientsPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Failed to create client", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("PATCH", `/api/clients/${id}/archive`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      toast({ title: "Client archived" });
+      setConfirmDialog(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Archive failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/clients/${id}/permanent`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      toast({ title: "Client permanently deleted" });
+      setConfirmDialog(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -170,6 +206,7 @@ export default function ClientsPage() {
                   <TableHead>Phone</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Created</TableHead>
+                  {canArchive && <TableHead className="w-10"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -186,6 +223,29 @@ export default function ClientsPage() {
                     <TableCell className="text-muted-foreground text-sm">
                       {client.createdAt ? new Date(client.createdAt).toLocaleDateString() : "\u2014"}
                     </TableCell>
+                    {canArchive && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost" data-testid={`button-client-menu-${client.id}`}>
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setConfirmDialog({ type: "archive", client })} data-testid={`menu-archive-client-${client.id}`}>
+                              <Archive className="w-4 h-4 mr-2" />
+                              Archive
+                            </DropdownMenuItem>
+                            {isMaster && (
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirmDialog({ type: "delete", client })} data-testid={`menu-delete-client-${client.id}`}>
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete Permanently
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -193,6 +253,30 @@ export default function ClientsPage() {
           )}
         </CardContent>
       </Card>
+
+      {confirmDialog && (
+        <ConfirmDialog
+          open={!!confirmDialog}
+          onOpenChange={(o) => { if (!o) setConfirmDialog(null); }}
+          title={confirmDialog.type === "archive" ? "Archive Client" : "Permanently Delete Client"}
+          description={
+            confirmDialog.type === "archive"
+              ? `Archive "${confirmDialog.client.firstName} ${confirmDialog.client.lastName}"? They will be hidden from normal views and can be restored from the Admin Governance Hub.`
+              : `Permanently delete "${confirmDialog.client.firstName} ${confirmDialog.client.lastName}"? This cannot be undone.`
+          }
+          confirmLabel={confirmDialog.type === "archive" ? "Archive" : "Delete Permanently"}
+          variant={confirmDialog.type === "delete" ? "destructive" : "default"}
+          isPending={archiveMutation.isPending || permanentDeleteMutation.isPending}
+          onConfirm={() => {
+            if (!confirmDialog) return;
+            if (confirmDialog.type === "archive") {
+              archiveMutation.mutate(confirmDialog.client.id);
+            } else {
+              permanentDeleteMutation.mutate(confirmDialog.client.id);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

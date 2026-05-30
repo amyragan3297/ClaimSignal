@@ -2,3 +2,5 @@
 - [Demo seed guard](demo-seed.md) — seedDemoData checks if claims already exist before seeding; won't double-seed on restart.
 - [Storage org-level methods](storage-patterns.md) — audio/email storage methods require claimId; added ByOrg variants for org-wide listing.
 - [ClaimSignal approved logo](brand-logo.md) — use only the orange shield + signal-lines PNG; never the lucide Shield icon as brand mark.
+- [Cross-tenant governance pattern](cross-tenant-governance.md) — super_admin governance ops must pass undefined orgId to storage; non-null falsy (null) causes wrong filter.
+- [TSX hot-reload caveat](tsx-hot-reload.md) — storage.ts changes may not hot-reload reliably; restart the workflow to guarantee new code runs.

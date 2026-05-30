@@ -9,13 +9,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useQuery as useAuthQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
-  Mic, Upload, Clock, CheckCircle, AlertCircle, FileAudio,
-  MessageSquare, Plus, ChevronDown, ChevronUp,
+  Mic, Clock, CheckCircle, FileAudio,
+  MessageSquare, Plus, ChevronDown, ChevronUp, MoreHorizontal, Archive, Trash2,
 } from "lucide-react";
 
 interface AudioRecording {
@@ -62,12 +63,16 @@ function TranscriptToggle({ text }: { text: string }) {
 
 export default function AudioPage() {
   const { toast } = useToast();
-  const { data: auth } = useAuth();
+  const { data: authData } = useAuth();
+  const userRole = authData?.user?.role || "standard";
+  const isMaster = userRole === "super_admin";
+  const canArchive = !["carrier_analyst"].includes(userRole);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClaimId, setSelectedClaimId] = useState("");
   const [fileName, setFileName] = useState("");
   const [duration, setDuration] = useState("");
   const [notes, setNotes] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<{ type: "archive" | "delete"; rec: AudioRecording } | null>(null);
 
   const { data: recordings, isLoading } = useQuery<AudioRecording[]>({
     queryKey: ["/api/audio"],
@@ -94,6 +99,18 @@ export default function AudioPage() {
     onError: (err: Error) => {
       toast({ title: "Failed to log recording", description: err.message, variant: "destructive" });
     },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("PATCH", `/api/audio/${id}/archive`); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/audio"] }); toast({ title: "Recording archived" }); setConfirmDialog(null); },
+    onError: (err: Error) => { toast({ title: "Archive failed", description: err.message, variant: "destructive" }); },
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/audio/${id}/permanent`); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/audio"] }); toast({ title: "Recording permanently deleted" }); setConfirmDialog(null); },
+    onError: (err: Error) => { toast({ title: "Delete failed", description: err.message, variant: "destructive" }); },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -260,6 +277,25 @@ export default function AudioPage() {
                         Transcription Pending
                       </Badge>
                     )}
+                    {canArchive && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 ml-1" data-testid={`button-audio-menu-${rec.id}`}>
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setConfirmDialog({ type: "archive", rec })} data-testid={`menu-archive-audio-${rec.id}`}>
+                            <Archive className="w-4 h-4 mr-2" />Archive
+                          </DropdownMenuItem>
+                          {isMaster && (
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirmDialog({ type: "delete", rec })} data-testid={`menu-delete-audio-${rec.id}`}>
+                              <Trash2 className="w-4 h-4 mr-2" />Delete Permanently
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </div>
 
@@ -295,6 +331,27 @@ export default function AudioPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {confirmDialog && (
+        <ConfirmDialog
+          open={!!confirmDialog}
+          onOpenChange={(o) => { if (!o) setConfirmDialog(null); }}
+          title={confirmDialog.type === "archive" ? "Archive Recording" : "Permanently Delete Recording"}
+          description={
+            confirmDialog.type === "archive"
+              ? `Archive this recording? It will be hidden and can be restored from the Admin Governance Hub.`
+              : `Permanently delete this recording? This cannot be undone.`
+          }
+          confirmLabel={confirmDialog.type === "archive" ? "Archive" : "Delete Permanently"}
+          variant={confirmDialog.type === "delete" ? "destructive" : "default"}
+          isPending={archiveMutation.isPending || permanentDeleteMutation.isPending}
+          onConfirm={() => {
+            if (!confirmDialog) return;
+            if (confirmDialog.type === "archive") archiveMutation.mutate(confirmDialog.rec.id);
+            else permanentDeleteMutation.mutate(confirmDialog.rec.id);
+          }}
+        />
       )}
     </div>
   );

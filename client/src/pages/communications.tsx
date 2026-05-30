@@ -9,11 +9,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   Mail, Phone, MessageSquare, FileText, Plus, Building2,
-  User, Mic, ChevronDown, ChevronUp, Search,
+  User, Mic, ChevronDown, ChevronUp, Search, MoreHorizontal, Archive, Trash2,
 } from "lucide-react";
 
 const COMM_TYPES = [
@@ -47,10 +50,15 @@ interface Communication {
 
 export default function CommunicationsPage() {
   const { toast } = useToast();
+  const { data: authData } = useAuth();
+  const userRole = authData?.user?.role || "standard";
+  const isMaster = userRole === "super_admin";
+  const canArchive = !["carrier_analyst"].includes(userRole);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [form, setForm] = useState({ claimId: "", type: "phone_call", direction: "incoming", subject: "", body: "" });
+  const [confirmDialog, setConfirmDialog] = useState<{ type: "archive" | "delete"; comm: Communication } | null>(null);
 
   const { data: comms, isLoading } = useQuery<Communication[]>({
     queryKey: ["/api/communications"],
@@ -74,6 +82,18 @@ export default function CommunicationsPage() {
     onError: (err: Error) => {
       toast({ title: "Failed to log communication", description: err.message, variant: "destructive" });
     },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("PATCH", `/api/communications/${id}/archive`); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/communications"] }); toast({ title: "Communication archived" }); setConfirmDialog(null); },
+    onError: (err: Error) => { toast({ title: "Archive failed", description: err.message, variant: "destructive" }); },
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/communications/${id}/permanent`); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/communications"] }); toast({ title: "Communication permanently deleted" }); setConfirmDialog(null); },
+    onError: (err: Error) => { toast({ title: "Delete failed", description: err.message, variant: "destructive" }); },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -233,6 +253,25 @@ export default function CommunicationsPage() {
                         <span className="text-xs text-muted-foreground ml-auto">
                           {new Date(comm.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                         </span>
+                        {canArchive && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" data-testid={`button-comm-menu-${comm.id}`}>
+                                <MoreHorizontal className="w-3 h-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setConfirmDialog({ type: "archive", comm })} data-testid={`menu-archive-comm-${comm.id}`}>
+                                <Archive className="w-4 h-4 mr-2" />Archive
+                              </DropdownMenuItem>
+                              {isMaster && (
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirmDialog({ type: "delete", comm })} data-testid={`menu-delete-comm-${comm.id}`}>
+                                  <Trash2 className="w-4 h-4 mr-2" />Delete Permanently
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                       {comm.body && (
                         <div>
@@ -257,6 +296,26 @@ export default function CommunicationsPage() {
             );
           })}
         </div>
+      )}
+      {confirmDialog && (
+        <ConfirmDialog
+          open={!!confirmDialog}
+          onOpenChange={(o) => { if (!o) setConfirmDialog(null); }}
+          title={confirmDialog.type === "archive" ? "Archive Communication" : "Permanently Delete Communication"}
+          description={
+            confirmDialog.type === "archive"
+              ? `Archive this ${commLabel(confirmDialog.comm.subject ?? "communication")}? It will be hidden and can be restored from the Admin Governance Hub.`
+              : `Permanently delete this communication? This cannot be undone.`
+          }
+          confirmLabel={confirmDialog.type === "archive" ? "Archive" : "Delete Permanently"}
+          variant={confirmDialog.type === "delete" ? "destructive" : "default"}
+          isPending={archiveMutation.isPending || permanentDeleteMutation.isPending}
+          onConfirm={() => {
+            if (!confirmDialog) return;
+            if (confirmDialog.type === "archive") archiveMutation.mutate(confirmDialog.comm.id);
+            else permanentDeleteMutation.mutate(confirmDialog.comm.id);
+          }}
+        />
       )}
     </div>
   );

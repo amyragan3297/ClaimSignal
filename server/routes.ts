@@ -904,13 +904,320 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/storm-events/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+  app.delete("/api/storm-events/:id", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
+      const existing = await storage.getStormEvent(req.params.id as string, req.auth!.organizationId);
+      if (!existing) return res.status(404).json({ message: "Storm event not found" });
       await storage.deleteStormEvent(req.params.id as string, req.auth!.organizationId);
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId,
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "STORM_EVENT_DELETED",
+        entityType: "storm_event",
+        entityId: req.params.id as string,
+        beforeJson: existing,
+        ipAddress: getClientIp(req),
+      });
       res.json({ deleted: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
+  });
+
+  // ── Governance routes ────────────────────────────────────────────────────
+
+  function requireCanArchive(req: AuthRequest, res: any, next: any) {
+    if (!req.auth) return res.status(401).json({ message: "Not authenticated" });
+    const noDestructive = ["carrier_analyst"];
+    if (noDestructive.includes(req.auth.role)) {
+      return res.status(403).json({ message: "Your role cannot perform destructive actions" });
+    }
+    next();
+  }
+
+  // GET governance overview (Master only)
+  app.get("/api/admin/governance", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
+    try {
+      const overview = await storage.getGovernanceOverview();
+      res.json(overview);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET archived records (Master only)
+  app.get("/api/admin/archived/:entity", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const { entity } = req.params;
+      let records: any[] = [];
+      switch (entity) {
+        case "claims": records = await storage.getArchivedClaims(); break;
+        case "adjusters": records = await storage.getArchivedAdjusters(); break;
+        case "clients": records = await storage.getArchivedClients(); break;
+        case "evidence": records = await storage.getArchivedEvidenceFiles(); break;
+        case "audio": records = await storage.getArchivedAudioRecordings(); break;
+        case "emails": records = await storage.getArchivedEmails(); break;
+        default: return res.status(400).json({ message: "Unknown entity type" });
+      }
+      res.json(records);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Claims governance
+  app.patch("/api/claims/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const scopedOrgId = isSuperAdmin ? undefined : orgId;
+      const ok = await storage.archiveClaim(req.params.id as string, scopedOrgId);
+      if (!ok) return res.status(404).json({ message: "Claim not found or already archived" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "CLAIM_ARCHIVED", entityType: "claim", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ archived: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/claims/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const scopedOrgId = isSuperAdmin ? undefined : orgId;
+      const ok = await storage.restoreClaim(req.params.id as string, scopedOrgId);
+      if (!ok) return res.status(404).json({ message: "Claim not found" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "CLAIM_RESTORED", entityType: "claim", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ restored: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/claims/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      await storage.permanentDeleteClaim(req.params.id as string, undefined);
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "CLAIM_PERMANENTLY_DELETED", entityType: "claim", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ deleted: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Adjusters governance
+  app.patch("/api/adjusters/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const scopedOrgId = isSuperAdmin ? undefined : orgId;
+      const ok = await storage.archiveAdjuster(req.params.id as string, scopedOrgId);
+      if (!ok) return res.status(404).json({ message: "Adjuster not found or already archived" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "ADJUSTER_ARCHIVED", entityType: "adjuster", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ archived: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/adjusters/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const scopedOrgId = isSuperAdmin ? undefined : orgId;
+      const ok = await storage.restoreAdjuster(req.params.id as string, scopedOrgId);
+      if (!ok) return res.status(404).json({ message: "Adjuster not found" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "ADJUSTER_RESTORED", entityType: "adjuster", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ restored: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/adjusters/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      await storage.permanentDeleteAdjuster(req.params.id as string, undefined);
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "ADJUSTER_PERMANENTLY_DELETED", entityType: "adjuster", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ deleted: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Clients governance
+  app.patch("/api/clients/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const scopedOrgId = isSuperAdmin ? undefined : orgId;
+      const ok = await storage.archiveClient(req.params.id as string, scopedOrgId);
+      if (!ok) return res.status(404).json({ message: "Client not found or already archived" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "CLIENT_ARCHIVED", entityType: "client", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ archived: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/clients/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const scopedOrgId = isSuperAdmin ? undefined : orgId;
+      const ok = await storage.restoreClient(req.params.id as string, scopedOrgId);
+      if (!ok) return res.status(404).json({ message: "Client not found" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "CLIENT_RESTORED", entityType: "client", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ restored: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/clients/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      await storage.permanentDeleteClient(req.params.id as string, undefined);
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "CLIENT_PERMANENTLY_DELETED", entityType: "client", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ deleted: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Evidence governance
+  app.patch("/api/evidence/files/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const ok = await storage.archiveEvidenceFile(req.params.id as string, isSuperAdmin ? undefined : orgId);
+      if (!ok) return res.status(404).json({ message: "File not found or already archived" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "EVIDENCE_ARCHIVED", entityType: "evidence_file", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ archived: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/evidence/files/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const ok = await storage.restoreEvidenceFile(req.params.id as string, isSuperAdmin ? undefined : orgId);
+      if (!ok) return res.status(404).json({ message: "File not found" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "EVIDENCE_RESTORED", entityType: "evidence_file", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ restored: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/evidence/files/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      await storage.permanentDeleteEvidenceFile(req.params.id as string, undefined);
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "EVIDENCE_PERMANENTLY_DELETED", entityType: "evidence_file", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ deleted: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Audio governance
+  app.patch("/api/audio/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const ok = await storage.archiveAudioRecording(req.params.id as string, isSuperAdmin ? undefined : orgId);
+      if (!ok) return res.status(404).json({ message: "Recording not found or already archived" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "AUDIO_ARCHIVED", entityType: "audio_recording", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ archived: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/audio/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const ok = await storage.restoreAudioRecording(req.params.id as string, isSuperAdmin ? undefined : orgId);
+      if (!ok) return res.status(404).json({ message: "Recording not found" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "AUDIO_RESTORED", entityType: "audio_recording", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ restored: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/audio/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      await storage.permanentDeleteAudioRecording(req.params.id as string, undefined);
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "AUDIO_PERMANENTLY_DELETED", entityType: "audio_recording", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ deleted: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Communications governance
+  app.patch("/api/communications/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const isSuperAdmin = req.auth!.role === "super_admin";
+      const orgId = req.auth!.organizationId;
+      const ok = await storage.archiveEmail(req.params.id as string, isSuperAdmin ? undefined : orgId);
+      if (!ok) return res.status(404).json({ message: "Communication not found or already archived" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "COMMUNICATION_ARCHIVED", entityType: "email", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ archived: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/communications/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const ok = await storage.restoreEmail(req.params.id as string, orgId);
+      if (!ok) return res.status(404).json({ message: "Communication not found" });
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "COMMUNICATION_RESTORED", entityType: "email", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ restored: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/communications/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      await storage.permanentDeleteEmail(req.params.id as string, orgId);
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        actionType: "COMMUNICATION_PERMANENTLY_DELETED", entityType: "email", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ deleted: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   seedPlatformOwner();

@@ -12,10 +12,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import type { Adjuster } from "@shared/schema";
-import { Plus, Users, Loader2, Search, X, ChevronLeft, Activity, BarChart3, Target, TrendingUp } from "lucide-react";
+import { Plus, Users, Loader2, Search, X, ChevronLeft, Activity, BarChart3, Target, MoreHorizontal, Archive, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const createAdjusterSchema = z.object({
   carrierName: z.string().min(1, "Carrier name required"),
@@ -188,6 +191,11 @@ export default function AdjustersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedAdjuster, setSelectedAdjuster] = useState<Adjuster | null>(null);
   const { toast } = useToast();
+  const { data: authData } = useAuth();
+  const userRole = authData?.user?.role || "standard";
+  const isMaster = userRole === "super_admin";
+  const canArchive = !["carrier_analyst"].includes(userRole);
+  const [confirmDialog, setConfirmDialog] = useState<{ type: "archive" | "delete"; adjuster: Adjuster } | null>(null);
 
   const { data: adjustersList, isLoading } = useQuery<Adjuster[]>({
     queryKey: ["/api/adjusters"],
@@ -227,6 +235,34 @@ export default function AdjustersPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Failed to add adjuster", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("PATCH", `/api/adjusters/${id}/archive`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/adjusters"] });
+      toast({ title: "Adjuster archived" });
+      setConfirmDialog(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Archive failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/adjusters/${id}/permanent`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/adjusters"] });
+      toast({ title: "Adjuster permanently deleted" });
+      setConfirmDialog(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -376,6 +412,7 @@ export default function AdjustersPage() {
                     <TableHead className="text-right">Claims</TableHead>
                     <TableHead className="text-right">Friction</TableHead>
                     <TableHead className="text-right">Denial Rate</TableHead>
+                    {canArchive && <TableHead className="w-10"></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -383,26 +420,48 @@ export default function AdjustersPage() {
                     <TableRow
                       key={adj.id}
                       className="cursor-pointer hover-elevate"
-                      onClick={() => setSelectedAdjuster(adj)}
                       data-testid={`row-adjuster-${adj.id}`}
                     >
-                      <TableCell className="font-medium" data-testid={`text-adjuster-name-${adj.id}`}>{adj.adjusterName}</TableCell>
-                      <TableCell data-testid={`text-adjuster-carrier-${adj.id}`}>{adj.carrierName}</TableCell>
-                      <TableCell>{adj.region || "\u2014"}</TableCell>
-                      <TableCell>
+                      <TableCell className="font-medium" onClick={() => setSelectedAdjuster(adj)} data-testid={`text-adjuster-name-${adj.id}`}>{adj.adjusterName}</TableCell>
+                      <TableCell onClick={() => setSelectedAdjuster(adj)} data-testid={`text-adjuster-carrier-${adj.id}`}>{adj.carrierName}</TableCell>
+                      <TableCell onClick={() => setSelectedAdjuster(adj)}>{adj.region || "\u2014"}</TableCell>
+                      <TableCell onClick={() => setSelectedAdjuster(adj)}>
                         <div className="flex items-center gap-1">
                           {adj.isFieldAdjuster && <Badge variant="secondary" className="text-xs">Field</Badge>}
                           {adj.isDeskAdjuster && <Badge variant="secondary" className="text-xs">Desk</Badge>}
                           {!adj.isFieldAdjuster && !adj.isDeskAdjuster && <span className="text-muted-foreground">{"\u2014"}</span>}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">{adj.totalClaimsTracked ?? 0}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={() => setSelectedAdjuster(adj)}>{adj.totalClaimsTracked ?? 0}</TableCell>
+                      <TableCell className="text-right" onClick={() => setSelectedAdjuster(adj)}>
                         <span className={`font-medium ${(adj.frictionScore ?? 0) > 6 ? "text-red-500" : (adj.frictionScore ?? 0) > 3 ? "text-yellow-500" : "text-green-500"}`}>
                           {formatScore(adj.frictionScore)}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">{formatPercent(adj.denialRate)}</TableCell>
+                      <TableCell className="text-right" onClick={() => setSelectedAdjuster(adj)}>{formatPercent(adj.denialRate)}</TableCell>
+                      {canArchive && (
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" data-testid={`button-adjuster-menu-${adj.id}`} onClick={e => e.stopPropagation()}>
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "archive", adjuster: adj }); }} data-testid={`menu-archive-adjuster-${adj.id}`}>
+                                <Archive className="w-4 h-4 mr-2" />
+                                Archive
+                              </DropdownMenuItem>
+                              {isMaster && (
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "delete", adjuster: adj }); }} data-testid={`menu-delete-adjuster-${adj.id}`}>
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete Permanently
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -411,6 +470,30 @@ export default function AdjustersPage() {
           )}
         </CardContent>
       </Card>
+
+      {confirmDialog && (
+        <ConfirmDialog
+          open={!!confirmDialog}
+          onOpenChange={(o) => { if (!o) setConfirmDialog(null); }}
+          title={confirmDialog.type === "archive" ? "Archive Adjuster" : "Permanently Delete Adjuster"}
+          description={
+            confirmDialog.type === "archive"
+              ? `Archive adjuster "${confirmDialog.adjuster.adjusterName}"? They will be hidden from normal views and can be restored from the Admin Governance Hub.`
+              : `Permanently delete "${confirmDialog.adjuster.adjusterName}"? This cannot be undone.`
+          }
+          confirmLabel={confirmDialog.type === "archive" ? "Archive" : "Delete Permanently"}
+          variant={confirmDialog.type === "delete" ? "destructive" : "default"}
+          isPending={archiveMutation.isPending || permanentDeleteMutation.isPending}
+          onConfirm={() => {
+            if (!confirmDialog) return;
+            if (confirmDialog.type === "archive") {
+              archiveMutation.mutate(confirmDialog.adjuster.id);
+            } else {
+              permanentDeleteMutation.mutate(confirmDialog.adjuster.id);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
