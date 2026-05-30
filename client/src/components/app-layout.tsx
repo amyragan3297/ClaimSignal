@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import logoImg from "@assets/ClaimSignal_top_logo_panel-1_1780180101332.png";
 import { useAuth } from "@/lib/auth";
 import { useLocation, Link, Redirect } from "wouter";
 import {
@@ -118,9 +119,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <Sidebar>
           <SidebarHeader className="p-4">
             <Link href="/" className="flex items-center gap-2">
-              <div className="flex items-center gap-2" data-testid="img-sidebar-logo">
-                <Shield className="h-6 w-6 text-blue-500" />
-                <span className="text-sm font-bold tracking-tight">ClaimSignal</span>
+              <div className="flex items-center" data-testid="img-sidebar-logo">
+                <img src={logoImg} alt="ClaimSignal" className="h-10 w-auto object-contain" />
               </div>
             </Link>
           </SidebarHeader>

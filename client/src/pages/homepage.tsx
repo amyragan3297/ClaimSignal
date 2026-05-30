@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import logoImg from "@assets/ClaimSignal_top_logo_panel-1_1780180101332.png";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -118,9 +119,8 @@ export default function Homepage() {
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/40 bg-background/90 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
           <Link href="/">
-            <div className="flex items-center gap-2" data-testid="img-logo">
-              <Shield className="h-7 w-7 text-blue-500" />
-              <span className="text-lg font-bold tracking-tight">ClaimSignal&#8482;</span>
+            <div className="flex items-center" data-testid="img-logo">
+              <img src={logoImg} alt="ClaimSignal" className="h-12 w-auto object-contain" />
             </div>
           </Link>
           <div className="flex items-center gap-3">

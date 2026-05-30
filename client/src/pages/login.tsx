@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
-import { ArrowLeft, Loader2, Shield } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import logoImg from "@assets/ClaimSignal_top_logo_panel-1_1780180101332.png";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { loginSchema, signupSchema } from "@shared/schema";
@@ -78,10 +79,9 @@ export default function LoginPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to home
           </Link>
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <div className="flex items-center gap-2 justify-center" data-testid="img-login-logo">
-              <Shield className="h-8 w-8 text-blue-500" />
-              <span className="text-2xl font-bold tracking-tight">ClaimSignal</span>
+          <div className="flex items-center justify-center mb-2">
+            <div className="flex items-center justify-center" data-testid="img-login-logo">
+              <img src={logoImg} alt="ClaimSignal" className="h-24 w-auto object-contain" />
             </div>
           </div>
           <p className="text-sm text-muted-foreground">Operational Intelligence Platform</p>
