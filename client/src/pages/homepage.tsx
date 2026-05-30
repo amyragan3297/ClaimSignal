@@ -364,9 +364,6 @@ export default function Homepage() {
             <Link href="/login" className="hover:text-foreground transition-colors">Log In</Link>
           </nav>
         </div>
-        <div className="max-w-6xl mx-auto mt-6 text-center text-xs text-muted-foreground">
-          &copy; 2026 ClaimSignal. All rights reserved.
-        </div>
       </footer>
     </div>
   );
