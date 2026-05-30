@@ -40,6 +40,20 @@ const createClaimSchema = z.object({
   rcvAmount: z.string().optional(),
   acvAmount: z.string().optional(),
   deductible: z.string().optional(),
+  // ── Expanded intake (additive) ──
+  claimType: z.string().optional(),
+  propertyType: z.string().optional(),
+  iaFirm: z.string().optional(),
+  vendorName: z.string().optional(),
+  vendorType: z.string().optional(),
+  vendorFinding: z.string().optional(),
+  recoverableDepreciation: z.string().optional(),
+  nonRecoverableDepreciation: z.string().optional(),
+  priorPayments: z.string().optional(),
+  supplementRequested: z.string().optional(),
+  supplementApproved: z.string().optional(),
+  denialReason: z.string().optional(),
+  initialOutcome: z.string().optional(),
 });
 
 const statusColors: Record<string, string> = {
@@ -136,6 +150,19 @@ export default function ClaimsPage() {
       rcvAmount: "",
       acvAmount: "",
       deductible: "",
+      claimType: "",
+      propertyType: "",
+      iaFirm: "",
+      vendorName: "",
+      vendorType: "",
+      vendorFinding: "",
+      recoverableDepreciation: "",
+      nonRecoverableDepreciation: "",
+      priorPayments: "",
+      supplementRequested: "",
+      supplementApproved: "",
+      denialReason: "",
+      initialOutcome: "",
     },
   });
 
@@ -295,6 +322,77 @@ export default function ClaimsPage() {
                   <Input type="number" placeholder="0.00" data-testid="input-deductible" {...form.register("deductible")} />
                 </div>
               </div>
+
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Claim Classification</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Claim Type</Label>
+                    <Input placeholder="Hail, Wind, Fire..." data-testid="input-claim-type" {...form.register("claimType")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Property Type</Label>
+                    <Input placeholder="Residential, Commercial..." data-testid="input-property-type" {...form.register("propertyType")} />
+                  </div>
+                </div>
+                <div className="space-y-2 mt-3">
+                  <Label>IA Firm</Label>
+                  <Input placeholder="Independent adjusting firm" data-testid="input-ia-firm" {...form.register("iaFirm")} />
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Vendor Intelligence</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Vendor Name</Label>
+                    <Input placeholder="EagleView, SeekNow..." data-testid="input-vendor-name" {...form.register("vendorName")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Vendor Type</Label>
+                    <Input placeholder="Inspection, Engineering..." data-testid="input-vendor-type" {...form.register("vendorType")} />
+                  </div>
+                </div>
+                <div className="space-y-2 mt-3">
+                  <Label>Vendor Finding</Label>
+                  <Input placeholder="Summary of vendor finding" data-testid="input-vendor-finding" {...form.register("vendorFinding")} />
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Financials & Outcome</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Recoverable Depreciation</Label>
+                    <Input type="number" placeholder="0.00" data-testid="input-recoverable-depreciation" {...form.register("recoverableDepreciation")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Non-Recoverable Depreciation</Label>
+                    <Input type="number" placeholder="0.00" data-testid="input-nonrecoverable-depreciation" {...form.register("nonRecoverableDepreciation")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Prior Payments</Label>
+                    <Input type="number" placeholder="0.00" data-testid="input-prior-payments" {...form.register("priorPayments")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Supplement Requested</Label>
+                    <Input type="number" placeholder="0.00" data-testid="input-supplement-requested" {...form.register("supplementRequested")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Supplement Approved</Label>
+                    <Input type="number" placeholder="0.00" data-testid="input-supplement-approved" {...form.register("supplementApproved")} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Initial Outcome</Label>
+                    <Input placeholder="Approved, Partial, Denied..." data-testid="input-initial-outcome" {...form.register("initialOutcome")} />
+                  </div>
+                </div>
+                <div className="space-y-2 mt-3">
+                  <Label>Denial Reason</Label>
+                  <Input placeholder="If denied/partial, why?" data-testid="input-denial-reason" {...form.register("denialReason")} />
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} data-testid="button-cancel-claim">
                   Cancel

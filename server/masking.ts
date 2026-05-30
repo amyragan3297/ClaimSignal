@@ -115,3 +115,58 @@ export function sanitizeSharedClaimRecord<T extends Record<string, any>>(row: T,
 export function sanitizeSharedClaimList<T extends Record<string, any>>(rows: T[], role: Role): T[] {
   return rows.map((r) => sanitizeSharedClaimRecord(r, role));
 }
+
+/**
+ * Playbook Engine sharing.
+ *
+ * Master sees everything. For non-Master shared/sanitized views we strip any
+ * linkage back to a private source claim and the authoring tenant, while
+ * PRESERVING the intelligence value (carrier, adjuster, IA firm, VENDOR,
+ * denial reason, missing scope, outcome, supplement/escalation result,
+ * timeline + documentation strategy).
+ *
+ * Note: playbook entries never store homeowner identity / claim # / address, but
+ * we defensively null any such fields if present.
+ */
+export function sanitizePlaybookRecord<T extends Record<string, any>>(row: T, role: Role): T {
+  if (PII_UNMASK_ROLES.includes(role)) return row;
+  const out: Record<string, any> = { ...row };
+  // linkage back to private source claim / authoring tenant
+  out.organizationId = undefined;
+  out.sourceClaimId = undefined;
+  out.createdBy = undefined;
+  out.metadataJson = null;
+  // defensive: never leak homeowner/contractor identity through a playbook
+  for (const k of ["homeownerName", "claimNumber", "propertyAddress", "address", "homeownerPhone", "homeownerEmail", "contractorName", "roofingCompany"]) {
+    if (k in out) out[k] = null;
+  }
+  // Free-form narrative prose is uncontrolled text that could embed homeowner /
+  // contractor identity. Playbooks are a cross-tenant shared library, so strip
+  // these prose fields for non-Master. Structured behavioral intelligence
+  // (carrier, adjuster, iaFirm, vendor, denialReason, scope items, outcome,
+  // supplementDelta, region, confidence) is categorical and preserved.
+  for (const k of ["actionTaken", "whatWorked", "whatDidNotWork", "timelineSummary", "recommendedNextStep"]) {
+    if (k in out) out[k] = null;
+  }
+  return out as T;
+}
+
+export function sanitizePlaybookList<T extends Record<string, any>>(rows: T[], role: Role): T[] {
+  return rows.map((r) => sanitizePlaybookRecord(r, role));
+}
+
+/** Aggregate-only projection for Executive role: strips narrative + source detail. */
+export function toPlaybookAggregate<T extends Record<string, any>>(row: T): Record<string, any> {
+  return {
+    id: row.id,
+    title: row.title,
+    scenarioType: row.scenarioType,
+    claimType: row.claimType,
+    carrier: row.carrier,
+    outcome: row.outcome,
+    supplementDelta: row.supplementDelta,
+    confidenceScore: row.confidenceScore,
+    sourceClaimCount: row.sourceClaimCount,
+    region: row.region,
+  };
+}

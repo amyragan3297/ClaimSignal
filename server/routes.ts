@@ -4,7 +4,11 @@ import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema } from "@shared/schema";
-import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked, sanitizeSharedClaimList } from "./masking";
+import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked, sanitizeSharedClaimList, sanitizePlaybookList, sanitizePlaybookRecord, toPlaybookAggregate, isMaster } from "./masking";
+import { computeCarrierIntelligence } from "./carrier-intelligence";
+import { createCandidatesFromText, sampleClaimDocumentText } from "./timeline-extraction";
+import { seedSamplePlaybooks } from "./playbook-seed";
+import { insertPlaybookEntrySchema } from "@shared/schema";
 import { createCheckoutSession, handleWebhookEvent } from "./billing";
 import exportsRouter from "./exports";
 import evidenceRouter from "./evidence";
@@ -27,6 +31,42 @@ import {
   getClientIp,
   hashToken,
 } from "./auth";
+
+const CLAIM_NUMERIC_FIELDS = [
+  "rcvAmount", "acvAmount", "deductible", "supplementAmountTotal", "finalPaidAmount",
+  "claimAmount", "approvedAmount", "rcvTotal", "acvTotal", "recoverableDepreciation",
+  "nonRecoverableDepreciation", "priorPayments", "supplementRequested", "supplementApproved",
+  "outstandingAmount", "finalApprovedAmount",
+];
+const CLAIM_DATE_FIELDS = [
+  "dateOfLoss", "inspectionDate", "determinationDate", "reinspectionDate",
+  "resolutionDate", "lossDate",
+];
+
+/**
+ * Normalizes claim form input: numeric string fields → number (or null when blank),
+ * date string fields → Date (or null when blank). Leaves all other keys untouched so
+ * this stays additive and safe for partial PATCH bodies.
+ */
+function normalizeClaimInput<T extends Record<string, any>>(body: T): T {
+  const out: Record<string, any> = { ...body };
+  for (const k of CLAIM_NUMERIC_FIELDS) {
+    if (!(k in out)) continue;
+    const v = out[k];
+    if (v === "" || v === null || v === undefined) { out[k] = null; continue; }
+    const n = typeof v === "number" ? v : Number(v);
+    out[k] = isNaN(n) ? null : n;
+  }
+  for (const k of CLAIM_DATE_FIELDS) {
+    if (!(k in out)) continue;
+    const v = out[k];
+    if (v === "" || v === null || v === undefined) { out[k] = null; continue; }
+    if (v instanceof Date) continue;
+    const d = new Date(v);
+    out[k] = isNaN(d.getTime()) ? null : d;
+  }
+  return out as T;
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -329,7 +369,7 @@ export async function registerRoutes(
     try {
       const orgId = req.auth!.organizationId;
       const claim = await storage.createClaim({
-        ...req.body,
+        ...normalizeClaimInput(req.body),
         organizationId: orgId,
       });
 
@@ -375,7 +415,7 @@ export async function registerRoutes(
         }
       }
 
-      const claim = await storage.updateClaim(req.params.id as string, orgId, req.body);
+      const claim = await storage.updateClaim(req.params.id as string, orgId, normalizeClaimInput(req.body));
       if (!claim) return res.status(404).json({ message: "Claim not found" });
 
       const velocity = computeLifecycleVelocity(
@@ -476,6 +516,235 @@ export async function registerRoutes(
       });
 
       res.json(adjuster);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Carrier Intelligence (MVP) — aggregated from claims, contains no homeowner PII
+  // ──────────────────────────────────────────────────────────────────────────
+  app.get("/api/carriers/intelligence", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const role = req.auth!.role;
+      // Master sees cross-tenant patterns; others see their own tenant's claims.
+      const claims = isMaster(role)
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "CARRIER_INTELLIGENCE_VIEWED", entityType: "carrier_intelligence", entityId: "aggregate",
+        afterJson: { scope: isMaster(role) ? "cross_tenant" : "tenant", carrierCount: undefined },
+        ipAddress: getClientIp(req),
+      });
+      res.json(computeCarrierIntelligence(claims));
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // AI Timeline / Date Extraction — review candidates
+  // ──────────────────────────────────────────────────────────────────────────
+  app.get("/api/timeline/candidates", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const claimId = typeof req.query.claimId === "string" ? req.query.claimId : undefined;
+      res.json(await storage.getTimelineCandidates(orgId, claimId));
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  // Run MVP extraction over provided text (or sample text) and create candidates.
+  app.post("/api/claims/:id/extract-timeline", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const claim = await storage.getClaim(req.params.id as string, orgId);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+      const text: string = (typeof req.body?.text === "string" && req.body.text.trim())
+        ? req.body.text
+        : sampleClaimDocumentText(claim.claimNumber);
+      const created = await createCandidatesFromText({
+        text, claimId: claim.id, orgId,
+        createdByUserId: req.auth!.userId,
+        sourceHint: typeof req.body?.sourceHint === "string" ? req.body.sourceHint : undefined,
+        sourceDocumentId: req.body?.sourceDocumentId ?? null,
+        sourceAudioId: req.body?.sourceAudioId ?? null,
+        sourceTranscriptId: req.body?.sourceTranscriptId ?? null,
+      });
+      // AUDIT uses the upload/action date (now), NOT the extracted event dates.
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "TIMELINE_EXTRACTION_RUN", entityType: "claim", entityId: claim.id,
+        afterJson: { createdCount: created.length, usedSample: !req.body?.text },
+        ipAddress: getClientIp(req),
+      });
+      res.json({ created: created.length, events: created });
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  // Review actions: accept | edit | reject | verify | change event type
+  app.patch("/api/timeline/:id/review", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const ev = await storage.getTimelineEvent(req.params.id as string, orgId);
+      if (!ev) return res.status(404).json({ message: "Timeline event not found" });
+      const action = String(req.body?.action || "");
+      const patch: Record<string, any> = {};
+      if (action === "accept") { patch.reviewStatus = "accepted"; patch.needsReview = false; }
+      else if (action === "verify") { patch.reviewStatus = "verified"; patch.needsReview = false; patch.dateSource = "user_entered"; }
+      else if (action === "reject") { patch.reviewStatus = "rejected"; patch.needsReview = false; patch.deletedAt = new Date(); }
+      else if (action === "edit") {
+        patch.reviewStatus = "verified"; patch.needsReview = false; patch.dateSource = "user_entered";
+        if (req.body?.eventDate) { const d = new Date(req.body.eventDate); patch.eventDate = d; patch.extractedDate = d; }
+        if (typeof req.body?.eventType === "string") patch.eventType = req.body.eventType;
+        if (typeof req.body?.title === "string") patch.title = req.body.title;
+      } else if (action === "change_type") {
+        if (typeof req.body?.eventType === "string") patch.eventType = req.body.eventType;
+        if (typeof req.body?.title === "string") patch.title = req.body.title;
+      } else {
+        return res.status(400).json({ message: "Unknown review action" });
+      }
+      const updated = await storage.updateTimelineEvent(ev.id, orgId, patch);
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "TIMELINE_REVIEW", entityType: "timeline_event", entityId: ev.id,
+        beforeJson: ev, afterJson: updated, ipAddress: getClientIp(req),
+      });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Playbook Engine (MVP) — historical "what has worked before" patterns
+  // ──────────────────────────────────────────────────────────────────────────
+  app.get("/api/playbooks", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      const entries = await storage.getPlaybookEntries();
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId, actorUserId: req.auth!.userId, actorRole: role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "PLAYBOOK_VIEWED", entityType: "playbook", entityId: "list",
+        ipAddress: getClientIp(req),
+      });
+      // Executive: aggregate metrics only. Master: full. Others: sanitized.
+      if (role === "carrier_analyst") return res.json(entries.map(toPlaybookAggregate));
+      return res.json(sanitizePlaybookList(entries, role));
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/playbooks/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      if (role === "carrier_analyst") {
+        return res.status(403).json({ message: "Executive role has aggregate-only playbook access" });
+      }
+      const entry = await storage.getPlaybookEntry(req.params.id as string);
+      if (!entry) return res.status(404).json({ message: "Playbook not found" });
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId, actorUserId: req.auth!.userId, actorRole: role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "PLAYBOOK_VIEWED", entityType: "playbook", entityId: entry.id,
+        ipAddress: getClientIp(req),
+      });
+      res.json(sanitizePlaybookRecord(entry, role));
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/playbooks", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const data = insertPlaybookEntrySchema.parse({
+        ...req.body,
+        organizationId: req.auth!.organizationId,
+        createdBy: req.auth!.userId,
+      });
+      const entry = await storage.createPlaybookEntry(data);
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "PLAYBOOK_CREATED", entityType: "playbook", entityId: entry.id,
+        afterJson: entry, ipAddress: getClientIp(req),
+      });
+      res.json(entry);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/playbooks/:id", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const existing = await storage.getPlaybookEntry(req.params.id as string);
+      if (!existing) return res.status(404).json({ message: "Playbook not found" });
+      const updated = await storage.updatePlaybookEntry(existing.id, req.body);
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "PLAYBOOK_EDITED", entityType: "playbook", entityId: existing.id,
+        beforeJson: existing, afterJson: updated, ipAddress: getClientIp(req),
+      });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/playbooks/:id", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const existing = await storage.getPlaybookEntry(req.params.id as string);
+      if (!existing) return res.status(404).json({ message: "Playbook not found" });
+      await storage.softDeletePlaybookEntry(existing.id);
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "PLAYBOOK_DELETED", entityType: "playbook", entityId: existing.id,
+        beforeJson: existing, ipAddress: getClientIp(req),
+      });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  // Action Engine ↔ Playbook bridge: MVP rule-based recommendation for a claim.
+  app.get("/api/claims/:id/playbook-recommendations", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const role = req.auth!.role;
+      const claim = await storage.getClaim(req.params.id as string, orgId);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+      const all = await storage.getPlaybookEntries();
+      // Simple rule-based scoring (NOT AI): match carrier / claimType / denial reason / scenario signals.
+      const scored = all.map((pb) => {
+        let score = 0;
+        const reasons: string[] = [];
+        if (pb.carrier && claim.carrier && pb.carrier.toLowerCase() === claim.carrier.toLowerCase()) { score += 3; reasons.push("same carrier"); }
+        if (pb.claimType && (claim.claimType || claim.lossType) && pb.claimType.toLowerCase() === String(claim.claimType || claim.lossType).toLowerCase()) { score += 2; reasons.push("same claim type"); }
+        if (pb.denialReason && claim.denialReason && pb.denialReason.toLowerCase().includes(claim.denialReason.toLowerCase().slice(0, 6))) { score += 3; reasons.push("similar denial reason"); }
+        if (pb.escalationUsed && claim.escalationUsed) { score += 1; reasons.push("escalation context"); }
+        if (pb.region && claim.state && pb.region.toLowerCase() === claim.state.toLowerCase()) { score += 1; reasons.push("same region"); }
+        return { playbook: sanitizePlaybookRecord(pb, role), matchScore: score, matchReasons: reasons };
+      }).filter((x) => x.matchScore > 0).sort((a, b) => b.matchScore - a.matchScore).slice(0, 5);
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "PLAYBOOK_RECOMMENDATION_GENERATED", entityType: "claim", entityId: claim.id,
+        afterJson: { count: scored.length }, ipAddress: getClientIp(req),
+      });
+      res.json({ method: "MVP rule-based recommendation", recommendations: scored });
     } catch (err: any) {
       res.status(400).json({ message: err.message });
     }
@@ -1246,6 +1515,9 @@ export async function registerRoutes(
   seedDefaultWeights().catch(console.error);
   if (isDemoSeedingAllowed()) {
     seedDemoData().catch(console.error);
+    seedSamplePlaybooks()
+      .then((n) => n > 0 && console.log(`[seedSamplePlaybooks] created ${n} sample playbook(s)`))
+      .catch(console.error);
   } else {
     console.log("[seedDemoData] skipped — demo seeding not allowed in this environment.");
   }

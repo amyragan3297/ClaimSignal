@@ -15,6 +15,9 @@ import {
   applyPiiMasking,
   sanitizeSharedClaimRecord,
   sanitizeSharedClaimList,
+  sanitizePlaybookRecord,
+  sanitizePlaybookList,
+  toPlaybookAggregate,
 } from "./masking";
 
 let passed = 0;
@@ -133,6 +136,91 @@ const list = sanitizeSharedClaimList([sampleClaim, sampleClaim], "standard");
 check("list length preserved", list.length === 2);
 check("every record masked", list.every((r) => r.homeownerName === "J. S."));
 check("every record strips contractor identity", list.every((r) => r.notes === null && r.organizationId === undefined));
+
+// A realistic playbook entry contributed from a private claim.
+const samplePlaybook = {
+  id: "pb-1",
+  organizationId: "org-roofing-firm-99",
+  sourceClaimId: "claim-1",
+  createdBy: "user-7",
+  title: "Supplement Approved After Documentation Pressure",
+  scenarioType: "supplement_approved",
+  claimType: "Hail / Wind",
+  carrier: "Farmers",
+  adjuster: "Desk Adjuster (anonymized)",
+  iaFirm: "EagleView IA",
+  vendor: "SeekNow",
+  denialReason: "Insufficient documentation",
+  missingScopeItems: ["gutters", "screens"],
+  outcome: "supplement_approved",
+  supplementDelta: 4200,
+  confidenceScore: 0.82,
+  sourceClaimCount: 3,
+  region: "Southeast",
+  actionTaken: "Submitted annotated photos for John Smith at 123 Oak St",
+  whatWorked: "Carrier reversed after Apex Roofing escalated",
+  whatDidNotWork: "Initial desk review",
+  timelineSummary: "Filed 1/5, denied 3/15, supplement approved 4/2",
+  recommendedNextStep: "Escalate to desk supervisor with IRC citation",
+  metadataJson: { internal: "private notes" },
+  // defensive: identity fields that must never leak even if present
+  homeownerName: "John Smith",
+  claimNumber: "800816754",
+  propertyAddress: "123 Oak St",
+  contractorName: "Apex Roofing",
+  roofingCompany: "Apex Roofing LLC",
+};
+
+console.log("\n=== 6. Playbook masking — Master sees everything ===");
+const masterPb = sanitizePlaybookRecord(samplePlaybook, MASTER_ROLE);
+check("Master keeps organizationId", masterPb.organizationId === "org-roofing-firm-99");
+check("Master keeps sourceClaimId", masterPb.sourceClaimId === "claim-1");
+check("Master keeps metadataJson", masterPb.metadataJson !== null);
+check("Master keeps narrative actionTaken", masterPb.actionTaken === "Submitted annotated photos for John Smith at 123 Oak St");
+check("Master keeps narrative recommendedNextStep", masterPb.recommendedNextStep === "Escalate to desk supervisor with IRC citation");
+
+console.log("\n=== 7. Playbook masking — non-Master strips source linkage + identity ===");
+const sharedPb = sanitizePlaybookRecord(samplePlaybook, "standard");
+check("organizationId stripped", sharedPb.organizationId === undefined);
+check("sourceClaimId stripped", sharedPb.sourceClaimId === undefined);
+check("createdBy stripped", sharedPb.createdBy === undefined);
+check("metadataJson nulled", sharedPb.metadataJson === null);
+check("homeownerName nulled", sharedPb.homeownerName === null);
+check("claimNumber nulled", sharedPb.claimNumber === null);
+check("propertyAddress nulled", sharedPb.propertyAddress === null);
+check("contractorName nulled", sharedPb.contractorName === null);
+check("roofingCompany nulled", sharedPb.roofingCompany === null);
+check("narrative actionTaken stripped (could embed identity)", sharedPb.actionTaken === null);
+check("narrative whatWorked stripped", sharedPb.whatWorked === null);
+check("narrative whatDidNotWork stripped", sharedPb.whatDidNotWork === null);
+check("narrative timelineSummary stripped", sharedPb.timelineSummary === null);
+check("narrative recommendedNextStep stripped", sharedPb.recommendedNextStep === null);
+
+console.log("\n=== 8. Playbook masking — behavioral intelligence PRESERVED ===");
+check("carrier preserved", sharedPb.carrier === "Farmers");
+check("adjuster preserved", sharedPb.adjuster === "Desk Adjuster (anonymized)");
+check("iaFirm preserved", sharedPb.iaFirm === "EagleView IA");
+check("vendor preserved", sharedPb.vendor === "SeekNow");
+check("denialReason preserved", sharedPb.denialReason === "Insufficient documentation");
+check("missingScopeItems preserved", Array.isArray(sharedPb.missingScopeItems) && sharedPb.missingScopeItems.length === 2);
+check("outcome preserved", sharedPb.outcome === "supplement_approved");
+check("supplementDelta preserved", sharedPb.supplementDelta === 4200);
+
+console.log("\n=== 9. Playbook list sanitizer applies per-record ===");
+const pbList = sanitizePlaybookList([samplePlaybook, samplePlaybook], "standard");
+check("playbook list length preserved", pbList.length === 2);
+check("every playbook strips source linkage", pbList.every((r) => r.organizationId === undefined && r.sourceClaimId === undefined));
+check("every playbook preserves carrier intel", pbList.every((r) => r.carrier === "Farmers"));
+
+console.log("\n=== 10. Executive aggregate projection (toPlaybookAggregate) ===");
+const agg = toPlaybookAggregate(samplePlaybook);
+check("aggregate keeps carrier", agg.carrier === "Farmers");
+check("aggregate keeps outcome", agg.outcome === "supplement_approved");
+check("aggregate keeps confidenceScore", agg.confidenceScore === 0.82);
+check("aggregate drops narrative denialReason", !("denialReason" in agg));
+check("aggregate drops organizationId", !("organizationId" in agg));
+check("aggregate drops vendor narrative", !("vendor" in agg));
+check("aggregate drops identity fields", !("homeownerName" in agg) && !("contractorName" in agg));
 
 console.log(`\n================ RESULT: ${passed} passed, ${failed} failed ================\n`);
 process.exit(failed === 0 ? 0 : 1);

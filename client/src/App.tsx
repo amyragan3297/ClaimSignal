@@ -21,6 +21,8 @@ import SignalEnginePage from "@/pages/signal-engine";
 import AudioPage from "@/pages/audio";
 import CommunicationsPage from "@/pages/communications";
 import IntelligencePage from "@/pages/intelligence";
+import CarrierIntelligencePage from "@/pages/carrier-intelligence";
+import PlaybooksPage from "@/pages/playbooks";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -34,6 +36,8 @@ function AppRoutes() {
         <Route path="/evidence" component={EvidencePage} />
         <Route path="/storm-events" component={StormEventsPage} />
         <Route path="/intelligence" component={IntelligencePage} />
+        <Route path="/carrier-intelligence" component={CarrierIntelligencePage} />
+        <Route path="/playbooks" component={PlaybooksPage} />
         <Route path="/signal-engine" component={SignalEnginePage} />
         <Route path="/audio" component={AudioPage} />
         <Route path="/communications" component={CommunicationsPage} />

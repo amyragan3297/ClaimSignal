@@ -151,6 +151,59 @@ export const claims = pgTable("claims", {
   supplementProbabilityScore: real("supplement_probability_score"),
   ircComplianceRiskScore: real("irc_compliance_risk_score"),
 
+  // ── Expanded intake (additive) ──
+  claimType: text("claim_type"),
+  propertyType: text("property_type"),
+  iaFirm: text("ia_firm"),
+
+  // Vendor capture — claim-relevant vendor intelligence (NOT contractor identity)
+  vendorName: text("vendor_name"),
+  vendorType: text("vendor_type"),
+  vendorRole: text("vendor_role"),
+  inspectionVendor: text("inspection_vendor"),
+  ladderAssistVendor: text("ladder_assist_vendor"),
+  engineeringFirm: text("engineering_firm"),
+  itelVendor: text("itel_vendor"),
+  photoInspectionVendor: text("photo_inspection_vendor"),
+  vendorFinding: text("vendor_finding"),
+  vendorImpact: text("vendor_impact"),
+  vendorNotes: text("vendor_notes"),
+
+  // Financial (additive)
+  recoverableDepreciation: real("recoverable_depreciation"),
+  nonRecoverableDepreciation: real("non_recoverable_depreciation"),
+  priorPayments: real("prior_payments"),
+  supplementRequested: real("supplement_requested"),
+  supplementApproved: real("supplement_approved"),
+  outstandingAmount: real("outstanding_amount"),
+  finalApprovedAmount: real("final_approved_amount"),
+
+  // Outcome / intelligence (additive)
+  initialOutcome: text("initial_outcome"),
+  finalOutcome: text("final_outcome"),
+  denialReason: text("denial_reason"),
+  denialOverturned: boolean("denial_overturned").default(false),
+  supplementOutcome: text("supplement_outcome"),
+  escalationUsed: boolean("escalation_used").default(false),
+  reinspectionRequested: boolean("reinspection_requested").default(false),
+  reinspectionOutcome: text("reinspection_outcome"),
+  paymentReceived: boolean("payment_received").default(false),
+  whatWorked: text("what_worked"),
+  whatDidNotWork: text("what_did_not_work"),
+  playbookNote: text("playbook_note"),
+  actionNote: text("action_note"),
+
+  // Documentation status flags (additive)
+  photosUploaded: boolean("photos_uploaded").default(false),
+  denialLetterUploaded: boolean("denial_letter_uploaded").default(false),
+  estimateUploaded: boolean("estimate_uploaded").default(false),
+  supplementUploaded: boolean("supplement_uploaded").default(false),
+  codeDocUploaded: boolean("code_doc_uploaded").default(false),
+  manufacturerDocUploaded: boolean("manufacturer_doc_uploaded").default(false),
+  audioUploaded: boolean("audio_uploaded").default(false),
+  transcriptStatus: text("transcript_status"),
+  stormReportStatus: text("storm_report_status"),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   archivedAt: timestamp("archived_at"),
@@ -374,6 +427,17 @@ export const timelineEvents = pgTable("timeline_events", {
   audioRecordingId: varchar("audio_recording_id"),
   deepLinkTarget: json("deep_link_target"),
   createdByUserId: varchar("created_by_user_id"),
+  // ── AI date-extraction (additive) ──
+  extractedDate: timestamp("extracted_date"),
+  uploadDate: timestamp("upload_date").defaultNow(),
+  dateSource: text("date_source"),
+  confidenceScore: real("confidence_score"),
+  needsReview: boolean("needs_review").default(false),
+  reviewStatus: text("review_status").default("pending"),
+  sourceDocumentId: varchar("source_document_id"),
+  sourceAudioId: varchar("source_audio_id"),
+  sourceTranscriptId: varchar("source_transcript_id"),
+  metadataJson: json("metadata_json"),
   createdAt: timestamp("created_at").defaultNow(),
   archivedAt: timestamp("archived_at"),
   deletedAt: timestamp("deleted_at"),
@@ -393,6 +457,41 @@ export const adjusterPlaybooks = pgTable("adjuster_playbooks", {
   denialPatternFrequency: integer("denial_pattern_frequency").default(0),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Playbook Engine (additive) — reusable historical claim outcome patterns ──
+export const playbookEntries = pgTable("playbook_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id"),
+  title: text("title").notNull(),
+  scenarioType: text("scenario_type"),
+  claimType: text("claim_type"),
+  carrier: text("carrier"),
+  adjuster: text("adjuster"),
+  iaFirm: text("ia_firm"),
+  vendor: text("vendor"),
+  denialReason: text("denial_reason"),
+  missingScopeItems: json("missing_scope_items"),
+  documentationUsed: json("documentation_used"),
+  actionTaken: text("action_taken"),
+  whatWorked: text("what_worked"),
+  whatDidNotWork: text("what_did_not_work"),
+  timelineSummary: text("timeline_summary"),
+  escalationUsed: boolean("escalation_used").default(false),
+  outcome: text("outcome"),
+  supplementDelta: real("supplement_delta"),
+  confidenceScore: real("confidence_score"),
+  sourceClaimCount: integer("source_claim_count").default(0),
+  sourceClaimId: varchar("source_claim_id"),
+  region: text("region"),
+  recommendedNextStep: text("recommended_next_step"),
+  isSample: boolean("is_sample").default(false),
+  createdBy: varchar("created_by"),
+  metadataJson: json("metadata_json"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  archivedAt: timestamp("archived_at"),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const ircCodes = pgTable("irc_codes", {
@@ -556,6 +655,7 @@ export const insertClaimDraftSchema = createInsertSchema(claimDrafts).omit({ id:
 export const insertAudioRecordingSchema = createInsertSchema(audioRecordings).omit({ id: true, createdAt: true, processedAt: true });
 export const insertTimelineEventSchema = createInsertSchema(timelineEvents).omit({ id: true, createdAt: true });
 export const insertAdjusterPlaybookSchema = createInsertSchema(adjusterPlaybooks).omit({ id: true, createdAt: true });
+export const insertPlaybookEntrySchema = createInsertSchema(playbookEntries).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertIrcCodeSchema = createInsertSchema(ircCodes).omit({ id: true });
 export const insertSupplementTriggerSchema = createInsertSchema(supplementTriggers).omit({ id: true, createdAt: true });
 export const insertPiiAccessLogSchema = createInsertSchema(piiAccessLogs).omit({ id: true, timestamp: true });
@@ -647,6 +747,8 @@ export type TimelineEvent = typeof timelineEvents.$inferSelect;
 export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
 export type AdjusterPlaybook = typeof adjusterPlaybooks.$inferSelect;
 export type InsertAdjusterPlaybook = z.infer<typeof insertAdjusterPlaybookSchema>;
+export type InsertPlaybookEntry = z.infer<typeof insertPlaybookEntrySchema>;
+export type PlaybookEntry = typeof playbookEntries.$inferSelect;
 export type IrcCode = typeof ircCodes.$inferSelect;
 export type InsertIrcCode = z.infer<typeof insertIrcCodeSchema>;
 export type SupplementTrigger = typeof supplementTriggers.$inferSelect;

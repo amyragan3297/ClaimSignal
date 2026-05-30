@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import multer from "multer";
 import crypto from "crypto";
 import { storage } from "./storage";
+import { createCandidatesFromText } from "./timeline-extraction";
 
 interface AuthRequest extends Request {
   auth?: {
@@ -261,6 +262,23 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     
     if (claimId) {
       await generateTimelineEvents(claimId, organizationId, evidenceFile.id, classification.category, entities, userId);
+      // AI date-extraction MVP: derive event-dated timeline candidates from the
+      // document text. Low-confidence dates become needsReview candidates. Never
+      // allowed to break the upload pipeline.
+      if (textContent && textContent.trim()) {
+        try {
+          await createCandidatesFromText({
+            text: textContent,
+            claimId,
+            orgId: organizationId,
+            createdByUserId: userId,
+            sourceDocumentId: evidenceFile.id,
+            sourceHint: classification.category === "denial_letter" ? "letter_date" : undefined,
+          });
+        } catch (extractErr: any) {
+          console.error("[timeline-extraction] non-fatal:", extractErr?.message);
+        }
+      }
     }
     
     let draft = null;

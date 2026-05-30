@@ -21,6 +21,7 @@ import {
   type TimelineEvent, type InsertTimelineEvent,
   type AdjusterAggregatedMetric, type InsertAdjusterAggregatedMetric,
   type AdjusterPlaybook, type InsertAdjusterPlaybook,
+  type PlaybookEntry, type InsertPlaybookEntry,
   type IrcCode, type InsertIrcCode,
   type SupplementTrigger, type InsertSupplementTrigger,
   type PiiAccessLog, type InsertPiiAccessLog,
@@ -35,7 +36,7 @@ import {
   clients, supplements, documents, emails, aiInsights,
   founderAgreements, auditLogs,
   evidenceFiles, extractedEntities, claimDrafts, audioRecordings, timelineEvents,
-  adjusterPlaybooks, ircCodes, supplementTriggers, piiAccessLogs,
+  adjusterPlaybooks, playbookEntries, ircCodes, supplementTriggers, piiAccessLogs,
   adjusterAggregatedMetrics,
   supplementIntelligence, adjusterIrcBehavior, communicationSignals, playbookInsights,
   scoringWeights, intelligenceEvents, stormEvents,
@@ -167,6 +168,17 @@ export interface IStorage {
 
   getTimelineEvents(claimId: string, orgId: string): Promise<TimelineEvent[]>;
   createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent>;
+  getTimelineEvent(id: string, orgId: string): Promise<TimelineEvent | undefined>;
+  getTimelineCandidates(orgId: string, claimId?: string): Promise<TimelineEvent[]>;
+  updateTimelineEvent(id: string, orgId: string, data: Partial<TimelineEvent>): Promise<TimelineEvent | undefined>;
+
+  // Playbook Engine
+  getPlaybookEntries(): Promise<PlaybookEntry[]>;
+  getPlaybookEntry(id: string): Promise<PlaybookEntry | undefined>;
+  createPlaybookEntry(entry: InsertPlaybookEntry): Promise<PlaybookEntry>;
+  updatePlaybookEntry(id: string, data: Partial<PlaybookEntry>): Promise<PlaybookEntry | undefined>;
+  softDeletePlaybookEntry(id: string): Promise<boolean>;
+  countPlaybookEntries(): Promise<number>;
 
   // Adjuster Playbooks
   getAdjusterPlaybook(adjusterId: string, orgId: string): Promise<AdjusterPlaybook | undefined>;
@@ -766,6 +778,70 @@ export class DatabaseStorage implements IStorage {
   async createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent> {
     const [created] = await db.insert(timelineEvents).values(event).returning();
     return created;
+  }
+
+  async getTimelineEvent(id: string, orgId: string): Promise<TimelineEvent | undefined> {
+    const [ev] = await db.select().from(timelineEvents).where(
+      and(eq(timelineEvents.id, id), eq(timelineEvents.organizationId, orgId))
+    );
+    return ev;
+  }
+
+  async getTimelineCandidates(orgId: string, claimId?: string): Promise<TimelineEvent[]> {
+    const conditions = [
+      eq(timelineEvents.organizationId, orgId),
+      eq(timelineEvents.needsReview, true),
+      isNull(timelineEvents.deletedAt),
+    ];
+    if (claimId) conditions.push(eq(timelineEvents.claimId, claimId));
+    return db.select().from(timelineEvents).where(and(...conditions)).orderBy(desc(timelineEvents.uploadDate));
+  }
+
+  async updateTimelineEvent(id: string, orgId: string, data: Partial<TimelineEvent>): Promise<TimelineEvent | undefined> {
+    const [updated] = await db.update(timelineEvents).set(data).where(
+      and(eq(timelineEvents.id, id), eq(timelineEvents.organizationId, orgId))
+    ).returning();
+    return updated;
+  }
+
+  // ── Playbook Engine ─────────────────────────────────────────────────────
+  async getPlaybookEntries(): Promise<PlaybookEntry[]> {
+    return db.select().from(playbookEntries).where(
+      and(isNull(playbookEntries.deletedAt), isNull(playbookEntries.archivedAt))
+    ).orderBy(desc(playbookEntries.createdAt));
+  }
+
+  async getPlaybookEntry(id: string): Promise<PlaybookEntry | undefined> {
+    const [entry] = await db.select().from(playbookEntries).where(
+      and(eq(playbookEntries.id, id), isNull(playbookEntries.deletedAt))
+    );
+    return entry;
+  }
+
+  async createPlaybookEntry(entry: InsertPlaybookEntry): Promise<PlaybookEntry> {
+    const [created] = await db.insert(playbookEntries).values(entry).returning();
+    return created;
+  }
+
+  async updatePlaybookEntry(id: string, data: Partial<PlaybookEntry>): Promise<PlaybookEntry | undefined> {
+    const [updated] = await db.update(playbookEntries).set({ ...data, updatedAt: new Date() }).where(
+      and(eq(playbookEntries.id, id), isNull(playbookEntries.deletedAt))
+    ).returning();
+    return updated;
+  }
+
+  async softDeletePlaybookEntry(id: string): Promise<boolean> {
+    const result = await db.update(playbookEntries).set({ deletedAt: new Date() }).where(
+      and(eq(playbookEntries.id, id), isNull(playbookEntries.deletedAt))
+    ).returning();
+    return result.length > 0;
+  }
+
+  async countPlaybookEntries(): Promise<number> {
+    const [row] = await db.select({ count: count() }).from(playbookEntries).where(
+      and(isNull(playbookEntries.deletedAt), isNull(playbookEntries.archivedAt))
+    );
+    return row?.count ?? 0;
   }
 
   async getAggregatedMetrics(filters?: { carrier?: string; region?: string; timePeriod?: string }): Promise<AdjusterAggregatedMetric[]> {

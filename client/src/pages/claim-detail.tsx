@@ -30,6 +30,7 @@ import {
   Activity,
   Brain,
   Calendar,
+  Eye,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -157,6 +158,47 @@ export default function ClaimDetailPage() {
     onError: (err: Error) => {
       toast({ title: "Failed to add supplement", description: err.message, variant: "destructive" });
     },
+  });
+
+  const { data: candidates } = useQuery<TimelineEvent[]>({
+    queryKey: ["/api/timeline/candidates", claimId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/timeline/candidates?claimId=${claimId}`);
+      return res.json();
+    },
+    enabled: !!claimId,
+  });
+
+  const { data: playbookRecs } = useQuery<{ method: string; recommendations: any[] }>({
+    queryKey: ["/api/claims", claimId, "playbook-recommendations"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/claims/${claimId}/playbook-recommendations`);
+      return res.json();
+    },
+    enabled: !!claimId,
+  });
+
+  const extractMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/claims/${claimId}/extract-timeline`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline/candidates", claimId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/timeline", claimId] });
+      toast({ title: "Date extraction complete", description: "Review the suggested timeline entries below." });
+    },
+    onError: (err: Error) => toast({ title: "Extraction failed", description: err.message, variant: "destructive" }),
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: string }) => {
+      await apiRequest("PATCH", `/api/timeline/${id}/review`, { action });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timeline/candidates", claimId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/timeline", claimId] });
+    },
+    onError: (err: Error) => toast({ title: "Review failed", description: err.message, variant: "destructive" }),
   });
 
   const handleExport = async (type: string, format: string) => {
@@ -607,12 +649,82 @@ export default function ClaimDetailPage() {
         </CardContent>
       </Card>
 
+      {playbookRecs && playbookRecs.recommendations && playbookRecs.recommendations.length > 0 && (
+        <Card data-testid="card-playbook-recs">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Brain className="w-4 h-4 text-primary" />
+              Playbook Recommendations
+              <Badge variant="outline" className="ml-1 text-[10px]">{playbookRecs.method}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {playbookRecs.recommendations.map((rec: any) => (
+              <div key={rec.playbook.id} className="rounded-md border border-border p-3" data-testid={`playbook-rec-${rec.playbook.id}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium">{rec.playbook.title}</p>
+                  <Badge variant="secondary" className="shrink-0">match {rec.matchScore}</Badge>
+                </div>
+                {rec.playbook.recommendedNextStep && (
+                  <p className="text-xs text-muted-foreground mt-1">{rec.playbook.recommendedNextStep}</p>
+                )}
+                {rec.matchReasons?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {rec.matchReasons.map((r: string, i: number) => (
+                      <Badge key={i} variant="outline" className="text-[10px]">{r}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {candidates && candidates.length > 0 && (
+        <Card data-testid="card-timeline-review">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-amber-500" />
+              Suggested Dates — Needs Review
+              <Badge variant="secondary" className="ml-1">{candidates.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {candidates.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-3 rounded-md border border-border p-3" data-testid={`candidate-${c.id}`}>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{c.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {c.extractedDate ? new Date(c.extractedDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—"}
+                    {c.dateSource ? ` · ${c.dateSource}` : ""}
+                    {c.confidenceScore != null ? ` · ${Math.round(c.confidenceScore * 100)}% confidence` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button size="sm" variant="outline" disabled={reviewMutation.isPending} onClick={() => reviewMutation.mutate({ id: c.id, action: "accept" })} data-testid={`button-accept-candidate-${c.id}`}>
+                    <CheckCircle className="w-3.5 h-3.5" /> Accept
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={reviewMutation.isPending} onClick={() => reviewMutation.mutate({ id: c.id, action: "reject" })} data-testid={`button-reject-candidate-${c.id}`}>
+                    <XCircle className="w-3.5 h-3.5" /> Reject
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <Card data-testid="card-timeline">
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Clock className="w-4 h-4 text-primary" />
             Timeline
           </CardTitle>
+          <Button size="sm" variant="outline" disabled={extractMutation.isPending} onClick={() => extractMutation.mutate()} data-testid="button-extract-dates">
+            {extractMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calendar className="w-3.5 h-3.5" />}
+            Extract Dates (AI)
+          </Button>
         </CardHeader>
         <CardContent>
           {timelineLoading ? (

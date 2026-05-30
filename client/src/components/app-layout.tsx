@@ -37,6 +37,8 @@ import {
   Mic,
   MessageSquare,
   BarChart2,
+  Building2,
+  BookOpen,
 } from "lucide-react";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -145,6 +147,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {navItem("Claim Intelligence", "/intelligence", Brain)}
+                    {navItem("Carrier Intelligence", "/carrier-intelligence", Building2, "nav-carrier-intelligence")}
+                    {navItem("Playbook Engine", "/playbooks", BookOpen, "nav-playbooks")}
                     {navItem("Signal Engine", "/signal-engine", Zap)}
                     {navItem("Adjusters", "/adjusters", Users)}
                   </SidebarMenu>
