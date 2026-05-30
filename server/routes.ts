@@ -12,6 +12,7 @@ import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
 import { createHash } from "crypto";
+import { isDemoSeedingAllowed, resolveSeedMasterCredentials } from "./config";
 import {
   type AuthRequest,
   requireAuth,
@@ -1241,9 +1242,13 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  seedPlatformOwner();
+  seedPlatformOwner().catch(console.error);
   seedDefaultWeights().catch(console.error);
-  seedDemoData().catch(console.error);
+  if (isDemoSeedingAllowed()) {
+    seedDemoData().catch(console.error);
+  } else {
+    console.log("[seedDemoData] skipped — demo seeding not allowed in this environment.");
+  }
 
   return httpServer;
 }
@@ -1253,47 +1258,68 @@ function sanitizeUser(user: any) {
   return safe;
 }
 
-async function seedPlatformOwner() {
-  const email = process.env.ADMIN_EMAIL || "admin@claimsignal.com";
-  const password = process.env.ADMIN_PASSWORD || "ClaimSignal2026!";
-
+// Create or promote a Master (super_admin) platform-owner user. Idempotent.
+async function ensureMasterUser(email: string, password: string, fullName: string) {
   const existing = await storage.getUserByEmail(email);
   if (existing) {
     if (!existing.isPlatformOwner || existing.role !== "super_admin") {
       await storage.updateUser(existing.id, { isPlatformOwner: true, role: "super_admin" });
     }
-  } else {
-    const passwordHash = await bcrypt.hash(password, 12);
-    const org = await storage.createOrganization({ name: "ClaimSignal Platform" });
-
-    await storage.createUser({
-      email,
-      passwordHash,
-      fullName: "Platform Owner",
-      organizationId: org.id,
-      role: "super_admin",
-      isPlatformOwner: true,
-      founderFlag: false,
-    });
-
-    await storage.createBillingAccount({
-      organizationId: org.id,
-      subscriptionStatus: "active",
-      planType: "founder",
-    });
+    return;
   }
 
+  const passwordHash = await bcrypt.hash(password, 12);
+  const org = await storage.createOrganization({ name: "ClaimSignal Platform" });
+
+  await storage.createUser({
+    email,
+    passwordHash,
+    fullName,
+    organizationId: org.id,
+    role: "super_admin",
+    isPlatformOwner: true,
+    founderFlag: false,
+  });
+
+  await storage.createBillingAccount({
+    organizationId: org.id,
+    subscriptionStatus: "active",
+    planType: "founder",
+  });
+}
+
+async function seedPlatformOwner() {
+  // Credential policy is centralized in config: production never uses hardcoded
+  // defaults (even with DEMO_MODE) and requires explicit MASTER_* env values.
+  const seed = resolveSeedMasterCredentials();
+  if (!seed) {
+    console.warn(
+      "[seedPlatformOwner] No Master seeded — production requires explicit MASTER_EMAIL / " +
+        "MASTER_INITIAL_PASSWORD, or seeding is disabled in this environment. No default credentials created.",
+    );
+    return;
+  }
+
+  await ensureMasterUser(seed.email, seed.password, seed.isDemo ? "Platform Owner (DEMO)" : "Platform Owner");
+
+  // The hardcoded demo/test login is ONLY ever created outside production.
+  if (!seed.isDemo) {
+    console.log("[seedPlatformOwner] Production Master ensured from explicit env credentials.");
+    return;
+  }
+
+  // Demo/test login used for the local environment & demos.
   const testEmail = "user@claimsignal.test";
   const testPassword = "password123";
   const testExisting = await storage.getUserByEmail(testEmail);
   if (!testExisting) {
     const testPasswordHash = await bcrypt.hash(testPassword, 12);
-    const testOrg = await storage.createOrganization({ name: "Test Organization" });
+    const testOrg = await storage.createOrganization({ name: "Test Organization (DEMO)" });
 
     await storage.createUser({
       email: testEmail,
       passwordHash: testPasswordHash,
-      fullName: "Test User",
+      fullName: "Test User (DEMO)",
       organizationId: testOrg.id,
       role: "super_admin",
       isPlatformOwner: true,

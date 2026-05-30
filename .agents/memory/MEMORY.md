@@ -1,4 +1,5 @@
-- [DB migration constraint](db-migrations.md) — drizzle-kit push fails in this env; always use raw psql for schema changes.
+- [DB migration constraint](db-migrations.md) — drizzle-kit push AND psql CLI both fail; run schema DDL via the app's pg pool in a root tsx script; soft-delete tables can miss archived_at/deleted_at.
+- [Auth startup hardening](auth-startup-hardening.md) — prod never uses fallback JWT secret or default Master creds; seeding policy centralized in resolveSeedMasterCredentials(); logs redact tokens.
 - [Demo seed guard](demo-seed.md) — seedDemoData checks if claims already exist before seeding; won't double-seed on restart.
 - [Storage org-level methods](storage-patterns.md) — audio/email storage methods require claimId; added ByOrg variants for org-wide listing.
 - [ClaimSignal approved logo](brand-logo.md) — use only the orange shield + signal-lines PNG; never the lucide Shield icon as brand mark.

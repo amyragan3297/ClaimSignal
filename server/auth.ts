@@ -2,10 +2,18 @@ import jwt from "jsonwebtoken";
 import { randomBytes, createHash } from "crypto";
 import { storage } from "./storage";
 import type { Request, Response, NextFunction } from "express";
+import { resolveJwtSecret } from "./config";
 
-const JWT_SECRET = process.env.SESSION_SECRET || "claimsignal-jwt-dev-secret";
 const ACCESS_TOKEN_EXPIRY = "15m";
 const REFRESH_TOKEN_DAYS = 30;
+
+// Resolved lazily so production fails fast (via assertStartupConfig) rather than
+// silently using a fallback. Cached after first resolution.
+let cachedJwtSecret: string | null = null;
+function getJwtSecret(): string {
+  if (cachedJwtSecret === null) cachedJwtSecret = resolveJwtSecret();
+  return cachedJwtSecret;
+}
 
 export interface JWTPayload {
   userId: string;
@@ -22,12 +30,12 @@ export interface AuthRequest extends Request {
 }
 
 export function signAccessToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: ACCESS_TOKEN_EXPIRY });
 }
 
 export function verifyAccessToken(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return jwt.verify(token, getJwtSecret()) as JWTPayload;
   } catch {
     return null;
   }

@@ -1,0 +1,84 @@
+LOCK DOWN AUTH STARTUP SECURITY — CLAIMSIGNAL
+
+Yes, lock down the two flagged auth risks before publishing or using the app outside a controlled demo.
+
+Fix these issues:
+
+1. JWT / SESSION SECRET FALLBACK
+
+Current risk:
+server/auth.ts falls back to a hardcoded development secret if SESSION_SECRET is unset.
+
+Required behavior:
+- In production, the app must fail fast if SESSION_SECRET is missing.
+- Do not allow hardcoded fallback secrets in production.
+- Development fallback may exist only when NODE_ENV is development or test.
+- Log a clear startup error if SESSION_SECRET is missing in production.
+- Do not print the secret value.
+
+Implementation rule:
+If NODE_ENV === "production" and SESSION_SECRET is missing, stop server startup with a clear error.
+
+2. DEFAULT MASTER / PLATFORM OWNER CREDENTIALS
+
+Current risk:
+A default Master login may be seeded if environment variables are absent.
+
+Required behavior:
+- Default Master credentials must never be seeded in production.
+- Demo or development Master seeding may exist only when NODE_ENV is development, test, or explicit DEMO_MODE=true.
+- Production Master user creation must require explicit secure setup values.
+- If required Master setup values are missing in production, fail safely and do not create default credentials.
+- Do not print passwords or secrets in logs.
+
+Required environment variables if production seeding is used:
+- MASTER_EMAIL
+- MASTER_INITIAL_PASSWORD or secure invite/setup flow
+- SESSION_SECRET
+
+Preferred behavior:
+- For production, require an explicit Master setup workflow or explicit env-provided Master credentials.
+- For demo mode, allow clearly labeled demo credentials only when DEMO_MODE=true.
+
+3. DEMO SAFETY
+
+Do not break the Tuesday demo.
+
+If demo mode is needed, support:
+- DEMO_MODE=true
+- safe demo accounts
+- safe sample data
+- no real homeowner data
+- no real claim numbers
+- no real property addresses
+- no private documents
+- no private audio
+
+Demo credentials must be clearly labeled as temporary and should be changed or disabled after the meeting.
+
+4. TESTS REQUIRED
+
+Add or update tests proving:
+
+- Production startup fails if SESSION_SECRET is missing.
+- Production does not use hardcoded JWT/session fallback secret.
+- Production does not seed default Master credentials when env vars are missing.
+- Development/test mode can still run safely.
+- Demo mode can seed safe demo users only when DEMO_MODE=true.
+- Master role still receives unmasked data when properly authenticated.
+- Non-Master roles still receive masked shared data.
+- Masking rules still pass after auth changes.
+
+5. FINAL REPORT
+
+After changes, report:
+- files changed
+- exact startup behavior in production
+- exact startup behavior in development/test
+- whether demo mode still works
+- commands run
+- tests passed
+- tests failed
+- any remaining auth risks
+
+Do not expose SESSION_SECRET, JWT secrets, passwords, API keys, database URLs, or environment values in the report.
