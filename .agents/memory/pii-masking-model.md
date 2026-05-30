@@ -3,9 +3,26 @@ name: PII masking model
 description: How ClaimSignal masks claim data — which roles see what, which endpoints apply masking, and how the shared library works.
 ---
 
+## Role mapping (important)
+Master === super_admin internally. There is NO separate "master" enum value. The
+DB enum `user_role` = super_admin/admin/team_owner/founder/standard/carrier_analyst.
+"Master" is a user-facing display label via ROLE_LABEL in client app-layout.tsx.
+`MASTER_ROLE` const in server/masking.ts is the single source of truth.
+
 ## Core rule
 Master (super_admin) always receives unmasked data automatically — no query param, no toggle.
 Non-Master users see own-org claims unmasked; cross-tenant shared claims always masked server-side.
+
+## Contractor-identity stripping in shared views
+sanitizeSharedClaimRecord() strips (for non-Master): organizationId, clientId,
+notes (internal contractor notes), aiClaimSummary, address (street), zipCode.
+PRESERVES adjuster intelligence: carrier, adjusterId, lossType, dateOfLoss, status,
+currentPhase, city/state (generalized), and ALL friction/risk/escalation scores.
+**Why:** the shared library exists to surface adjuster behavior patterns, so adjuster
+data must never be masked — only homeowner PII + contractor identity.
+
+## Tests
+server/masking.test.ts — run `npx tsx server/masking.test.ts` (99 assertions, pure-function, no DB).
 
 ## Masking functions (server/masking.ts)
 - `maskName()` — initials only: "John Smith" → "J. S."

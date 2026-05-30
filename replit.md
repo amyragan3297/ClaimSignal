@@ -37,9 +37,15 @@ ClaimSignal is a full-stack monorepo with a React frontend (`client/`), an Expre
 
 ### Authentication & Authorization
 - **Mechanism:** JWT for access, refresh tokens for session management.
-- **Roles:** `super_admin`, `admin`, `founder`, `standard`.
+- **Roles (internal DB enum `user_role`):** `super_admin`, `admin`, `team_owner`, `founder`, `standard`, `carrier_analyst`.
+- **Role display mapping (user-facing labels via `ROLE_LABEL` in `client/src/components/app-layout.tsx`):**
+    - `super_admin` → **Master** (the platform-owner role; **Master === super_admin** internally — there is no separate `master` enum value)
+    - `team_owner` → Team Admin
+    - `standard` → Individual
+    - `carrier_analyst` → Executive
+    - `admin` → Admin, `founder` → Founder
 - **Access Control:** Billing gate based on subscription status.
-- `super_admin` has full platform access, impersonation, and cross-tenant data visibility.
+- **Master (`super_admin`)** has full platform access, impersonation, cross-tenant data visibility, and is the only role that receives unmasked PII (enforced server-side via `MASTER_ROLE` in `server/masking.ts`).
 
 ### Billing Model
 - **Tiers:** Founding Partner ($99/mo), Pro ($199/mo), Team ($399/mo), Enterprise (custom).
