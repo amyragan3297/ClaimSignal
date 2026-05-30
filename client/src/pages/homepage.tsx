@@ -3,180 +3,217 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Activity,
-  TrendingUp,
-  Brain,
-  AlertTriangle,
+  Shield,
   FileText,
-  Lock,
-  Database,
-  Users,
-  HardDrive,
+  Brain,
   Zap,
-  ChevronRight,
-  Target,
+  BarChart2,
+  CloudLightning,
+  Users,
+  ClipboardList,
+  Lock,
+  Eye,
+  BookOpen,
   ArrowRight,
   Check,
-  Shield,
 } from "lucide-react";
 
-const intelligenceLayers = [
-  {
-    icon: Activity,
-    title: "Friction Scoring Engine",
-    description: "Quantify adjuster responsiveness and claim progression velocity with behavioral analytics.",
-  },
-  {
-    icon: Brain,
-    title: "Inspection Integrity Engine",
-    description: "Track location authentication, photo coverage depth, mechanical test documentation, and visual reference clarity.",
-  },
-  {
-    icon: TrendingUp,
-    title: "Scope Delta Engine",
-    description: "Compare estimated vs. actual scope with supplement detection and depreciation recovery modeling.",
-  },
-  {
-    icon: Target,
-    title: "Lifecycle Phase Engine",
-    description: "8-phase claim lifecycle from Pre-Claim Validation through Resolution with phase-specific scoring.",
-  },
-  {
-    icon: AlertTriangle,
-    title: "Escalation Architecture Engine",
-    description: "Track reinspection requests, denial flags, policyholder activation, and regulatory signaling with escalation levels 0-5.",
-  },
-  {
-    icon: FileText,
-    title: "Outcome Migration Engine",
-    description: "Your monetization layer. Track Initial Determination to Final Outcome with full outcome migration data.",
-  },
+const solutionCards = [
+  { icon: ClipboardList, title: "Claim Intake", description: "Structured intake for loss type, carrier, policy, lifecycle phase, and key dates." },
+  { icon: Brain, title: "AI Extraction Review", description: "Document-level extraction of financials, scope fields, code items, denial signals, and risk indicators." },
+  { icon: Zap, title: "Action Engine", description: "Generates prioritized recommended actions from extracted document intelligence and scoring signals." },
+  { icon: BookOpen, title: "Playbook Engine", description: "Builds adjuster-specific behavioral playbooks from historical claim pattern data." },
+  { icon: BarChart2, title: "Carrier Intelligence", description: "Aggregated adjuster and carrier behavioral data for pattern analysis without homeowner PII." },
+  { icon: Users, title: "Adjuster Intelligence", description: "Friction scoring, supplement resistance, IRC behavior, and response velocity by adjuster." },
+  { icon: CloudLightning, title: "Storm Date Intelligence", description: "Storm event lookup module for correlating claim dates with verifiable weather events." },
+  { icon: FileText, title: "Audit Logs", description: "Immutable event stream capturing all platform actions for compliance and review purposes." },
 ];
 
-const infraFeatures = [
-  { icon: Lock, title: "Tenant Isolation", description: "Complete data isolation between organizations with row-level security." },
-  { icon: Database, title: "Immutable Audit Logs", description: "Every action tracked, timestamped, and permanently recorded." },
-  { icon: Users, title: "Role-Based Enforcement", description: "Granular access control across owner, admin, analyst, and member roles." },
-  { icon: HardDrive, title: "Encrypted Backups", description: "Point-in-time recovery with AES-256 encrypted backup infrastructure." },
-  { icon: Zap, title: "Built for Scale", description: "Horizontally scalable architecture designed for enterprise claim volumes." },
-];
-
-const outcomes = [
-  "Reduce denial cycle time by 40%",
-  "Increase supplement recovery rate",
-  "Identify adjuster risk patterns early",
-  "Standardize repairability documentation",
-  "Protect gross margin across portfolios",
+const pricingPlans = [
+  {
+    name: "Founder Access",
+    price: "$79",
+    period: "/month",
+    description: "Available by approval only for a limited early group.",
+    note: "Card required before platform access. Founder pricing remains active while the subscription remains active.",
+    features: [
+      "Full platform access",
+      "All intelligence engines",
+      "Unmasked data access",
+      "Roadmap collaboration eligibility",
+      "Priority support",
+    ],
+    cta: "Apply for Founder Access",
+    ctaHref: "/login?tab=register&plan=founder",
+    highlighted: true,
+    testId: "card-pricing-founder",
+    btnTestId: "button-pricing-founder",
+    variant: "default" as const,
+  },
+  {
+    name: "Individual",
+    price: "$99",
+    period: "/month",
+    description: "For independent contractors, consultants, and solo claim professionals.",
+    note: "",
+    features: [
+      "Full platform access",
+      "All intelligence engines",
+      "Claims lifecycle tracking",
+      "Adjuster metrics",
+    ],
+    cta: "Request Access",
+    ctaHref: "/login?tab=register&plan=pro",
+    highlighted: false,
+    testId: "card-pricing-individual",
+    btnTestId: "button-pricing-individual",
+    variant: "outline" as const,
+  },
+  {
+    name: "Team",
+    price: "$149",
+    period: "/month",
+    description: "Includes 2 seats. Additional seats are $30.00 per user per month.",
+    note: "",
+    features: [
+      "Everything in Individual",
+      "2 included seats",
+      "Role-based access control",
+      "Priority support",
+    ],
+    cta: "Request Team Access",
+    ctaHref: "/login?tab=register&plan=team",
+    highlighted: false,
+    testId: "card-pricing-team",
+    btnTestId: "button-pricing-team",
+    variant: "outline" as const,
+  },
+  {
+    name: "Enterprise",
+    price: "Custom",
+    period: "",
+    description: "For larger organizations needing custom onboarding, expanded data controls, dedicated support, and advanced permissions.",
+    note: "",
+    features: [
+      "Everything in Team",
+      "Custom onboarding",
+      "Expanded data controls",
+      "Dedicated support",
+      "Advanced permissions",
+    ],
+    cta: "Contact Sales",
+    ctaHref: "mailto:enterprise@claimsignal.com",
+    highlighted: false,
+    testId: "card-pricing-enterprise",
+    btnTestId: "button-pricing-enterprise",
+    variant: "outline" as const,
+    external: true,
+  },
 ];
 
 export default function Homepage() {
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap px-6 py-4">
-          <Link href="/" className="flex items-center gap-2">
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Nav */}
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/40 bg-background/90 backdrop-blur-xl">
+        <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
+          <Link href="/">
             <div className="flex items-center gap-2" data-testid="img-logo">
-              <Shield className="h-8 w-8 text-blue-500" />
-              <span className="text-xl font-bold tracking-tight">ClaimSignal</span>
+              <Shield className="h-7 w-7 text-blue-500" />
+              <span className="text-lg font-bold tracking-tight">ClaimSignal</span>
             </div>
           </Link>
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
             <Link href="/login">
               <Button variant="ghost" size="sm" data-testid="link-login">Log In</Button>
             </Link>
             <Link href="/login?tab=register">
-              <Button size="sm" data-testid="link-register">
-                Get Started
-                <ChevronRight className="w-4 h-4" />
+              <Button size="sm" data-testid="button-nav-request-access">
+                Request Access
+                <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </Link>
           </div>
         </div>
       </nav>
 
-      <section className="relative pt-32 pb-24 px-6">
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/5 rounded-full blur-3xl" />
+      {/* Hero */}
+      <section className="relative pt-36 pb-28 px-6">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/3 w-[480px] h-[480px] bg-blue-500/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 right-1/4 w-[360px] h-[360px] bg-blue-400/4 rounded-full blur-3xl" />
         </div>
-        <div className="max-w-4xl mx-auto text-center relative">
-          <Badge variant="outline" className="mb-6">
-            Insurance Adjuster Intelligence
+        <div className="max-w-3xl mx-auto text-center relative">
+          <Badge variant="outline" className="mb-6 text-xs tracking-wide uppercase px-3 py-1">
+            Pre-Implementation Pilot
           </Badge>
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6" data-testid="text-hero-title">
-            Claim<span className="text-primary">Signal</span>
+          <h1
+            className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-tight"
+            data-testid="text-hero-title"
+          >
+            Claim intelligence built from real claim evidence.
           </h1>
-          <p className="text-xl md:text-2xl text-muted-foreground mb-3 font-medium" data-testid="text-hero-subtitle">
-            Operational Intelligence for Property Claims
-          </p>
-          <p className="text-base text-muted-foreground/80 mb-10 max-w-2xl mx-auto leading-relaxed" data-testid="text-hero-subtext">
-            Structured behavioral analytics, escalation modeling, and audit-ready claim infrastructure.
-            Built for contractors who want structural advantage &mdash; not reactive workflows.
+          <p
+            className="text-base md:text-lg text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed"
+            data-testid="text-hero-subtext"
+          >
+            ClaimSignal organizes estimates, photos, denial letters, audio, inspection notes, storm data, and carrier communications into structured claim intelligence for contractors, claim professionals, and restoration teams.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <Link href="/login?tab=register">
-              <Button size="lg" data-testid="button-hero-cta">
-                Get Started
-                <ArrowRight className="w-4 h-4" />
+              <Button size="lg" className="px-8" data-testid="button-hero-cta">
+                Request Access
+                <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </Link>
-            <a href="#infrastructure">
-              <Button variant="outline" size="lg" data-testid="button-hero-secondary">
-                View Enterprise Architecture
+            <Link href="/login">
+              <Button variant="outline" size="lg" className="px-8" data-testid="button-hero-secondary">
+                View Platform
               </Button>
-            </a>
+            </Link>
           </div>
         </div>
       </section>
 
-      <section className="py-24 px-6" id="intelligence">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <Badge variant="outline" className="mb-4">
-              Core Platform
-            </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-              Intelligence Layers
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Six integrated analytics engines that transform raw claim data into actionable operational intelligence.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {intelligenceLayers.map((item) => (
-              <Card key={item.title} className="hover-elevate" data-testid={`card-intelligence-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                <CardContent className="p-6">
-                  <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center mb-4">
-                    <item.icon className="w-5 h-5 text-primary" />
-                  </div>
-                  <h3 className="font-semibold mb-2">{item.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+      {/* Problem */}
+      <section className="py-20 px-6 bg-card/40 border-y border-border/30">
+        <div className="max-w-3xl mx-auto text-center">
+          <Badge variant="outline" className="mb-5 text-xs tracking-wide uppercase px-3 py-1">
+            The Problem
+          </Badge>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
+            Property claim work is fragmented, manual, and difficult to defend.
+          </h2>
+          <p className="text-muted-foreground leading-relaxed text-base">
+            Claim files often live across estimates, photos, emails, voicemails, inspection notes, and carrier correspondence. ClaimSignal is designed to convert that scattered evidence into structured operational intelligence.
+          </p>
         </div>
       </section>
 
-      <section className="py-24 px-6 bg-card/50" id="infrastructure">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <Badge variant="outline" className="mb-4">
-              Architecture
+      {/* Solution */}
+      <section className="py-24 px-6" id="platform">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-14">
+            <Badge variant="outline" className="mb-5 text-xs tracking-wide uppercase px-3 py-1">
+              Platform
             </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-              Enterprise Infrastructure
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
+              A structured intelligence layer for property claims.
             </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Built from the ground up for compliance, security, and performance at scale.
+            <p className="text-muted-foreground max-w-xl mx-auto text-sm leading-relaxed">
+              Eight interconnected modules that convert scattered claim evidence into defensible, actionable intelligence.
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {infraFeatures.map((item) => (
-              <Card key={item.title} className="text-center hover-elevate" data-testid={`card-infra-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                <CardContent className="p-6">
-                  <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                    <item.icon className="w-5 h-5 text-primary" />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {solutionCards.map((item) => (
+              <Card
+                key={item.title}
+                className="border border-border/50 bg-card/60"
+                data-testid={`card-solution-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+              >
+                <CardContent className="p-5">
+                  <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center mb-4">
+                    <item.icon className="w-4 h-4 text-primary" />
                   </div>
                   <h3 className="font-semibold text-sm mb-2">{item.title}</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">{item.description}</p>
@@ -187,27 +224,33 @@ export default function Homepage() {
         </div>
       </section>
 
-      <section className="py-24 px-6">
+      {/* Security and Data Governance */}
+      <section className="py-20 px-6 bg-card/40 border-y border-border/30" id="security">
         <div className="max-w-5xl mx-auto">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
-              <Badge variant="outline" className="mb-4">
-                Outcomes
+              <Badge variant="outline" className="mb-5 text-xs tracking-wide uppercase px-3 py-1">
+                Data Governance
               </Badge>
-              <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-                Measured Performance. Not Guesswork.
+              <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
+                Built for sensitive claim data.
               </h2>
-              <p className="text-muted-foreground mb-8 leading-relaxed">
-                Every metric is derived from structured claim data, carrier behavior analysis, and outcome modeling.
+              <p className="text-muted-foreground leading-relaxed text-sm">
+                ClaimSignal uses role-aware access concepts, masked views, audit-ready workflows, and controlled data visibility. Master Admin users may view full unmasked records. Restricted users see masked claim numbers, carrier names, and property addresses.
               </p>
             </div>
             <div className="space-y-4">
-              {outcomes.map((outcome) => (
-                <div key={outcome} className="flex items-start gap-3">
-                  <div className="mt-0.5 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <Check className="w-3 h-3 text-primary" />
+              {[
+                { icon: Lock, label: "Role-aware access control with tenant isolation" },
+                { icon: Eye, label: "Masked PII views by default for restricted users" },
+                { icon: FileText, label: "Audit-ready event logging for all platform actions" },
+                { icon: Shield, label: "Controlled data visibility with unmasking audit trail" },
+              ].map((item) => (
+                <div key={item.label} className="flex items-start gap-3">
+                  <div className="mt-0.5 w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                    <item.icon className="w-4 h-4 text-primary" />
                   </div>
-                  <span className="text-sm font-medium">{outcome}</span>
+                  <span className="text-sm leading-relaxed pt-1.5">{item.label}</span>
                 </div>
               ))}
             </div>
@@ -215,172 +258,114 @@ export default function Homepage() {
         </div>
       </section>
 
-      <section className="py-24 px-6 bg-card/50" id="pricing">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <Badge variant="outline" className="mb-4">
-              Operate With Signal.
-            </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-              Pricing
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Choose the plan that fits your operation.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card data-testid="card-pricing-pro">
-              <CardContent className="p-6">
-                <div className="mb-6">
-                  <h3 className="text-lg font-bold mb-1">Pro</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Independent contractor / high volume operator</p>
-                  <div>
-                    <span className="text-3xl font-bold">$199</span>
-                    <span className="text-muted-foreground">/mo</span>
-                  </div>
-                </div>
-                <div className="space-y-3 mb-8">
-                  {[
-                    "Full platform access",
-                    "6 intelligence engines",
-                    "Claims lifecycle tracking",
-                    "Adjuster metrics",
-                  ].map((feature) => (
-                    <div key={feature} className="flex items-center gap-2 text-sm">
-                      <Check className="w-4 h-4 text-primary shrink-0" />
-                      <span>{feature}</span>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/login?tab=register&plan=pro">
-                  <Button className="w-full" data-testid="button-pricing-pro">
-                    Get Started
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-pricing-team">
-              <CardContent className="p-6">
-                <div className="mb-6">
-                  <h3 className="text-lg font-bold mb-1">Team</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Multi-user account</p>
-                  <div>
-                    <span className="text-3xl font-bold">$399</span>
-                    <span className="text-muted-foreground">/mo</span>
-                  </div>
-                </div>
-                <div className="space-y-3 mb-8">
-                  {[
-                    "Everything in Pro",
-                    "Multi-user organization",
-                    "Role-based access",
-                    "Priority support",
-                  ].map((feature) => (
-                    <div key={feature} className="flex items-center gap-2 text-sm">
-                      <Check className="w-4 h-4 text-primary shrink-0" />
-                      <span>{feature}</span>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/login?tab=register&plan=team">
-                  <Button className="w-full" data-testid="button-pricing-team">
-                    Get Started
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card className="border-primary" data-testid="card-pricing-founder">
-              <CardContent className="p-6">
-                <div className="mb-6">
-                  <Badge variant="secondary" className="mb-3" data-testid="badge-founder-spots">Invitation Only - 3 Spots</Badge>
-                  <h3 className="text-lg font-bold mb-1">Founding Partner</h3>
-                  <p className="text-sm text-muted-foreground mb-4">For founding collaborators</p>
-                  <div>
-                    <span className="text-3xl font-bold">$99</span>
-                    <span className="text-muted-foreground">/mo</span>
-                  </div>
-                </div>
-                <div className="space-y-3 mb-8">
-                  {[
-                    "Full unmasked data access",
-                    "All 6 intelligence engines",
-                    "14-day free trial",
-                    "Roadmap collaboration eligibility",
-                    "Price locked permanently",
-                    "Priority support",
-                  ].map((feature) => (
-                    <div key={feature} className="flex items-center gap-2 text-sm">
-                      <Check className="w-4 h-4 text-primary shrink-0" />
-                      <span>{feature}</span>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/login?tab=register&plan=founder">
-                  <Button className="w-full" data-testid="button-pricing-founder">
-                    Start 14-Day Trial
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-pricing-enterprise">
-              <CardContent className="p-6">
-                <div className="mb-6">
-                  <h3 className="text-lg font-bold mb-1">Enterprise</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Custom or high-scale organization</p>
-                  <div>
-                    <span className="text-3xl font-bold">Custom</span>
-                  </div>
-                </div>
-                <div className="space-y-3 mb-8">
-                  {[
-                    "Everything in Team",
-                    "Unlimited seats",
-                    "Custom integrations",
-                    "Dedicated support",
-                    "SLA guarantees",
-                  ].map((feature) => (
-                    <div key={feature} className="flex items-center gap-2 text-sm">
-                      <Check className="w-4 h-4 text-primary shrink-0" />
-                      <span>{feature}</span>
-                    </div>
-                  ))}
-                </div>
-                <a href="mailto:enterprise@claimsignal.com">
-                  <Button variant="outline" className="w-full" data-testid="button-pricing-enterprise">
-                    Contact Sales
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </a>
-              </CardContent>
-            </Card>
+      {/* Current Stage */}
+      <section className="py-20 px-6">
+        <div className="max-w-3xl mx-auto text-center">
+          <Badge variant="outline" className="mb-5 text-xs tracking-wide uppercase px-3 py-1">
+            Current Stage
+          </Badge>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
+            Pre-implementation pilot platform.
+          </h2>
+          <p className="text-muted-foreground leading-relaxed text-sm max-w-2xl mx-auto">
+            ClaimSignal is currently being prepared for technical validation, pilot workflows, and commercialization support. Production services such as authentication hardening, payment processing, file storage, OCR, AI extraction, storm APIs, and audit logging will be finalized during backend implementation.
+          </p>
+          <div className="mt-8">
+            <Link href="/login?tab=register">
+              <Button variant="outline" data-testid="button-stage-cta">
+                Request Access
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-border/50 py-12 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-blue-500" />
-                <span className="text-sm font-bold tracking-tight">ClaimSignal</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-6 flex-wrap text-sm text-muted-foreground">
-              <a href="#pricing" className="hover-elevate px-2 py-1 rounded-md">Pricing</a>
-              <a href="#infrastructure" className="hover-elevate px-2 py-1 rounded-md">Security</a>
-              <a href="#intelligence" className="hover-elevate px-2 py-1 rounded-md">Platform</a>
-            </div>
+      {/* Pricing */}
+      <section className="py-24 px-6 bg-card/40 border-y border-border/30" id="pricing">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-14">
+            <Badge variant="outline" className="mb-5 text-xs tracking-wide uppercase px-3 py-1">
+              Pricing
+            </Badge>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
+              View Pricing
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-sm">
+              Access options for independent professionals, teams, and enterprise organizations.
+            </p>
           </div>
-          <div className="mt-8 text-center text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} ClaimSignal. All rights reserved.
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {pricingPlans.map((plan) => (
+              <Card
+                key={plan.name}
+                className={`flex flex-col ${plan.highlighted ? "border-primary ring-1 ring-primary/30" : "border-border/50"}`}
+                data-testid={plan.testId}
+              >
+                <CardContent className="p-6 flex flex-col flex-1">
+                  <div className="mb-5">
+                    {plan.highlighted && (
+                      <Badge className="mb-3 text-xs" data-testid="badge-founder-access">
+                        By Approval Only
+                      </Badge>
+                    )}
+                    <h3 className="text-base font-bold mb-1">{plan.name}</h3>
+                    <p className="text-xs text-muted-foreground mb-4 leading-relaxed">{plan.description}</p>
+                    <div className="flex items-baseline gap-0.5">
+                      <span className="text-3xl font-bold">{plan.price}</span>
+                      {plan.period && (
+                        <span className="text-sm text-muted-foreground">{plan.period}</span>
+                      )}
+                    </div>
+                    {plan.note && (
+                      <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{plan.note}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2.5 mb-7 flex-1">
+                    {plan.features.map((feature) => (
+                      <div key={feature} className="flex items-start gap-2 text-xs">
+                        <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                        <span className="leading-relaxed">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {plan.external ? (
+                    <a href={plan.ctaHref}>
+                      <Button variant={plan.variant} className="w-full text-sm" data-testid={plan.btnTestId}>
+                        {plan.cta}
+                      </Button>
+                    </a>
+                  ) : (
+                    <Link href={plan.ctaHref}>
+                      <Button variant={plan.variant} className="w-full text-sm" data-testid={plan.btnTestId}>
+                        {plan.cta}
+                        <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                      </Button>
+                    </Link>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
           </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-border/40 py-10 px-6">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-blue-500" />
+            <span className="text-sm font-bold tracking-tight">ClaimSignal</span>
+          </div>
+          <nav className="flex items-center gap-6 text-xs text-muted-foreground">
+            <a href="#platform" className="hover:text-foreground transition-colors">Platform</a>
+            <a href="#security" className="hover:text-foreground transition-colors">Security</a>
+            <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
+            <Link href="/login" className="hover:text-foreground transition-colors">Log In</Link>
+          </nav>
+        </div>
+        <div className="max-w-6xl mx-auto mt-6 text-center text-xs text-muted-foreground">
+          &copy; 2026 ClaimSignal. All rights reserved.
         </div>
       </footer>
     </div>

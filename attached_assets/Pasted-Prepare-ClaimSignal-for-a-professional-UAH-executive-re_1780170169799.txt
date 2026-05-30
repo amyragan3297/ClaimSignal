@@ -1,0 +1,136 @@
+Prepare ClaimSignal for a professional UAH executive review.
+
+Do not rebuild the full app.
+Do not add new experimental sections.
+Do not change backend logic.
+Do not create internal setup pages on the public site.
+
+Clean the public-facing site so it looks appropriate for a university innovation, commercialization, and startup review meeting.
+
+Primary goal:
+ClaimSignal should look like a serious insurance claim intelligence platform in pre-implementation/pilot stage, not a generic SaaS free-trial product.
+
+Remove all public-facing language that says:
+- Get Started
+- Start trial
+- Start 14-day trial
+- 14-day free trial
+- Invitation Only - 3 Spots
+- Founding Partner
+- Price locked permanently
+- Pro $199/mo
+- Team $399/mo
+
+Replace public CTA language with:
+Request Access
+
+Secondary CTA:
+View Platform
+
+Pricing CTA:
+View Pricing
+
+Founder Access CTA:
+Apply for Founder Access
+
+Public homepage structure should be:
+
+1. Hero
+Headline:
+Claim intelligence built from real claim evidence.
+
+Subheadline:
+ClaimSignal organizes estimates, photos, denial letters, audio, inspection notes, storm data, and carrier communications into structured claim intelligence for contractors, claim professionals, and restoration teams.
+
+Primary button:
+Request Access
+
+Secondary button:
+View Platform
+
+2. Problem
+Title:
+Property claim work is fragmented, manual, and difficult to defend.
+
+Copy:
+Claim files often live across estimates, photos, emails, voicemails, inspection notes, and carrier correspondence. ClaimSignal is designed to convert that scattered evidence into structured operational intelligence.
+
+3. Solution
+Title:
+A structured intelligence layer for property claims.
+
+Cards:
+- Claim Intake
+- AI Extraction Review
+- Action Engine
+- Playbook Engine
+- Carrier Intelligence
+- Adjuster Intelligence
+- Storm Date Intelligence
+- Audit Logs
+
+4. Security and Data Governance
+Title:
+Built for sensitive claim data.
+
+Copy:
+ClaimSignal uses role-aware access concepts, masked views, audit-ready workflows, and controlled data visibility. Master Admin users may view full unmasked records. Restricted users see masked claim numbers, carrier names, and property addresses.
+
+5. Current Stage
+Title:
+Pre-implementation pilot platform.
+
+Copy:
+ClaimSignal is currently being prepared for technical validation, pilot workflows, and commercialization support. Production services such as authentication hardening, payment processing, file storage, OCR, AI extraction, storm APIs, and audit logging will be finalized during backend implementation.
+
+6. Pricing
+Use this pricing only:
+
+Founder Access
+$79.00 per month
+Available by approval only for a limited early group.
+Card required before platform access.
+Founder pricing remains active while the subscription remains active.
+Button: Apply for Founder Access
+
+Individual
+$99.00 per month
+For independent contractors, consultants, and solo claim professionals.
+Button: Request Access
+
+Team
+$149.00 per month
+Includes 2 seats.
+Additional seats are $30.00 per user per month.
+Button: Request Team Access
+
+Enterprise
+Custom pricing
+For larger organizations needing custom onboarding, expanded data controls, dedicated support, and advanced permissions.
+Button: Contact Sales
+
+7. Footer
+Use:
+Copyright 2026 ClaimSignal. All rights reserved.
+
+Remove from public homepage:
+- Role Permission Matrix
+- Implementation Summary
+- Copy Brief for Replit
+- Permission toggles
+- Internal setup controls
+- Developer notes
+- Replit implementation text
+- Excessive architecture cards
+- Trial language
+- Seat cap language
+
+Design requirements:
+- Professional dark navy and white enterprise design.
+- Clear mobile spacing.
+- No large blank gaps.
+- No overlapping sections.
+- No cut-off headings.
+- No public free-trial language.
+- No gimmicky startup language.
+- The site should be suitable to show at a UAH innovation or commercialization meeting.
