@@ -527,71 +527,54 @@ export default function AdjustersPage() {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Adjuster</TableHead>
-                    <TableHead>Carrier</TableHead>
-                    <TableHead>Region</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Claims</TableHead>
-                    <TableHead className="text-right">Friction</TableHead>
-                    <TableHead className="text-right">Denial Rate</TableHead>
-                    {canArchive && <TableHead className="w-10"></TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAdjusters.map((adj) => (
-                    <TableRow
-                      key={adj.id}
-                      className="cursor-pointer hover-elevate"
-                      data-testid={`row-adjuster-${adj.id}`}
-                    >
-                      <TableCell className="font-medium" onClick={() => setSelectedAdjuster(adj)} data-testid={`text-adjuster-name-${adj.id}`}>{adj.adjusterName}</TableCell>
-                      <TableCell onClick={() => setSelectedAdjuster(adj)} data-testid={`text-adjuster-carrier-${adj.id}`}>{adj.carrierName}</TableCell>
-                      <TableCell onClick={() => setSelectedAdjuster(adj)}>{adj.region || "\u2014"}</TableCell>
-                      <TableCell onClick={() => setSelectedAdjuster(adj)}>
-                        <div className="flex items-center gap-1">
-                          {adj.isFieldAdjuster && <Badge variant="secondary" className="text-xs">Field</Badge>}
-                          {adj.isDeskAdjuster && <Badge variant="secondary" className="text-xs">Desk</Badge>}
-                          {!adj.isFieldAdjuster && !adj.isDeskAdjuster && <span className="text-muted-foreground">{"\u2014"}</span>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right" onClick={() => setSelectedAdjuster(adj)}>{adj.totalClaimsTracked ?? 0}</TableCell>
-                      <TableCell className="text-right" onClick={() => setSelectedAdjuster(adj)}>
-                        <span className={`font-medium ${(adj.frictionScore ?? 0) > 6 ? "text-red-500" : (adj.frictionScore ?? 0) > 3 ? "text-yellow-500" : "text-green-500"}`}>
-                          {formatScore(adj.frictionScore)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right" onClick={() => setSelectedAdjuster(adj)}>{formatPercent(adj.denialRate)}</TableCell>
-                      {canArchive && (
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" data-testid={`button-adjuster-menu-${adj.id}`} onClick={e => e.stopPropagation()}>
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "archive", adjuster: adj }); }} data-testid={`menu-archive-adjuster-${adj.id}`}>
-                                <Archive className="w-4 h-4 mr-2" />
-                                Archive
-                              </DropdownMenuItem>
-                              {isMaster && (
-                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "delete", adjuster: adj }); }} data-testid={`menu-delete-adjuster-${adj.id}`}>
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Delete Permanently
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="divide-y divide-border">
+              {filteredAdjusters.map((adj) => (
+                <div
+                  key={adj.id}
+                  className="p-4 hover:bg-accent/5 cursor-pointer transition-colors"
+                  onClick={() => setSelectedAdjuster(adj)}
+                  data-testid={`row-adjuster-${adj.id}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <span className="font-medium" data-testid={`text-adjuster-name-${adj.id}`}>{adj.adjusterName}</span>
+                        {adj.isFieldAdjuster && <Badge variant="secondary" className="text-xs">Field</Badge>}
+                        {adj.isDeskAdjuster && <Badge variant="secondary" className="text-xs">Desk</Badge>}
+                      </div>
+                      <p className="text-sm text-muted-foreground" data-testid={`text-adjuster-carrier-${adj.id}`}>
+                        {adj.carrierName}{adj.region ? ` · ${adj.region}` : ""}
+                      </p>
+                      <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
+                        <span>{adj.totalClaimsTracked ?? 0} claims</span>
+                        <span>Friction <span className={`font-medium ${(adj.frictionScore ?? 0) > 6 ? "text-red-500" : (adj.frictionScore ?? 0) > 3 ? "text-yellow-500" : "text-green-500"}`}>{formatScore(adj.frictionScore)}</span></span>
+                        <span>Denial {formatPercent(adj.denialRate)}</span>
+                      </div>
+                    </div>
+                    {canArchive && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" data-testid={`button-adjuster-menu-${adj.id}`} onClick={e => e.stopPropagation()}>
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "archive", adjuster: adj }); }} data-testid={`menu-archive-adjuster-${adj.id}`}>
+                            <Archive className="w-4 h-4 mr-2" />
+                            Archive
+                          </DropdownMenuItem>
+                          {isMaster && (
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "delete", adjuster: adj }); }} data-testid={`menu-delete-adjuster-${adj.id}`}>
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete Permanently
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

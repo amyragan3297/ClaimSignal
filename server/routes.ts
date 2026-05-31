@@ -23,7 +23,7 @@ import evidenceRouter from "./evidence";
 import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
-import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured } from "./ai-services";
+import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText } from "./ai-services";
 import { getClaimWeather } from "./weather";
 import express from "express";
 import { createHash } from "crypto";
@@ -1430,6 +1430,17 @@ export async function registerRoutes(
         const sha256Hash = createHash("sha256").update(buffer).digest("hex");
         const transcriptText = await transcribeAudio(buffer);
 
+        // Run LLM field extraction on the transcript so spoken claim data
+        // (claim #, carrier, adjuster, dates, amounts) is captured for review.
+        let transcriptExtraction = null;
+        if (transcriptText && transcriptText.trim().length > 80) {
+          try {
+            transcriptExtraction = await extractClaimFieldsFromText(transcriptText, "transcript");
+          } catch (extErr: any) {
+            console.error("[audio/transcribe] extraction non-fatal:", extErr?.message);
+          }
+        }
+
         const recording = await storage.createAudioRecording({
           organizationId: req.auth!.organizationId,
           uploadedByUserId: req.auth!.userId,
@@ -1491,7 +1502,7 @@ export async function registerRoutes(
           }
         }
 
-        res.json({ ...recording, extractedEventCount });
+        res.json({ ...recording, extractedEventCount, extraction: transcriptExtraction });
       } catch (err: any) {
         res.status(500).json({ message: err.message });
       }

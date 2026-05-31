@@ -162,3 +162,158 @@ export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
   const response = await client.audio.transcriptions.create({ file, model: TRANSCRIBE_MODEL });
   return response.text;
 }
+
+// ── AI document field extraction ──────────────────────────────────────────────
+
+export interface ExtractionResult {
+  claimNumber?: string;
+  policyNumber?: string;
+  homeownerName?: string;
+  insuredName?: string;
+  adjusterName?: string;
+  adjusterEmail?: string;
+  adjusterPhone?: string;
+  iaFirm?: string;
+  carrier?: string;
+  vendor?: string;
+  propertyAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  dateOfLoss?: string;
+  inspectionDate?: string;
+  estimateDate?: string;
+  denialDate?: string;
+  approvalDate?: string;
+  paymentDate?: string;
+  rcv?: string;
+  acv?: string;
+  deductible?: string;
+  recoverableDepreciation?: string;
+  supplementRequested?: string;
+  supplementApproved?: string;
+  denialReason?: string;
+  initialOutcome?: string;
+  finalOutcome?: string;
+  denialOverturned?: boolean;
+  missingScopeItems?: string[];
+  codeItems?: string[];
+  reinspectionReferences?: string[];
+  escalationReferences?: string[];
+  timelineEvents?: Array<{ date: string; description: string }>;
+  documentType?: string;
+  confidence: number;
+  extractionMethod: "llm";
+}
+
+const EXTRACTION_SYSTEM_PROMPT = `You are an expert property insurance claims analyst. Extract structured data from insurance claim documents with high precision. Only include fields where you have clear evidence in the text — never invent or guess values. Respond ONLY with valid JSON.`;
+
+export async function extractClaimFieldsFromText(
+  text: string,
+  hint?: string
+): Promise<ExtractionResult> {
+  const client = getOpenAIClient();
+  const truncated = text.slice(0, 12000);
+  const docHint = hint ? hint.replace(/_/g, " ") : "insurance document";
+
+  const userPrompt = `Extract all claim-related information from this ${docHint} and return JSON with this schema (omit any field not found in the text — never invent):
+
+{
+  "claimNumber": "claim number string",
+  "policyNumber": "policy number string",
+  "homeownerName": "homeowner full name",
+  "insuredName": "insured party full name",
+  "adjusterName": "adjuster full name",
+  "adjusterEmail": "adjuster email",
+  "adjusterPhone": "adjuster phone number",
+  "iaFirm": "independent adjusting firm name",
+  "carrier": "insurance carrier or company name",
+  "vendor": "engineering firm, ITEL, or vendor name",
+  "propertyAddress": "street address of property",
+  "city": "city",
+  "state": "2-letter state code",
+  "zipCode": "zip code",
+  "dateOfLoss": "YYYY-MM-DD",
+  "inspectionDate": "YYYY-MM-DD",
+  "estimateDate": "YYYY-MM-DD",
+  "denialDate": "YYYY-MM-DD",
+  "approvalDate": "YYYY-MM-DD",
+  "paymentDate": "YYYY-MM-DD",
+  "rcv": "replacement cost value as decimal string e.g. '18500.00'",
+  "acv": "actual cash value as decimal string",
+  "deductible": "deductible amount as decimal string",
+  "recoverableDepreciation": "recoverable depreciation as decimal string",
+  "supplementRequested": "supplement amount requested as decimal string",
+  "supplementApproved": "supplement amount approved as decimal string",
+  "denialReason": "reason for denial or coverage exclusion",
+  "initialOutcome": "one of: approved | denied | partial | pending",
+  "finalOutcome": "one of: approved | denied | partial | pending",
+  "denialOverturned": true or false,
+  "missingScopeItems": ["scope item not included or disputed", "..."],
+  "codeItems": ["building code or IRC item referenced", "..."],
+  "reinspectionReferences": ["reinspection request or result", "..."],
+  "escalationReferences": ["appraisal clause, litigation, or escalation mention", "..."],
+  "timelineEvents": [{"date": "YYYY-MM-DD", "description": "brief event description"}],
+  "documentType": "denial_letter | estimate | scope | supplement | payment_letter | invoice | policy | email_thread | other",
+  "confidence": 0.0 to 1.0
+}
+
+DOCUMENT TEXT:
+${truncated}`;
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    messages: [
+      { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  const parsed = JSON.parse(raw);
+
+  const str = (v: unknown): string | undefined =>
+    typeof v === "string" && v.trim() ? v.trim() : undefined;
+  const arr = (v: unknown): string[] | undefined =>
+    Array.isArray(v) && v.length > 0 ? v.filter((x) => typeof x === "string") as string[] : undefined;
+
+  const result: ExtractionResult = {
+    extractionMethod: "llm",
+    confidence:
+      typeof parsed.confidence === "number"
+        ? Math.min(Math.max(parsed.confidence, 0), 1)
+        : 0.5,
+  };
+
+  const textFields = [
+    "claimNumber", "policyNumber", "homeownerName", "insuredName",
+    "adjusterName", "adjusterEmail", "adjusterPhone", "iaFirm", "carrier", "vendor",
+    "propertyAddress", "city", "state", "zipCode",
+    "dateOfLoss", "inspectionDate", "estimateDate", "denialDate", "approvalDate", "paymentDate",
+    "rcv", "acv", "deductible", "recoverableDepreciation", "supplementRequested", "supplementApproved",
+    "denialReason", "initialOutcome", "finalOutcome", "documentType",
+  ];
+  for (const key of textFields) {
+    const v = str(parsed[key]);
+    if (v !== undefined) (result as any)[key] = v;
+  }
+
+  if (typeof parsed.denialOverturned === "boolean") {
+    result.denialOverturned = parsed.denialOverturned;
+  }
+
+  for (const key of ["missingScopeItems", "codeItems", "reinspectionReferences", "escalationReferences"]) {
+    const v = arr(parsed[key]);
+    if (v) (result as any)[key] = v;
+  }
+
+  if (Array.isArray(parsed.timelineEvents)) {
+    const evts = parsed.timelineEvents.filter(
+      (e: any) => e && typeof e.date === "string" && typeof e.description === "string"
+    );
+    if (evts.length > 0) result.timelineEvents = evts.map((e: any) => ({ date: e.date, description: e.description }));
+  }
+
+  return result;
+}

@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -50,6 +51,9 @@ import {
   Loader2,
   ChevronDown,
   Link as LinkIcon,
+  Brain,
+  Sparkles,
+  CheckCheck,
 } from "lucide-react";
 
 const ACCEPTED_TYPES =
@@ -91,15 +95,428 @@ function formatFileSize(bytes: number | null | undefined): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+interface ExtractionResultData {
+  claimNumber?: string;
+  policyNumber?: string;
+  homeownerName?: string;
+  insuredName?: string;
+  adjusterName?: string;
+  adjusterEmail?: string;
+  adjusterPhone?: string;
+  iaFirm?: string;
+  carrier?: string;
+  vendor?: string;
+  propertyAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  dateOfLoss?: string;
+  inspectionDate?: string;
+  estimateDate?: string;
+  denialDate?: string;
+  approvalDate?: string;
+  paymentDate?: string;
+  rcv?: string;
+  acv?: string;
+  deductible?: string;
+  recoverableDepreciation?: string;
+  supplementRequested?: string;
+  supplementApproved?: string;
+  denialReason?: string;
+  initialOutcome?: string;
+  finalOutcome?: string;
+  denialOverturned?: boolean;
+  missingScopeItems?: string[];
+  codeItems?: string[];
+  reinspectionReferences?: string[];
+  escalationReferences?: string[];
+  timelineEvents?: Array<{ date: string; description: string }>;
+  documentType?: string;
+  confidence: number;
+  extractionMethod: "llm";
+}
+
 interface UploadResult {
   file: EvidenceFile;
   entities: ExtractedEntity[];
+  extraction?: ExtractionResultData | null;
   matchedClaimId: string | null;
   autoMatched?: boolean;
   matchConfidence?: number;
   matchConfidenceLabel?: string;
   matchReasons?: string[];
   draft: ClaimDraft | null;
+}
+
+const EXTRACTION_SECTIONS = [
+  {
+    title: "Claim Identifiers",
+    fields: [
+      { key: "claimNumber", label: "Claim Number" },
+      { key: "policyNumber", label: "Policy Number" },
+    ],
+  },
+  {
+    title: "People & Organizations",
+    fields: [
+      { key: "homeownerName", label: "Homeowner Name" },
+      { key: "insuredName", label: "Insured Name" },
+      { key: "carrier", label: "Carrier" },
+      { key: "adjusterName", label: "Adjuster Name" },
+      { key: "adjusterEmail", label: "Adjuster Email" },
+      { key: "adjusterPhone", label: "Adjuster Phone" },
+      { key: "iaFirm", label: "IA Firm" },
+      { key: "vendor", label: "Vendor / Engineer" },
+    ],
+  },
+  {
+    title: "Property Location",
+    fields: [
+      { key: "propertyAddress", label: "Property Address" },
+      { key: "city", label: "City" },
+      { key: "state", label: "State" },
+      { key: "zipCode", label: "Zip Code" },
+    ],
+  },
+  {
+    title: "Key Dates",
+    fields: [
+      { key: "dateOfLoss", label: "Date of Loss" },
+      { key: "inspectionDate", label: "Inspection Date" },
+      { key: "estimateDate", label: "Estimate Date" },
+      { key: "denialDate", label: "Denial Date" },
+      { key: "approvalDate", label: "Approval Date" },
+      { key: "paymentDate", label: "Payment Date" },
+    ],
+  },
+  {
+    title: "Financials",
+    fields: [
+      { key: "rcv", label: "RCV ($)" },
+      { key: "acv", label: "ACV ($)" },
+      { key: "deductible", label: "Deductible ($)" },
+      { key: "recoverableDepreciation", label: "Recoverable Depreciation ($)" },
+      { key: "supplementRequested", label: "Supplement Requested ($)" },
+      { key: "supplementApproved", label: "Supplement Approved ($)" },
+    ],
+  },
+  {
+    title: "Outcomes",
+    fields: [
+      { key: "denialReason", label: "Denial Reason" },
+      { key: "initialOutcome", label: "Initial Outcome" },
+      { key: "finalOutcome", label: "Final Outcome" },
+    ],
+  },
+];
+
+function ExtractionReviewDialog({
+  fileId,
+  claimId,
+  open,
+  onClose,
+}: {
+  fileId: string | null;
+  claimId: string | null | undefined;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const [initialized, setInitialized] = useState(false);
+
+  const { data: file, isLoading: fileLoading } = useQuery<EvidenceFile>({
+    queryKey: ["/api/evidence/files", fileId],
+    queryFn: async () => {
+      const token = (await import("@/lib/queryClient")).getAccessToken();
+      const res = await fetch(`/api/evidence/files/${fileId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load file");
+      return res.json();
+    },
+    enabled: !!fileId && open,
+  });
+
+  const extraction: ExtractionResultData | null =
+    (file?.extractedJson as any)?.extraction ?? null;
+
+  const setFieldValue = (key: string, value: string) =>
+    setFields((prev) => ({ ...prev, [key]: value }));
+
+  // Pre-fill editable fields from extraction on first load
+  useState(() => {
+    if (extraction && !initialized) {
+      const init: Record<string, string> = {};
+      for (const section of EXTRACTION_SECTIONS) {
+        for (const f of section.fields) {
+          const v = (extraction as any)[f.key];
+          if (v != null && typeof v !== "boolean") init[f.key] = String(v);
+        }
+      }
+      setFields(init);
+      setInitialized(true);
+    }
+  });
+
+  // Also initialize when extraction arrives asynchronously
+  if (extraction && !initialized) {
+    const init: Record<string, string> = {};
+    for (const section of EXTRACTION_SECTIONS) {
+      for (const f of section.fields) {
+        const v = (extraction as any)[f.key];
+        if (v != null && typeof v !== "boolean") init[f.key] = String(v);
+      }
+    }
+    setFields(init);
+    setInitialized(true);
+  }
+
+  const applyMutation = useMutation({
+    mutationFn: async (acceptedFields: Record<string, string>) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/evidence/files/${fileId}/apply-extraction`,
+        { fields: acceptedFields }
+      );
+      return res;
+    },
+    onSuccess: (data: any) => {
+      const count = data?.fieldsApplied?.length ?? 0;
+      toast({
+        title: "AI extraction applied",
+        description: `${count} field${count !== 1 ? "s" : ""} updated on the claim`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
+      onClose();
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Failed to apply extraction",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleApply = () => {
+    const nonempty: Record<string, string> = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (v && v.trim()) nonempty[k] = v.trim();
+    }
+    applyMutation.mutate(nonempty);
+  };
+
+  const confidence = extraction?.confidence ?? 0;
+  const confLabel =
+    confidence >= 0.8 ? "High" : confidence >= 0.5 ? "Medium" : "Low";
+  const confColor =
+    confidence >= 0.8
+      ? "text-green-400"
+      : confidence >= 0.5
+      ? "text-amber-400"
+      : "text-red-400";
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) {
+          setInitialized(false);
+          setFields({});
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle
+            className="flex items-center gap-2"
+            data-testid="text-extraction-dialog-title"
+          >
+            <Brain className="w-5 h-5 text-primary" />
+            AI Extraction Review
+          </DialogTitle>
+          <DialogDescription>
+            Review and edit fields extracted by AI from your document. Clear
+            any field you don't want applied, then click Apply to Claim.
+          </DialogDescription>
+        </DialogHeader>
+
+        {fileLoading ? (
+          <div className="space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : !extraction ? (
+          <div className="py-10 text-center space-y-2">
+            <Brain className="w-10 h-10 text-muted-foreground/30 mx-auto" />
+            <p className="text-muted-foreground">
+              No AI extraction data available for this file.
+            </p>
+            <p className="text-xs text-muted-foreground/70">
+              AI extraction works for PDF, TXT, and EML documents with
+              readable text content.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 rounded-md border border-border bg-muted/40 p-3">
+              <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">
+                  AI Confidence:{" "}
+                  <span className={confColor}>
+                    {(confidence * 100).toFixed(0)}% — {confLabel}
+                  </span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Edit any field before applying. Clear a field to exclude it.
+                </p>
+              </div>
+              <div className="w-24 h-2 rounded-full bg-muted overflow-hidden flex-shrink-0">
+                <div
+                  className="h-full bg-primary rounded-full transition-all"
+                  style={{ width: `${confidence * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {EXTRACTION_SECTIONS.map((section) => {
+              const visibleFields = section.fields.filter(
+                (f) => (extraction as any)[f.key] != null
+              );
+              if (!visibleFields.length) return null;
+              return (
+                <div key={section.title}>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                    {section.title}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {visibleFields.map((f) => (
+                      <div key={f.key} className="space-y-1">
+                        <label className="text-xs text-muted-foreground">
+                          {f.label}
+                        </label>
+                        <Input
+                          value={fields[f.key] ?? ""}
+                          onChange={(e) =>
+                            setFieldValue(f.key, e.target.value)
+                          }
+                          placeholder={String((extraction as any)[f.key])}
+                          className="h-8 text-sm"
+                          data-testid={`input-extraction-${f.key}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {!!extraction.missingScopeItems?.length && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Missing Scope Items (informational)
+                </h4>
+                <ul className="space-y-1">
+                  {extraction.missingScopeItems.map((item, i) => (
+                    <li
+                      key={i}
+                      className="text-sm flex items-start gap-2 text-muted-foreground"
+                      data-testid={`text-scope-item-${i}`}
+                    >
+                      <span className="text-primary mt-0.5">•</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {!!extraction.escalationReferences?.length && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Escalation References (informational)
+                </h4>
+                <ul className="space-y-1">
+                  {extraction.escalationReferences.map((item, i) => (
+                    <li
+                      key={i}
+                      className="text-sm flex items-start gap-2 text-amber-400/80"
+                      data-testid={`text-escalation-ref-${i}`}
+                    >
+                      <span className="mt-0.5">⚠</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {!!extraction.timelineEvents?.length && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Timeline Events Detected
+                </h4>
+                <div className="space-y-1">
+                  {extraction.timelineEvents.map((evt, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 text-sm"
+                      data-testid={`row-timeline-event-${i}`}
+                    >
+                      <span className="font-mono text-xs text-muted-foreground min-w-[90px]">
+                        {evt.date}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {evt.description}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-between gap-2 pt-4 border-t border-border">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            data-testid="button-extraction-skip"
+          >
+            Skip
+          </Button>
+          <Button
+            disabled={
+              !extraction ||
+              !claimId ||
+              applyMutation.isPending ||
+              fileLoading
+            }
+            onClick={handleApply}
+            data-testid="button-extraction-apply"
+          >
+            {applyMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CheckCheck className="w-4 h-4" />
+            )}
+            Apply to Claim
+          </Button>
+        </div>
+        {!claimId && extraction && (
+          <p className="text-xs text-amber-400 text-center">
+            Match this file to a claim first before applying extraction fields.
+          </p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 interface MatchCandidate {
@@ -136,6 +553,9 @@ export default function EvidencePage() {
   const [unmatchedOpen, setUnmatchedOpen] = useState(true);
   const [preSelectClaimId, setPreSelectClaimId] = useState<string>("");
   const [claimSearch, setClaimSearch] = useState("");
+  const [extractionReviewFileId, setExtractionReviewFileId] = useState<string | null>(null);
+  const [extractionReviewClaimId, setExtractionReviewClaimId] = useState<string | null>(null);
+  const [extractionReviewOpen, setExtractionReviewOpen] = useState(false);
 
   const { data: evidenceFiles, isLoading: filesLoading } = useQuery<
     (EvidenceFile & { entities?: ExtractedEntity[] })[]
@@ -304,6 +724,12 @@ export default function EvidencePage() {
     setMatchDialogOpen(true);
   }, []);
 
+  const openExtractionReview = useCallback((fileId: string, claimId?: string | null) => {
+    setExtractionReviewFileId(fileId);
+    setExtractionReviewClaimId(claimId ?? null);
+    setExtractionReviewOpen(true);
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -363,10 +789,13 @@ export default function EvidencePage() {
           >
             {isUploading ? (
               <div className="flex flex-col items-center gap-3">
-                <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                <p className="text-sm font-medium">Processing document...</p>
+                <div className="relative">
+                  <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                  <Brain className="w-4 h-4 text-primary absolute -bottom-1 -right-1" />
+                </div>
+                <p className="text-sm font-medium">AI is analyzing your document...</p>
                 <p className="text-xs text-muted-foreground">
-                  Classifying, extracting entities, and matching claims
+                  Extracting claim fields, classifying document, matching claims
                 </p>
               </div>
             ) : (
@@ -489,6 +918,37 @@ export default function EvidencePage() {
                 </span>
               </div>
             </div>
+
+            {uploadResult.extraction && (
+              <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+                <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">
+                    AI extracted {Object.keys(uploadResult.extraction).filter(
+                      (k) => !["confidence", "extractionMethod", "documentType", "missingScopeItems", "codeItems", "reinspectionReferences", "escalationReferences", "timelineEvents", "denialOverturned"].includes(k) &&
+                        (uploadResult.extraction as any)[k] != null
+                    ).length} claim fields
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Confidence: {((uploadResult.extraction.confidence || 0) * 100).toFixed(0)}% — review before applying
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    openExtractionReview(
+                      uploadResult.file.id,
+                      uploadResult.matchedClaimId
+                    )
+                  }
+                  data-testid="button-review-extraction-upload"
+                >
+                  <Brain className="w-4 h-4" />
+                  Review & Apply
+                </Button>
+              </div>
+            )}
+
             {uploadResult.entities && uploadResult.entities.length > 0 && (
               <div>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -753,6 +1213,30 @@ export default function EvidencePage() {
                   </div>
                 </div>
               )}
+
+            {(() => {
+              const fileExtraction = (selectedFile.extractedJson as any)?.extraction as ExtractionResultData | null;
+              return fileExtraction ? (
+                <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+                  <Brain className="w-4 h-4 text-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">AI extraction available</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(fileExtraction.confidence * 100).toFixed(0)}% confidence
+                      {selectedFile.claimId ? " · Click to review and apply to claim" : " · Match to a claim first"}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => openExtractionReview(selectedFile.id, selectedFile.claimId)}
+                    data-testid="button-review-extraction-detail"
+                  >
+                    <Brain className="w-3 h-3" />
+                    Review
+                  </Button>
+                </div>
+              ) : null;
+            })()}
 
             {!selectedFile.claimId && (
               <div className="pt-2 flex flex-wrap gap-2">
@@ -1124,6 +1608,17 @@ export default function EvidencePage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ExtractionReviewDialog
+        fileId={extractionReviewFileId}
+        claimId={extractionReviewClaimId}
+        open={extractionReviewOpen}
+        onClose={() => {
+          setExtractionReviewOpen(false);
+          setExtractionReviewFileId(null);
+          setExtractionReviewClaimId(null);
+        }}
+      />
     </div>
   );
 }

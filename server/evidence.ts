@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking } from "./masking";
+import { extractClaimFieldsFromText, isOpenAIConfigured, type ExtractionResult } from "./ai-services";
 
 interface AuthRequest extends Request {
   auth?: {
@@ -322,10 +323,29 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     let textContent = "";
     if (fileType === "txt" || fileType === "eml") {
       textContent = buffer.toString("utf-8");
+    } else if (fileType === "pdf") {
+      try {
+        const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse");
+        const pdfData = await pdfParse(buffer);
+        textContent = pdfData.text || "";
+      } catch (pdfErr: any) {
+        console.error("[pdf-parse] failed to extract text:", pdfErr?.message);
+      }
     }
     
     const classification = classifyDocument(textContent);
     const entities = extractEntities(textContent);
+
+    // ── LLM field extraction (runs after rule-based, non-blocking on failure) ──
+    let llmExtraction: ExtractionResult | null = null;
+    if (isOpenAIConfigured() && textContent && textContent.trim().length > 80) {
+      try {
+        llmExtraction = await extractClaimFieldsFromText(textContent, classification.category);
+        console.log(`[ai-extraction] success for ${req.file.originalname}, confidence=${llmExtraction.confidence}`);
+      } catch (aiErr: any) {
+        console.error("[ai-extraction] non-fatal:", aiErr?.message);
+      }
+    }
 
     // Pre-selected claim wins; otherwise attempt high-confidence auto-match.
     const claimPool = await getClaimPool(req.auth.role, organizationId);
@@ -354,8 +374,10 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       fileSize: buffer.length,
       docCategory: classification.category as any,
       confidence: classification.confidence,
-      extractionStatus: textContent ? "complete" : "pending",
-      extractedJson: entities.length > 0 ? { entities } : undefined,
+      extractionStatus: llmExtraction ? "complete" : (textContent && textContent.trim().length > 80 ? "failed" : "pending"),
+      extractedJson: (entities.length > 0 || llmExtraction)
+        ? { entities, extraction: llmExtraction || null }
+        : undefined,
     });
     
     for (const entity of entities) {
@@ -441,6 +463,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     res.json({
       file: evidenceFile,
       entities,
+      extraction: llmExtraction,
       classification,
       matchedClaimId: claimId,
       autoMatched: !!autoMatch,
@@ -728,6 +751,104 @@ router.post("/files/:id/unmatch", async (req: AuthRequest, res: Response) => {
     });
 
     res.json({ unmatched: true, draft });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// Apply LLM extraction fields to the matched claim. Only applies scalar fields
+// the user accepted; arrays (scope items, code items) are informational only.
+router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    const { role, organizationId, userId } = req.auth;
+    const master = isMaster(role);
+
+    const file = master
+      ? await storage.getEvidenceFileAnyTenant(req.params.id as string)
+      : await storage.getEvidenceFile(req.params.id as string, organizationId);
+    if (!file) return res.status(404).json({ message: "File not found" });
+    if (!file.claimId) {
+      return res.status(400).json({ message: "File must be matched to a claim before applying extraction" });
+    }
+
+    const { fields } = req.body as { fields: Record<string, string> };
+    if (!fields || typeof fields !== "object") {
+      return res.status(400).json({ message: "fields object required" });
+    }
+
+    const claim = master
+      ? await storage.getClaimAnyTenant(file.claimId)
+      : await storage.getClaim(file.claimId, file.organizationId);
+    if (!claim) return res.status(404).json({ message: "Matched claim not found" });
+    if (!master && claim.organizationId !== organizationId) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Map extraction keys → InsertClaim keys
+    const FIELD_MAP: Record<string, string> = {
+      claimNumber: "claimNumber",
+      policyNumber: "policyNumber",
+      homeownerName: "homeownerName",
+      insuredName: "insuredName",
+      carrier: "carrier",
+      propertyAddress: "propertyAddress",
+      city: "city",
+      state: "state",
+      zipCode: "zipCode",
+      dateOfLoss: "dateOfLoss",
+      inspectionDate: "inspectionDate",
+      rcv: "rcvAmount",
+      acv: "acvAmount",
+      deductible: "deductible",
+      supplementRequested: "supplementRequested",
+      supplementApproved: "supplementApproved",
+      denialReason: "denialReason",
+      initialOutcome: "initialOutcome",
+      finalOutcome: "finalOutcome",
+    };
+    const DATE_KEYS = new Set(["dateOfLoss", "inspectionDate"]);
+    const NUMERIC_KEYS = new Set(["rcv", "acv", "deductible", "supplementRequested", "supplementApproved", "recoverableDepreciation"]);
+
+    const claimUpdate: Record<string, any> = {};
+    for (const [exKey, claimKey] of Object.entries(FIELD_MAP)) {
+      const raw = fields[exKey];
+      if (!raw || String(raw).trim() === "") continue;
+      const val = String(raw).trim();
+      if (DATE_KEYS.has(exKey)) {
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) claimUpdate[claimKey] = d;
+      } else if (NUMERIC_KEYS.has(exKey)) {
+        const n = parseFloat(val.replace(/[$,\s]/g, ""));
+        if (!isNaN(n)) claimUpdate[claimKey] = String(n);
+      } else {
+        claimUpdate[claimKey] = val;
+      }
+    }
+
+    if (Object.keys(claimUpdate).length === 0) {
+      return res.status(400).json({ message: "No valid fields to apply" });
+    }
+
+    const updated = await storage.updateClaim(file.claimId, claim.organizationId, claimUpdate as any);
+
+    await storage.createAuditLog({
+      organizationId: claim.organizationId,
+      actorUserId: userId,
+      actorRole: role,
+      actionType: "AI_EXTRACTION_APPLIED",
+      entityType: "claim",
+      entityId: file.claimId,
+      afterJson: {
+        fileId: file.id,
+        fileName: file.fileName,
+        fieldsApplied: Object.keys(claimUpdate),
+        count: Object.keys(claimUpdate).length,
+        actorOrganizationId: organizationId,
+      },
+    });
+
+    res.json({ claim: updated, fieldsApplied: Object.keys(claimUpdate) });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }

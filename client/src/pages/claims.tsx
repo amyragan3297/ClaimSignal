@@ -498,85 +498,72 @@ export default function ClaimsPage() {
                   )}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Claim #</TableHead>
-                        <TableHead>Carrier</TableHead>
-                        <TableHead>Property</TableHead>
-                        <TableHead>Homeowner</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Phase</TableHead>
-                        <TableHead>Escalation</TableHead>
-                        <TableHead>Risk Score</TableHead>
-                        <TableHead>Analysis</TableHead>
-                        <TableHead className="w-10"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredClaims.map((claim) => (
-                        <TableRow key={claim.id} className="hover-elevate cursor-pointer" data-testid={`row-claim-${claim.id}`}>
-                          <TableCell className="font-mono text-sm" onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`text-claim-number-${claim.id}`}>{claim.claimNumber}</TableCell>
-                          <TableCell onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`text-carrier-${claim.id}`}>{claim.carrier || "—"}</TableCell>
-                          <TableCell className="text-muted-foreground max-w-[200px] truncate" onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`text-address-${claim.id}`}>
-                            {claim.propertyAddress || "—"}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground" onClick={() => setLocation(`/claims/${claim.id}`)} data-testid={`text-homeowner-${claim.id}`}>
-                            {(claim as any).homeownerName || "—"}
-                          </TableCell>
-                          <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
+                <div className="divide-y divide-border">
+                  {filteredClaims.map((claim) => (
+                    <div
+                      key={claim.id}
+                      className="p-4 hover:bg-accent/5 cursor-pointer transition-colors"
+                      onClick={() => setLocation(`/claims/${claim.id}`)}
+                      data-testid={`row-claim-${claim.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="font-mono text-sm font-semibold" data-testid={`text-claim-number-${claim.id}`}>{claim.claimNumber}</span>
                             <Badge variant={(statusColors[claim.status] as any) || "outline"} className="text-xs capitalize">
                               {claim.status.replace("_", " ")}
                             </Badge>
-                          </TableCell>
-                          <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
-                            <Badge variant={(phaseColors[claim.currentPhase || ""] as any) || "outline"} className="text-xs" data-testid={`badge-phase-${claim.id}`}>
-                              {formatPhase(claim.currentPhase || "")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
-                            <Badge variant={(escalationColors(claim.escalationLevel) as any) || "outline"} className="text-xs" data-testid={`badge-escalation-${claim.id}`}>
-                              {claim.escalationLevel ?? "—"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
-                            {claim.riskScore !== null ? (
-                              <Badge variant={claim.riskScore > 70 ? "destructive" : claim.riskScore > 40 ? "secondary" : "outline"} className="text-xs">
-                                {claim.riskScore}
-                              </Badge>
-                            ) : "—"}
-                          </TableCell>
-                          <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
                             {analyzingId === claim.id ? (
                               <Badge variant="outline" className="text-xs gap-1" data-testid={`badge-analysis-${claim.id}`}>
                                 <Loader2 className="w-3 h-3 animate-spin" /> Analyzing
                               </Badge>
                             ) : (() => {
                               const s = claimAnalysisStatus(claim);
-                              return <Badge variant={s.variant} className="text-xs" data-testid={`badge-analysis-${claim.id}`}>{s.label}</Badge>;
+                              return s.label !== "No Analysis" ? <Badge variant={s.variant as any} className="text-xs" data-testid={`badge-analysis-${claim.id}`}>{s.label}</Badge> : null;
                             })()}
-                          </TableCell>
-                          <TableCell>
-                            {canArchive && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button size="icon" variant="ghost" data-testid={`button-claim-menu-${claim.id}`} onClick={e => e.stopPropagation()}>
-                                    <MoreHorizontal className="w-4 h-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    disabled={analyzingId === claim.id}
-                                    onClick={(e) => { e.stopPropagation(); aiAnalysisMutation.mutate(claim.id); }}
-                                    data-testid={`menu-analyze-claim-${claim.id}`}
-                                  >
-                                    <Sparkles className="w-4 h-4 mr-2" />
-                                    {claim.aiAnalysisAt ? "Re-run AI Analysis" : "Run AI Analysis"}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "archive", claim }); }}
-                                    data-testid={`menu-archive-claim-${claim.id}`}
+                          </div>
+                          <p className="text-sm text-muted-foreground truncate" data-testid={`text-homeowner-${claim.id}`}>
+                            {[(claim as any).homeownerName, claim.carrier].filter(Boolean).join(" · ") || "—"}
+                          </p>
+                          {claim.propertyAddress && (
+                            <p className="text-xs text-muted-foreground/70 truncate mt-0.5" data-testid={`text-address-${claim.id}`}>{claim.propertyAddress}</p>
+                          )}
+                          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                            <Badge variant={(phaseColors[claim.currentPhase || ""] as any) || "outline"} className="text-xs" data-testid={`badge-phase-${claim.id}`}>
+                              {formatPhase(claim.currentPhase || "pre claim")}
+                            </Badge>
+                            {claim.escalationLevel != null && claim.escalationLevel > 0 && (
+                              <Badge variant={(escalationColors(claim.escalationLevel) as any) || "outline"} className="text-xs" data-testid={`badge-escalation-${claim.id}`}>
+                                Esc {claim.escalationLevel}
+                              </Badge>
+                            )}
+                            {claim.riskScore != null && (
+                              <Badge variant={claim.riskScore > 70 ? "destructive" : claim.riskScore > 40 ? "secondary" : "outline"} className="text-xs">
+                                Risk {claim.riskScore}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          {canArchive ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="icon" variant="ghost" className="h-8 w-8" data-testid={`button-claim-menu-${claim.id}`} onClick={e => e.stopPropagation()}>
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  disabled={analyzingId === claim.id}
+                                  onClick={(e) => { e.stopPropagation(); aiAnalysisMutation.mutate(claim.id); }}
+                                  data-testid={`menu-analyze-claim-${claim.id}`}
+                                >
+                                  <Sparkles className="w-4 h-4 mr-2" />
+                                  {claim.aiAnalysisAt ? "Re-run AI Analysis" : "Run AI Analysis"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "archive", claim }); }}
+                                  data-testid={`menu-archive-claim-${claim.id}`}
                                   >
                                     <Archive className="w-4 h-4 mr-2" />
                                     Archive
@@ -593,13 +580,13 @@ export default function ClaimsPage() {
                                   )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
+                            ) : (
+                              <Eye className="w-4 h-4 text-muted-foreground mt-1" />
                             )}
-                            {!canArchive && <Eye className="w-4 h-4 text-muted-foreground" />}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
@@ -649,59 +636,45 @@ export default function ClaimsPage() {
                   <p className="text-sm text-muted-foreground/70">Claims contributed to the platform appear here for pattern intelligence.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Homeowner</TableHead>
-                        <TableHead>Claim #</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Carrier</TableHead>
-                        <TableHead>Loss Type</TableHead>
-                        <TableHead>Date of Loss</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>RCV</TableHead>
-                        <TableHead>Risk</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sharedClaims
-                        ?.filter((c) =>
-                          !sharedSearch ||
-                          (c.carrier || "").toLowerCase().includes(sharedSearch.toLowerCase()) ||
-                          (c.propertyAddress || "").toLowerCase().includes(sharedSearch.toLowerCase()) ||
-                          (c.lossType || "").toLowerCase().includes(sharedSearch.toLowerCase()) ||
-                          (c.status || "").toLowerCase().includes(sharedSearch.toLowerCase())
-                        )
-                        .map((claim, idx) => (
-                          <TableRow key={claim.id || idx} className="hover-elevate" data-testid={`row-shared-${claim.id || idx}`}>
-                            <TableCell className="font-mono text-sm text-muted-foreground">{(claim as any).homeownerName || "—"}</TableCell>
-                            <TableCell className="font-mono text-sm text-muted-foreground">{claim.claimNumber || "—"}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{claim.propertyAddress || "—"}</TableCell>
-                            <TableCell className="text-sm">{claim.carrier || "—"}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{claim.lossType || "—"}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {claim.dateOfLoss ? new Date(claim.dateOfLoss).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—"}
-                            </TableCell>
-                            <TableCell>
+                <div className="divide-y divide-border">
+                  {sharedClaims
+                    ?.filter((c) =>
+                      !sharedSearch ||
+                      (c.carrier || "").toLowerCase().includes(sharedSearch.toLowerCase()) ||
+                      (c.propertyAddress || "").toLowerCase().includes(sharedSearch.toLowerCase()) ||
+                      (c.lossType || "").toLowerCase().includes(sharedSearch.toLowerCase()) ||
+                      (c.status || "").toLowerCase().includes(sharedSearch.toLowerCase())
+                    )
+                    .map((claim, idx) => (
+                      <div key={claim.id || idx} className="p-4" data-testid={`row-shared-${claim.id || idx}`}>
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="font-mono text-sm text-muted-foreground">{claim.claimNumber || "—"}</span>
                               <Badge variant={(statusColors[claim.status] as any) || "outline"} className="text-xs capitalize">
                                 {claim.status.replace("_", " ")}
                               </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {claim.rcvAmount ? `$${Number(claim.rcvAmount).toLocaleString()}` : "—"}
-                            </TableCell>
-                            <TableCell>
-                              {claim.riskScore !== null && claim.riskScore !== undefined ? (
+                              {claim.riskScore != null && (
                                 <Badge variant={claim.riskScore > 70 ? "destructive" : claim.riskScore > 40 ? "secondary" : "outline"} className="text-xs">
-                                  {claim.riskScore}
+                                  Risk {claim.riskScore}
                                 </Badge>
-                              ) : "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {[(claim as any).homeownerName, claim.carrier].filter(Boolean).join(" · ") || "—"}
+                            </p>
+                            {claim.propertyAddress && (
+                              <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{claim.propertyAddress}</p>
+                            )}
+                            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                              {claim.lossType && <span>{claim.lossType}</span>}
+                              {claim.dateOfLoss && <span>{new Date(claim.dateOfLoss).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>}
+                              {claim.rcvAmount && <span>RCV ${Number(claim.rcvAmount).toLocaleString()}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               )}
             </CardContent>
