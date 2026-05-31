@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum, json, real, date, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum, json, real, date, numeric, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -30,6 +30,21 @@ export const entityTypeEnum = pgEnum("entity_type", [
   "check_amount", "coverage_type"
 ]);
 export const claimDraftStatusEnum = pgEnum("claim_draft_status", ["needs_review", "merged", "discarded"]);
+
+// ── Multi-adjuster / cross-claim linkage (additive, Item 7) ──
+export const claimAdjusterRoleEnum = pgEnum("claim_adjuster_role", [
+  "primary_adjuster", "field_adjuster", "desk_adjuster", "catastrophe_adjuster",
+  "supervisor", "team_lead", "reinspection_adjuster", "supplement_adjuster",
+  "appraisal_contact", "carrier_representative", "unknown",
+]);
+export const claimAdjusterInvolvementEnum = pgEnum("claim_adjuster_involvement", [
+  "assigned", "inspected", "denied", "approved", "partially_approved",
+  "requested_documents", "handled_supplement", "handled_reinspection",
+  "escalated_review", "issued_payment", "communicated", "mentioned_only", "unknown",
+]);
+export const claimAdjusterSourceEnum = pgEnum("claim_adjuster_source", [
+  "legacy_backfill", "manual", "document", "audio", "transcript", "communication", "system", "unknown",
+]);
 
 export const organizations = pgTable("organizations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -314,6 +329,36 @@ export const adjusters = pgTable("adjusters", {
   archivedAt: timestamp("archived_at"),
   deletedAt: timestamp("deleted_at"),
 });
+
+// Many-to-many: one claim can involve multiple adjusters; one adjuster can
+// appear across multiple claims. claim.adjusterId remains as the legacy primary.
+export const claimAdjusters = pgTable("claim_adjusters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull(),
+  claimId: varchar("claim_id").notNull(),
+  adjusterId: varchar("adjuster_id").notNull(),
+  carrierId: varchar("carrier_id"),
+  roleOnClaim: claimAdjusterRoleEnum("role_on_claim").notNull().default("unknown"),
+  involvementType: claimAdjusterInvolvementEnum("involvement_type").notNull().default("unknown"),
+  firstSeenDate: timestamp("first_seen_date"),
+  lastSeenDate: timestamp("last_seen_date"),
+  sourceDocumentId: varchar("source_document_id"),
+  sourceAudioId: varchar("source_audio_id"),
+  sourceTranscriptId: varchar("source_transcript_id"),
+  sourceCommunicationId: varchar("source_communication_id"),
+  sourceType: claimAdjusterSourceEnum("source_type").notNull().default("manual"),
+  confidenceScore: real("confidence_score").default(1),
+  needsReview: boolean("needs_review").notNull().default(false),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  uniqueClaimAdjusterRole: uniqueIndex("claim_adjusters_claim_adjuster_role_uniq").on(
+    table.claimId,
+    table.adjusterId,
+    table.roleOnClaim,
+  ),
+}));
 
 export const adjusterAggregatedMetrics = pgTable("adjuster_aggregated_metrics", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -648,6 +693,7 @@ export const insertClientSchema = createInsertSchema(clients).omit({ id: true, c
 export const insertClaimSchema = createInsertSchema(claims).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClaimVersionSchema = createInsertSchema(claimVersions).omit({ id: true, changedAt: true });
 export const insertAdjusterSchema = createInsertSchema(adjusters).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertClaimAdjusterSchema = createInsertSchema(claimAdjusters).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAdjusterAggregatedMetricSchema = createInsertSchema(adjusterAggregatedMetrics).omit({ id: true, computedAt: true });
 export const insertSupplementSchema = createInsertSchema(supplements).omit({ id: true, createdAt: true });
 export const insertDocumentSchema = createInsertSchema(documents).omit({ id: true, createdAt: true });
@@ -729,6 +775,8 @@ export type InsertClaim = z.infer<typeof insertClaimSchema>;
 export type ClaimVersion = typeof claimVersions.$inferSelect;
 export type Adjuster = typeof adjusters.$inferSelect;
 export type InsertAdjuster = z.infer<typeof insertAdjusterSchema>;
+export type ClaimAdjuster = typeof claimAdjusters.$inferSelect;
+export type InsertClaimAdjuster = z.infer<typeof insertClaimAdjusterSchema>;
 export type AdjusterAggregatedMetric = typeof adjusterAggregatedMetrics.$inferSelect;
 export type InsertAdjusterAggregatedMetric = z.infer<typeof insertAdjusterAggregatedMetricSchema>;
 export type Supplement = typeof supplements.$inferSelect;

@@ -55,6 +55,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { computeDefensibility, type AiAnalysis } from "@/lib/claim-intelligence";
+import { ClaimAdjustersCard } from "@/components/claim-adjusters-card";
 
 const LIFECYCLE_PHASES = [
   { key: "pre_claim", label: "Pre-Claim" },
@@ -808,6 +809,51 @@ export default function ClaimDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ClaimAdjustersCard claimId={claim.id} canEdit={userRole !== "carrier_analyst"} />
+
+      {(claim.initialOutcome || claim.finalOutcome || claim.denialOverturned) && (
+        <Card data-testid="card-outcome-path">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <ArrowRight className="w-4 h-4 text-primary" />
+              Outcome Path
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <span className="text-xs text-muted-foreground">Initial Outcome</span>
+                <p className="text-sm font-medium capitalize" data-testid="text-initial-outcome">
+                  {claim.initialOutcome ? claim.initialOutcome.replace(/_/g, " ") : "\u2014"}
+                </p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">Final Outcome</span>
+                <p className="text-sm font-medium capitalize" data-testid="text-final-outcome">
+                  {claim.denialOverturned
+                    ? "Denial Overturned to Approval"
+                    : claim.finalOutcome
+                    ? claim.finalOutcome.replace(/_/g, " ")
+                    : "\u2014"}
+                </p>
+              </div>
+            </div>
+            {claim.denialOverturned && (
+              <div className="flex items-center gap-2 flex-wrap rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2" data-testid="text-outcome-path-overturned">
+                <Badge variant="outline" className="text-red-400 border-red-500/40">Denied</Badge>
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+                <Badge variant="outline" className="text-amber-400 border-amber-500/40">Disputed / Reworked</Badge>
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+                <Badge variant="outline" className="text-emerald-400 border-emerald-500/40">Overturned to Approval</Badge>
+              </div>
+            )}
+            {claim.denialOverturned && !claim.notes && (
+              <p className="text-xs text-muted-foreground">Outcome overturned. Reversal reason pending evidence.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {(() => {
         const def = computeDefensibility(claim);

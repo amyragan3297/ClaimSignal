@@ -1,0 +1,342 @@
+START DEDICATED ITEM 7 ONLY — REAL MULTI-ADJUSTER / CROSS-CLAIM LINKAGE
+
+Proceed with Item 7 as a dedicated, isolated task.
+
+The prior report says Item 7 was only partially delivered because each claim still links to a single adjuster using adjusterId, and there is no true many-to-many claim_adjusters relationship.
+
+This needs to be fixed carefully and additively.
+
+Do not rebuild the app.
+Do not erase existing data.
+Do not remove working features.
+Do not weaken login, Master access, RBAC, masking, audit logs, shared masked claim visibility, security hardening, claims, evidence upload, Signal Engine, Adjuster Intelligence, Carrier Intelligence, Playbook, or current routing.
+
+This must be an additive schema and logic improvement.
+
+OBJECTIVE
+
+ClaimSignal must support:
+
+1. One claim involving multiple adjusters.
+2. One adjuster appearing across multiple claims.
+3. Different adjuster roles on the same claim.
+4. Adjuster history feeding Adjuster Intelligence.
+5. Adjuster history feeding Signal Engine.
+6. Adjuster history feeding Playbook recommendations.
+7. Claim deduplication staying separate from adjuster identity matching.
+
+CORE RULE
+
+Do not confuse claims with adjusters.
+
+A repeated adjuster does not mean a repeated claim.
+
+A repeated claim does not mean a duplicate adjuster.
+
+A claim can have multiple adjusters.
+
+An adjuster can appear on multiple claims.
+
+This is the intelligence layer, not duplicate data.
+
+REQUIRED SCHEMA ADDITION
+
+Add a claim_adjusters join table if it does not already exist.
+
+Recommended fields:
+
+- id
+- claim_id
+- adjuster_id
+- carrier_id
+- role_on_claim
+- involvement_type
+- first_seen_date
+- last_seen_date
+- source_document_id
+- source_audio_id
+- source_transcript_id
+- source_communication_id
+- source_type
+- confidence_score
+- needs_review
+- notes
+- created_at
+- updated_at
+
+This must be additive.
+
+Do not drop the existing claim.adjusterId field yet if existing code depends on it.
+
+Use claim.adjusterId as legacy primary adjuster support if needed, but new logic should support claim_adjusters as the source for multiple adjuster relationships.
+
+MIGRATION REQUIREMENT
+
+If existing claims have adjusterId, backfill claim_adjusters from existing data.
+
+For each existing claim with adjusterId:
+
+- create claim_adjusters row
+- claim_id = existing claim id
+- adjuster_id = existing adjusterId
+- role_on_claim = primary_adjuster or unknown
+- involvement_type = assigned or unknown
+- source_type = legacy_backfill
+- confidence_score = 1.0
+- needs_review = false
+
+Do not duplicate existing relationships if the migration is run more than once.
+
+Use idempotent migration logic.
+
+ROLE ON CLAIM OPTIONS
+
+Support these role values:
+
+- primary_adjuster
+- field_adjuster
+- desk_adjuster
+- catastrophe_adjuster
+- supervisor
+- team_lead
+- reinspection_adjuster
+- supplement_adjuster
+- appraisal_contact
+- carrier_representative
+- unknown
+
+INVOLVEMENT TYPE OPTIONS
+
+Support these involvement values:
+
+- assigned
+- inspected
+- denied
+- approved
+- partially_approved
+- requested_documents
+- handled_supplement
+- handled_reinspection
+- escalated_review
+- issued_payment
+- communicated
+- mentioned_only
+- unknown
+
+CLAIM DETAIL REQUIREMENT
+
+Claim detail must show all adjusters linked to the claim.
+
+Do not overwrite one adjuster with another.
+
+If a claim has multiple adjusters, display them clearly:
+
+Example:
+
+Adjusters on this claim:
+- Primary Adjuster: Cody Vines
+- Desk Adjuster: Adjuster B
+- Supervisor: Adjuster C
+- Reinspection Adjuster: Adjuster D
+
+If role is unknown, show:
+- Adjuster: Name, role pending review
+
+ADJUSTER PROFILE REQUIREMENT
+
+Adjuster profiles must aggregate all linked claims through claim_adjusters.
+
+Adjuster profile should show:
+
+- linked claim count
+- carriers involved
+- claim outcomes
+- initial denials
+- overturned denials
+- final approvals
+- partial approvals
+- supplement results
+- reinspection involvement
+- escalation involvement
+- vendor involvement if applicable
+- timeline behavior if available
+- Playbook patterns
+- source confidence
+
+Do not show fake zeroes.
+
+If there is not enough linked claim evidence, show:
+
+“Not enough linked claim evidence.”
+
+or
+
+“Profile exists. Linked claim evidence pending.”
+
+CODY VINES OUTCOME CORRECTION
+
+If a Cody Vines-related claim was initially denied but later overturned, it must not display as simply denied.
+
+Use:
+
+Initial Outcome: Denied
+Final Outcome: Denial Overturned to Approval
+Outcome Path: Denied -> Disputed / Reworked -> Overturned to Approval
+
+If the reversal reason is not yet in the data, show:
+
+“Outcome overturned. Reversal reason pending evidence.”
+
+Do not count that claim as only a final denial.
+
+ADJUSTER DEDUPLICATION RULE
+
+Adjuster deduplication should use adjuster-level evidence:
+
+- normalized name
+- alias
+- carrier association
+- IA firm
+- email
+- phone
+- region
+- source document signature
+- source communication identity
+- manual confirmation
+
+Do not auto-merge uncertain adjusters without preserving aliases and confidence.
+
+If uncertain, create a review-needed match candidate.
+
+CLAIM DEDUPLICATION RULE
+
+Claim deduplication must remain separate.
+
+Duplicate claims should be detected using claim-level signals:
+
+- claim number
+- homeowner name
+- property address
+- carrier
+- date of loss
+- uploaded document overlap
+- matching estimate
+- matching denial letter
+- matching financial values
+
+An adjuster appearing on multiple claims is not enough to mark claims as duplicates.
+
+AI / EXTRACTION REQUIREMENT
+
+When documents, notes, audio transcripts, communications, or evidence mention multiple adjusters, the system should create multiple adjuster link candidates instead of overwriting the existing adjuster.
+
+Classify extracted people as:
+
+- homeowner
+- policyholder
+- adjuster
+- desk_adjuster
+- field_adjuster
+- supervisor
+- team_lead
+- carrier_representative
+- contractor
+- contractor_representative
+- vendor
+- engineer
+- public_adjuster
+- attorney
+- unknown
+
+If confidence is low, set needs_review = true.
+
+PLAYBOOK CONNECTION
+
+Playbook recommendations must be able to use adjuster history.
+
+If current claim involves an adjuster with prior patterns, Playbook may recommend similar historical strategies.
+
+Example:
+
+Current claim:
+- Adjuster: Cody Vines
+- Carrier: Allstate
+- Initial outcome: denied
+- Issue: repairability disputed
+
+Recommended Playbook:
+“Review prior denial-overturn strategy involving this adjuster or similar carrier behavior.”
+
+Do not confuse repeated adjuster with duplicate claim.
+
+SIGNAL ENGINE CONNECTION
+
+Signal Engine should use linked adjuster history for:
+
+- adjuster friction indicator
+- prior denial pattern
+- prior overturned denial pattern
+- supplement behavior
+- escalation behavior
+- reinspection behavior
+- source confidence
+- recommended next action
+
+AUDIT LOG REQUIREMENT
+
+Log:
+
+- adjuster linked to claim
+- adjuster unlinked from claim
+- adjuster role changed
+- adjuster alias merged
+- adjuster match accepted
+- adjuster match rejected
+- adjuster profile viewed
+- multi-adjuster relationship created
+- denied access attempt
+
+VALIDATION REQUIRED
+
+After implementation, confirm:
+
+1. claim_adjusters table exists or equivalent many-to-many relationship exists.
+2. Existing claim.adjusterId data was backfilled safely.
+3. Migration is additive and idempotent.
+4. One claim can link to multiple adjusters.
+5. One adjuster can link to multiple claims.
+6. Existing claim detail still works.
+7. Claim detail shows all adjusters on the claim.
+8. Adjuster profile aggregates all linked claims.
+9. Adjuster matching does not create duplicate claims.
+10. Claim deduplication does not erase adjuster history.
+11. Cody Vines denied-then-overturned outcome is not shown as simply denied if supported by data.
+12. Playbook can use adjuster history.
+13. Signal Engine can use adjuster history.
+14. Masking still works.
+15. Audit logs still work.
+16. Existing data remains intact.
+17. Tests still pass.
+18. App remains safe to demo.
+
+FINAL REPORT REQUIRED
+
+Report:
+
+- files changed
+- database changes made
+- whether changes were additive
+- migration/backfill logic
+- relationship model used
+- claim_adjusters status
+- existing adjusterId compatibility status
+- Cody Vines outcome status
+- adjuster deduplication logic
+- claim deduplication logic
+- Playbook linkage status
+- Signal Engine linkage status
+- commands run
+- tests passed
+- tests failed
+- remaining limitations
+- whether the app remains safe to demo

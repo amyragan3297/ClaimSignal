@@ -58,6 +58,116 @@ function ScoreCard({ label, value, max = 10 }: { label: string; value: number | 
   );
 }
 
+type LinkedClaim = {
+  id: string;
+  claimId: string;
+  roleOnClaim: string;
+  involvementType: string;
+  sourceType: string;
+  needsReview: boolean;
+  claimNumber: string | null;
+  carrier: string | null;
+  status: string | null;
+  initialOutcome: string | null;
+  finalOutcome: string | null;
+  denialOverturned: boolean | null;
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  primary_adjuster: "Primary Adjuster", field_adjuster: "Field Adjuster", desk_adjuster: "Desk Adjuster",
+  catastrophe_adjuster: "Catastrophe Adjuster", supervisor: "Supervisor", team_lead: "Team Lead",
+  reinspection_adjuster: "Reinspection Adjuster", supplement_adjuster: "Supplement Adjuster",
+  appraisal_contact: "Appraisal Contact", carrier_representative: "Carrier Representative", unknown: "Role pending review",
+};
+
+function LinkedClaimsCard({ adjusterId }: { adjusterId: string }) {
+  const { data, isLoading } = useQuery<{ linkedClaimCount: number; links: LinkedClaim[] }>({
+    queryKey: ["/api/adjusters", adjusterId, "claims"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/adjusters/${adjusterId}/claims`);
+      return res.json();
+    },
+  });
+
+  const links = data?.links ?? [];
+  const carriers = Array.from(new Set(links.map((l) => l.carrier).filter(Boolean))) as string[];
+  const overturned = links.filter((l) => l.denialOverturned).length;
+  const initialDenials = links.filter(
+    (l) => (l.initialOutcome || "").toLowerCase().includes("deni") || l.involvementType === "denied",
+  ).length;
+  const finalApprovals = links.filter(
+    (l) => l.denialOverturned || (l.finalOutcome || "").toLowerCase().includes("approv") || l.involvementType === "approved",
+  ).length;
+  const partials = links.filter(
+    (l) => (l.finalOutcome || "").toLowerCase().includes("partial") || l.involvementType === "partially_approved",
+  ).length;
+  const reinspections = links.filter((l) => l.roleOnClaim === "reinspection_adjuster" || l.involvementType === "handled_reinspection").length;
+  const escalations = links.filter((l) => l.involvementType === "escalated_review").length;
+
+  return (
+    <Card data-testid="card-linked-claims">
+      <CardHeader className="flex flex-row items-center gap-2 pb-3">
+        <Activity className="w-4 h-4 text-muted-foreground" />
+        <CardTitle className="text-base">Linked Claims (cross-claim history)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading linked claims…</p>
+        ) : links.length === 0 ? (
+          <p className="text-sm text-muted-foreground" data-testid="text-no-linked-claims">
+            Not enough linked claim evidence. Profile exists. Linked claim evidence pending.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+              <div className="text-center"><p className="text-2xl font-bold" data-testid="text-linked-count">{data?.linkedClaimCount ?? links.length}</p><p className="text-xs text-muted-foreground">Linked Claims</p></div>
+              <div className="text-center"><p className="text-2xl font-bold">{initialDenials}</p><p className="text-xs text-muted-foreground">Initial Denials</p></div>
+              <div className="text-center"><p className="text-2xl font-bold text-emerald-400" data-testid="text-overturned">{overturned}</p><p className="text-xs text-muted-foreground">Overturned</p></div>
+              <div className="text-center"><p className="text-2xl font-bold">{finalApprovals}</p><p className="text-xs text-muted-foreground">Final Approvals</p></div>
+              <div className="text-center"><p className="text-2xl font-bold">{partials}</p><p className="text-xs text-muted-foreground">Partial Approvals</p></div>
+              <div className="text-center"><p className="text-2xl font-bold">{reinspections + escalations}</p><p className="text-xs text-muted-foreground">Reinsp. / Escal.</p></div>
+            </div>
+
+            {carriers.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground">Carriers:</span>
+                {carriers.map((c) => <Badge key={c} variant="secondary" data-testid={`badge-carrier-${c}`}>{c}</Badge>)}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {links.map((l) => (
+                <div key={l.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-card/50 px-3 py-2" data-testid={`row-linked-claim-${l.id}`}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{l.claimNumber ?? "Claim"}</span>
+                      <Badge variant={l.roleOnClaim === "unknown" ? "outline" : "secondary"} className={l.roleOnClaim === "unknown" ? "text-amber-500 border-amber-500/40" : ""}>
+                        {ROLE_LABELS[l.roleOnClaim] ?? "Role pending review"}
+                      </Badge>
+                      {l.denialOverturned && <Badge variant="outline" className="text-emerald-400 border-emerald-500/40">Denial Overturned</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {l.carrier ?? "Carrier unknown"}
+                      {l.denialOverturned
+                        ? " · Denied \u2192 Overturned to Approval"
+                        : l.finalOutcome
+                        ? ` · ${l.finalOutcome.replace(/_/g, " ")}`
+                        : l.initialOutcome
+                        ? ` · ${l.initialOutcome.replace(/_/g, " ")}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">MVP rule-based aggregation from linked claim evidence; not yet a learned model.</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () => void }) {
   const tracked = adjuster.totalClaimsTracked ?? 0;
   const basisNote =
@@ -196,6 +306,8 @@ function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () =
           </div>
         </CardContent>
       </Card>
+
+      <LinkedClaimsCard adjusterId={adjuster.id} />
     </div>
   );
 }

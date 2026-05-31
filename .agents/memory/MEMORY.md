@@ -8,3 +8,4 @@
 - [PII masking model](pii-masking-model.md) — Master always unmasked (auto, no toggle), own-org claims unmasked for all roles, shared library always masked server-side; also exclude PII identifiers (claim/policy #, names, address) from LLM prompts.
 - [Express body parser ordering](express-body-parser-ordering.md) — global express.json runs first; route-level limit overrides need the path excluded from the global parser (see /api/audio/transcribe).
 - [Open-Meteo geocoding](open-meteo-geocoding.md) — geocoder needs bare city name (no "City, State"/zip); use zippopotam for zip→latlon, match city result by state.
+- [claim_adjusters linkage](claim-adjusters-linkage.md) — multi-adjuster join table; uniqueness on (claim_id, adjuster_id, role_on_claim) enforced in BOTH DB index and POST route; same adjuster allowed in multiple roles.

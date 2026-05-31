@@ -7,6 +7,7 @@ import {
   type Claim, type InsertClaim,
   type ClaimVersion,
   type Adjuster, type InsertAdjuster,
+  type ClaimAdjuster, type InsertClaimAdjuster,
   type Client, type InsertClient,
   type Supplement, type InsertSupplement,
   type Document, type InsertDocument,
@@ -32,7 +33,7 @@ import {
   type ScoringWeight, type InsertScoringWeight,
   type IntelligenceEvent, type InsertIntelligenceEvent,
   organizations, users, userSessions, billingAccounts,
-  claims, claimVersions, adjusters,
+  claims, claimVersions, adjusters, claimAdjusters,
   clients, supplements, documents, emails, aiInsights,
   founderAgreements, auditLogs,
   evidenceFiles, extractedEntities, claimDrafts, audioRecordings, timelineEvents,
@@ -104,6 +105,13 @@ export interface IStorage {
   createAdjuster(adjuster: InsertAdjuster): Promise<Adjuster>;
   updateAdjuster(id: string, orgId: string, data: Partial<InsertAdjuster>): Promise<Adjuster | undefined>;
   getAdjusterCount(orgId: string): Promise<number>;
+  // Multi-adjuster / cross-claim linkage (Item 7)
+  getClaimAdjusters(claimId: string, orgId?: string): Promise<ClaimAdjuster[]>;
+  getAdjusterClaims(adjusterId: string, orgId?: string): Promise<ClaimAdjuster[]>;
+  getClaimAdjusterLink(id: string, orgId?: string): Promise<ClaimAdjuster | undefined>;
+  linkAdjusterToClaim(link: InsertClaimAdjuster): Promise<ClaimAdjuster>;
+  updateClaimAdjusterLink(id: string, orgId: string, data: Partial<InsertClaimAdjuster>): Promise<ClaimAdjuster | undefined>;
+  unlinkClaimAdjuster(id: string, orgId: string): Promise<boolean>;
 
   getClients(orgId: string): Promise<Client[]>;
   getClient(id: string, orgId: string): Promise<Client | undefined>;
@@ -505,6 +513,47 @@ export class DatabaseStorage implements IStorage {
   async getAdjusterCount(orgId: string): Promise<number> {
     const result = await db.select({ count: count() }).from(adjusters).where(eq(adjusters.organizationId, orgId));
     return result[0]?.count ?? 0;
+  }
+
+  // ── Multi-adjuster / cross-claim linkage (Item 7) ──
+  // orgId omitted = cross-tenant (Master governance only). See cross-tenant-governance memory.
+  async getClaimAdjusters(claimId: string, orgId?: string): Promise<ClaimAdjuster[]> {
+    const conds = [eq(claimAdjusters.claimId, claimId)];
+    if (orgId !== undefined) conds.push(eq(claimAdjusters.organizationId, orgId));
+    return db.select().from(claimAdjusters).where(and(...conds)).orderBy(claimAdjusters.createdAt);
+  }
+
+  async getAdjusterClaims(adjusterId: string, orgId?: string): Promise<ClaimAdjuster[]> {
+    const conds = [eq(claimAdjusters.adjusterId, adjusterId)];
+    if (orgId !== undefined) conds.push(eq(claimAdjusters.organizationId, orgId));
+    return db.select().from(claimAdjusters).where(and(...conds)).orderBy(desc(claimAdjusters.createdAt));
+  }
+
+  async getClaimAdjusterLink(id: string, orgId?: string): Promise<ClaimAdjuster | undefined> {
+    const conds = [eq(claimAdjusters.id, id)];
+    if (orgId !== undefined) conds.push(eq(claimAdjusters.organizationId, orgId));
+    const [link] = await db.select().from(claimAdjusters).where(and(...conds));
+    return link;
+  }
+
+  async linkAdjusterToClaim(link: InsertClaimAdjuster): Promise<ClaimAdjuster> {
+    const [created] = await db.insert(claimAdjusters).values(link).returning();
+    return created;
+  }
+
+  async updateClaimAdjusterLink(id: string, orgId: string, data: Partial<InsertClaimAdjuster>): Promise<ClaimAdjuster | undefined> {
+    const [updated] = await db.update(claimAdjusters)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(claimAdjusters.id, id), eq(claimAdjusters.organizationId, orgId)))
+      .returning();
+    return updated;
+  }
+
+  async unlinkClaimAdjuster(id: string, orgId: string): Promise<boolean> {
+    const result = await db.delete(claimAdjusters)
+      .where(and(eq(claimAdjusters.id, id), eq(claimAdjusters.organizationId, orgId)))
+      .returning();
+    return result.length > 0;
   }
 
   async getClients(orgId: string): Promise<Client[]> {

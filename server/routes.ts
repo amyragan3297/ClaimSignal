@@ -487,6 +487,224 @@ export async function registerRoutes(
     }
   });
 
+  // ── Multi-adjuster / cross-claim linkage (Item 7) ──
+  // Resolve a claim for the caller (own org, or Master cross-tenant). Returns the
+  // claim plus the org scope its adjuster links live in.
+  async function resolveClaimForCaller(req: AuthRequest) {
+    const role = req.auth!.role;
+    const orgId = req.auth!.organizationId;
+    let claim = await storage.getClaim(req.params.id as string, orgId);
+    if (!claim && role === "super_admin") {
+      const all = await storage.getAllClaimsAcrossTenants();
+      claim = all.find((c) => c.id === req.params.id) || undefined;
+    }
+    return claim;
+  }
+
+  // GET adjusters linked to a claim (enriched with adjuster name/carrier).
+  app.get("/api/claims/:id/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      const claim = await resolveClaimForCaller(req);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+      const scopeOrg = claim.organizationId;
+      const links = await storage.getClaimAdjusters(claim.id, scopeOrg);
+      const orgAdjusters = role === "super_admin"
+        ? await storage.getAllAdjustersAcrossTenants()
+        : await storage.getAdjusters(scopeOrg);
+      const adjusterMap = new Map(orgAdjusters.map((a) => [a.id, a]));
+
+      const enriched = links.map((link) => {
+        const a = adjusterMap.get(link.adjusterId);
+        return {
+          ...link,
+          adjusterName: a?.adjusterName ?? null,
+          carrierName: a?.carrierName ?? null,
+          region: a?.region ?? null,
+        };
+      });
+
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Link an adjuster to a claim (multiple adjusters per claim supported).
+  app.post("/api/claims/:id/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      if (role === "carrier_analyst") {
+        await storage.createAuditLog({
+          organizationId: req.auth!.organizationId,
+          actorUserId: req.auth!.userId,
+          actorRole: role,
+          actionType: "ADJUSTER_LINK_DENIED",
+          entityType: "claim_adjuster",
+          entityId: req.params.id as string,
+          ipAddress: getClientIp(req),
+        });
+        return res.status(403).json({ message: "Not permitted for this role" });
+      }
+
+      const claim = await resolveClaimForCaller(req);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+      const scopeOrg = claim.organizationId;
+
+      const adjuster = await storage.getAdjuster(req.body.adjusterId, scopeOrg);
+      if (!adjuster) return res.status(400).json({ message: "Adjuster not found in this organization" });
+
+      const requestedRole = req.body.roleOnClaim ?? "unknown";
+      const existingLinks = await storage.getClaimAdjusters(claim.id, scopeOrg);
+      if (existingLinks.some((l) => l.adjusterId === req.body.adjusterId && l.roleOnClaim === requestedRole)) {
+        return res.status(409).json({ message: "This adjuster is already linked to this claim in that role" });
+      }
+
+      const link = await storage.linkAdjusterToClaim({
+        organizationId: scopeOrg,
+        claimId: claim.id,
+        adjusterId: req.body.adjusterId,
+        carrierId: req.body.carrierId ?? null,
+        roleOnClaim: req.body.roleOnClaim ?? "unknown",
+        involvementType: req.body.involvementType ?? "unknown",
+        sourceType: req.body.sourceType ?? "manual",
+        confidenceScore: req.body.confidenceScore ?? 1,
+        needsReview: req.body.needsReview ?? false,
+        notes: req.body.notes ?? null,
+      });
+
+      await storage.createAuditLog({
+        organizationId: scopeOrg,
+        actorUserId: req.auth!.userId,
+        actorRole: role,
+        isImpersonation: req.auth!.isImpersonation,
+        impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "ADJUSTER_LINKED",
+        entityType: "claim_adjuster",
+        entityId: link.id,
+        afterJson: link,
+        ipAddress: getClientIp(req),
+      });
+
+      res.json(link);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  // Update a claim-adjuster link (role / involvement / review status).
+  app.patch("/api/claims/:id/adjusters/:linkId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      if (role === "carrier_analyst") return res.status(403).json({ message: "Not permitted for this role" });
+
+      const claim = await resolveClaimForCaller(req);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+      const scopeOrg = claim.organizationId;
+
+      const existing = await storage.getClaimAdjusterLink(req.params.linkId as string, scopeOrg);
+      if (!existing || existing.claimId !== claim.id) return res.status(404).json({ message: "Link not found" });
+
+      const patch: any = {};
+      for (const f of ["roleOnClaim", "involvementType", "carrierId", "confidenceScore", "needsReview", "notes"]) {
+        if (req.body[f] !== undefined) patch[f] = req.body[f];
+      }
+
+      const updated = await storage.updateClaimAdjusterLink(req.params.linkId as string, scopeOrg, patch);
+      if (!updated) return res.status(404).json({ message: "Link not found" });
+
+      await storage.createAuditLog({
+        organizationId: scopeOrg,
+        actorUserId: req.auth!.userId,
+        actorRole: role,
+        isImpersonation: req.auth!.isImpersonation,
+        impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "ADJUSTER_ROLE_CHANGED",
+        entityType: "claim_adjuster",
+        entityId: updated.id,
+        beforeJson: existing,
+        afterJson: updated,
+        ipAddress: getClientIp(req),
+      });
+
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  // Unlink an adjuster from a claim (preserves adjuster + other claims; history intact).
+  app.delete("/api/claims/:id/adjusters/:linkId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      if (role === "carrier_analyst") return res.status(403).json({ message: "Not permitted for this role" });
+
+      const claim = await resolveClaimForCaller(req);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+      const scopeOrg = claim.organizationId;
+
+      const existing = await storage.getClaimAdjusterLink(req.params.linkId as string, scopeOrg);
+      if (!existing || existing.claimId !== claim.id) return res.status(404).json({ message: "Link not found" });
+
+      const ok = await storage.unlinkClaimAdjuster(req.params.linkId as string, scopeOrg);
+      if (!ok) return res.status(404).json({ message: "Link not found" });
+
+      await storage.createAuditLog({
+        organizationId: scopeOrg,
+        actorUserId: req.auth!.userId,
+        actorRole: role,
+        isImpersonation: req.auth!.isImpersonation,
+        impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "ADJUSTER_UNLINKED",
+        entityType: "claim_adjuster",
+        entityId: req.params.linkId as string,
+        beforeJson: existing,
+        ipAddress: getClientIp(req),
+      });
+
+      res.json({ message: "Unlinked" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Cross-claim history for an adjuster (feeds Adjuster Intelligence / profile).
+  app.get("/api/adjusters/:id/claims", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      const orgId = req.auth!.organizationId;
+      const adjusterId = req.params.id as string;
+
+      const links = role === "super_admin"
+        ? await storage.getAdjusterClaims(adjusterId)
+        : await storage.getAdjusterClaims(adjusterId, orgId);
+
+      const claimIds = Array.from(new Set(links.map((l) => l.claimId)));
+      const allClaims = role === "super_admin"
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
+      const claimMap = new Map(allClaims.map((c) => [c.id, c]));
+
+      const enriched = links.map((link) => {
+        const c = claimMap.get(link.claimId);
+        return {
+          ...link,
+          claimNumber: c?.claimNumber ?? null,
+          carrier: c?.carrier ?? null,
+          status: c?.status ?? null,
+          initialOutcome: (c as any)?.initialOutcome ?? null,
+          finalOutcome: (c as any)?.finalOutcome ?? null,
+          denialOverturned: (c as any)?.denialOverturned ?? null,
+        };
+      });
+
+      res.json({ linkedClaimCount: claimIds.length, links: enriched });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get("/api/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
