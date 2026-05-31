@@ -1,0 +1,456 @@
+CLAIMSIGNAL AI REALITY CHECK AND CORRECTION
+
+The current app is still displaying “AI” language, but the actual behavior appears to be mostly manual entry, placeholder logic, MVP rule-based checks, and disconnected screens.
+
+This is not acceptable as “AI implemented.”
+
+Do not falsely label anything as AI unless it actually performs model-based extraction, classification, summarization, recommendation, or pattern matching from uploaded claim content.
+
+Do not rebuild the app from scratch.
+Do not erase existing data.
+Do not remove working features.
+Do not weaken login, Master access, RBAC, masking, audit logs, security, claims, evidence upload, adjuster intelligence, carrier intelligence, Playbook, or current routing.
+
+OBJECTIVE
+
+Separate what is truly AI from what is currently manual, placeholder, or rule-based.
+
+Then either:
+
+1. Connect actual AI extraction and analysis where required.
+
+or
+
+2. Clearly relabel non-AI features as MVP rule-based, manual, pending evidence, or pending AI integration.
+
+No fake AI language.
+
+CORE CORRECTION
+
+If the system is not using an LLM or model-based analysis, do not call it:
+
+- AI extraction
+- AI analysis
+- AI detection
+- AI timeline extraction
+- AI Playbook recommendation
+- AI Signal Engine
+- AI-generated insight
+
+Use accurate labels instead:
+
+- MVP rule-based analysis
+- Manual entry
+- Pending AI integration
+- Evidence review pending
+- Not enough data
+- Upload documents to generate analysis
+- Parsed text extraction pending
+- Timeline candidate pending review
+
+REQUIRED AI IMPLEMENTATION CHECK
+
+Audit every place the app says “AI” and confirm whether it is actually connected to model-based logic.
+
+Check:
+
+- Claims page
+- Evidence upload
+- Audio upload
+- Transcriptions
+- Claim detail
+- Timeline
+- Signal Engine
+- Claim Intelligence
+- Adjuster Intelligence
+- Carrier Intelligence
+- Playbook Engine
+- Communications
+- Storm / Weather
+- Security / landing page copy
+
+For each area, classify status as one of:
+
+- AI active
+- MVP rule-based only
+- Manual entry only
+- Placeholder only
+- Pending integration
+- Not built
+
+DO NOT OVERSTATE STATUS
+
+If AI is not active, show this clearly in the UI.
+
+Examples:
+
+Instead of:
+“AI Extraction Review”
+
+Use:
+“Extraction Review”
+or
+“MVP Extraction Review”
+or
+“AI Extraction Pending”
+
+Instead of:
+“AI detected risk signals”
+
+Use:
+“Rule-based risk signals”
+or
+“Risk signals pending document analysis”
+
+Instead of:
+“AI Timeline Extraction”
+
+Use:
+“Timeline Extraction Review”
+or
+“Timeline date candidates pending AI integration”
+
+Instead of:
+“Playbook AI Recommendation”
+
+Use:
+“Rule-based Playbook Match”
+or
+“Playbook recommendation pending AI integration”
+
+WHAT TRUE AI MUST DO
+
+True ClaimSignal AI must be able to process uploaded or pasted claim content and extract structured claim intelligence.
+
+AI extraction should read:
+
+- estimates
+- denial letters
+- approval letters
+- carrier letters
+- supplements
+- invoices
+- photos if image analysis is available
+- audio transcripts
+- communication notes
+- inspection notes
+- storm reports
+
+AI must extract or classify:
+
+- homeowner name
+- claim number
+- property address
+- carrier
+- adjuster
+- IA firm
+- vendor
+- date of loss
+- inspection date
+- estimate date
+- denial date
+- approval date
+- supplement date
+- payment date
+- claim status
+- initial outcome
+- final outcome
+- denial reason
+- denial overturned status
+- RCV
+- ACV
+- deductible
+- depreciation
+- supplement requested
+- supplement approved
+- missing scope items
+- code items
+- manufacturer documentation
+- repairability dispute
+- reinspection request
+- escalation trigger
+- recommended next action
+- Playbook match candidate
+
+AI TIMELINE REQUIREMENT
+
+Timeline is not correct if it only uses upload date.
+
+AI or extraction logic must identify actual event dates from the uploaded content.
+
+For example:
+
+- denial letter date
+- estimate date
+- approval letter date
+- supplement submission date
+- communication date
+- reinspection date
+- payment date
+
+Audit log date = upload/action date.
+Timeline event date = extracted claim event date.
+
+If confidence is low, create:
+
+“Timeline candidate needs review.”
+
+Do not silently insert bad timeline dates.
+
+CLAIM UPLOAD REQUIREMENT
+
+When a file is uploaded, the app should not just store the file.
+
+It should attempt to:
+
+1. Parse text from the file.
+2. Extract claim fields.
+3. Create or update claim draft.
+4. Suggest claim match if claim already exists.
+5. Create extraction review card.
+6. Create timeline candidates.
+7. Create Signal Engine signals.
+8. Create missing documentation checklist.
+9. Create Playbook recommendation if enough data exists.
+10. Log the upload and extraction attempt.
+
+If parsing or AI is unavailable, say:
+
+“File uploaded. AI extraction pending integration.”
+
+or
+
+“File uploaded. Manual review required.”
+
+DO NOT MAKE EMPTY SCREENS LOOK DONE
+
+If a screen has no real data, do not show fake scores or fake completed intelligence.
+
+Examples:
+
+Bad:
+- 0.0 friction score
+- 0% denial rate
+- 0 claims tracked
+- AI complete
+- Demo Mode
+- Full LLM powered extraction coming later while showing fake scores
+
+Good:
+- Not enough linked claim evidence
+- Pending evidence
+- Upload documents to generate analysis
+- MVP rule-based analysis only
+- No verified claim data yet
+- Manual entry available
+
+ADJUSTER INTELLIGENCE CORRECTION
+
+Do not display Cody Vines or any real adjuster as if there is verified intelligence unless linked claim evidence exists.
+
+Each adjuster profile must show:
+
+- source type
+- linked claim count
+- source confidence
+- evidence status
+- last seen date
+- carrier
+- outcome history if available
+
+If no linked claim evidence exists, show:
+
+“Profile exists. No linked claim evidence yet.”
+
+If a Cody Vines claim was initially denied but later overturned, it must not show as simply denied.
+
+Use:
+
+Initial Outcome: Denied
+Final Outcome: Denial Overturned to Approval
+Outcome Path: Denied -> Disputed / Reworked -> Overturned to Approval
+
+If reversal reason is not yet uploaded, show:
+
+“Outcome overturned. Reversal reason pending evidence.”
+
+PLAYBOOK CORRECTION
+
+Playbook must not just be manual cards.
+
+Playbook MVP should support:
+
+- manually created entries
+- rule-based matches from claim fields
+- source claim count
+- match reason
+- confidence score
+- related carrier
+- related adjuster
+- related vendor
+- related outcome
+- what worked
+- what did not work
+- recommended next step
+
+If AI is not connected, label it:
+
+“Rule-based Playbook Match”
+
+Do not call it AI-generated unless an LLM actually generated the match from historical claim data.
+
+SIGNAL ENGINE CORRECTION
+
+Signal Engine must use actual claim data or show pending status.
+
+It should not show fake metrics.
+
+Signal Engine must show:
+
+- high risk claims
+- medium risk claims
+- low risk claims
+- active escalations
+- denied claims
+- missing documentation
+- supplement opportunity
+- carrier friction
+- adjuster friction
+- vendor involvement
+- next action
+
+If the system lacks data, show:
+
+“Not enough data.”
+
+or
+
+“Upload claim evidence to generate signals.”
+
+Do not show meaningless zeros.
+
+BILLING PAGE CORRECTION
+
+The Billing page currently shows:
+
+Pro Plan
+$199/mo
+
+This conflicts with current public pricing direction.
+
+Do not finalize billing pricing unless pricing is approved.
+
+Current approved public direction:
+
+- Founder Access: $79.00/month
+- Card required before paid platform access
+- Individual and Team pricing may remain displayed for now, but are not final
+- No free trial language unless explicitly approved
+
+If billing is not connected to Stripe yet, label it:
+
+“Billing setup pending.”
+
+Do not show an active paid plan unless it is real.
+
+STORM PAGE CORRECTION
+
+Storm page may remain manual for now.
+
+Use:
+
+“Storm Event Lookup - Roadmap MVP”
+
+This is acceptable if it clearly says manual entry now and automated NOAA / SPC / NCEI lookup is planned.
+
+Do not imply live storm API is active unless it is connected.
+
+SECURITY COPY CORRECTION
+
+Security page must say what is actually secured:
+
+- homeowner identity
+- claim number
+- property address
+- contractor identity
+- contractor representative names
+- private documents
+- raw audio
+- unsanitized transcripts
+- phone numbers
+- emails
+- private identifiers
+
+Preserve:
+
+- carrier
+- adjuster
+- IA firm
+- vendor
+- denial reason
+- outcome
+- supplement result
+- escalation result
+- behavior intelligence
+
+Remove:
+
+- unmasked data access
+- masked carrier names
+- pre-implementation pilot
+- legal guarantees
+
+AI STATUS BADGES
+
+Add visible status badges where needed:
+
+- AI active
+- Rule-based MVP
+- Manual entry
+- Pending evidence
+- Pending AI integration
+- Not enough data
+- Needs review
+
+VALIDATION REQUIRED
+
+After this correction, report:
+
+1. Every place the app says AI.
+2. Whether that area is actually AI active, rule-based, manual, placeholder, or pending integration.
+3. Which AI language was removed or corrected.
+4. Whether uploads trigger extraction or only storage.
+5. Whether timeline uses extracted event dates or upload dates.
+6. Whether Signal Engine uses real claim data.
+7. Whether Playbook uses real claim/outcome data.
+8. Whether adjuster profiles use linked claim evidence.
+9. Whether fake 0.0 metrics were removed.
+10. Whether Cody Vines is labeled with source status and correct outcome logic.
+11. Whether billing pricing conflicts were flagged.
+12. Whether existing data stayed intact.
+13. Whether masking still works.
+14. Whether audit logs still work.
+15. Whether tests still pass.
+16. Whether the app is safe to demo honestly.
+
+FINAL REPORT REQUIRED
+
+Report:
+
+- files changed
+- database changes made
+- whether changes were additive
+- commands run
+- tests passed
+- tests failed
+- AI status audit results
+- upload extraction status
+- timeline extraction status
+- Signal Engine status
+- Playbook status
+- Adjuster Intelligence status
+- Carrier Intelligence status
+- Billing status
+- Security page status
+- remaining limitations
+- honest demo readiness status
