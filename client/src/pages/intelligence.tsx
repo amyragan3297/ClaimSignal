@@ -81,8 +81,9 @@ export default function IntelligencePage() {
   const { data: adjusters } = useQuery<Adjuster[]>({ queryKey: ["/api/adjusters"] });
 
   const totalClaims = claims?.length ?? 0;
-  const avgFriction = claims?.length
-    ? (claims.reduce((s, c) => s + (c.frictionScore ?? 0), 0) / claims.length).toFixed(1)
+  const scoredClaims = (claims ?? []).filter(c => (c.frictionScore ?? 0) > 0);
+  const avgFriction = scoredClaims.length
+    ? (scoredClaims.reduce((s, c) => s + (c.frictionScore ?? 0), 0) / scoredClaims.length).toFixed(1)
     : "—";
   const totalSupplementOpp = claims?.reduce((s, c) => s + (c.supplementAmountTotal ?? 0), 0) ?? 0;
   const deniedCount = claims?.filter(c => c.status === "denied").length ?? 0;
@@ -233,10 +234,10 @@ export default function IntelligencePage() {
             <div>
               <p className="text-sm font-medium">Intelligence Engine Status</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Scoring is currently rules-based using claim data. Full LLM-powered document extraction, behavioral transcription analysis, and real-time carrier intelligence will be enabled during backend integration.
+                Risk, friction, and escalation scores are computed with MVP rule-based models from your real claim data. AI narrative analysis (per claim), document extraction, and audio transcription run live via OpenAI. Aggregated carrier and adjuster patterns grow stronger as more claims and evidence are added.
               </p>
             </div>
-            <Badge variant="outline" className="text-xs shrink-0">Demo Mode</Badge>
+            <Badge variant="outline" className="text-xs shrink-0">MVP Rule-Based</Badge>
           </div>
         </CardContent>
       </Card>

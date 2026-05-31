@@ -20,8 +20,9 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import type { Claim } from "@shared/schema";
-import { Plus, Search, FileText, Eye, Loader2, X, Globe, MoreHorizontal, Archive, Trash2 } from "lucide-react";
+import { Plus, Search, FileText, Eye, Loader2, X, Globe, MoreHorizontal, Archive, Trash2, Sparkles } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { claimAnalysisStatus } from "@/lib/data-source";
 
 const createClaimSchema = z.object({
   claimNumber: z.string().min(1, "Claim number required"),
@@ -114,6 +115,7 @@ export default function ClaimsPage() {
     type: "archive" | "delete";
     claim: Claim;
   } | null>(null);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
 
   const { data: claims, isLoading } = useQuery<Claim[]>({
     queryKey: ["/api/claims"],
@@ -208,6 +210,21 @@ export default function ClaimsPage() {
     onError: (err: Error) => {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
+  });
+
+  const aiAnalysisMutation = useMutation({
+    mutationFn: async (claimId: string) => {
+      setAnalyzingId(claimId);
+      await apiRequest("POST", `/api/claims/${claimId}/ai-analysis`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
+      toast({ title: "AI analysis generated" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "AI analysis failed", description: err.message, variant: "destructive" });
+    },
+    onSettled: () => setAnalyzingId(null),
   });
 
   const filteredClaims = claims?.filter(
@@ -469,6 +486,7 @@ export default function ClaimsPage() {
                         <TableHead>Phase</TableHead>
                         <TableHead>Escalation</TableHead>
                         <TableHead>Risk Score</TableHead>
+                        <TableHead>Analysis</TableHead>
                         <TableHead className="w-10"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -505,6 +523,16 @@ export default function ClaimsPage() {
                               </Badge>
                             ) : "—"}
                           </TableCell>
+                          <TableCell onClick={() => setLocation(`/claims/${claim.id}`)}>
+                            {analyzingId === claim.id ? (
+                              <Badge variant="outline" className="text-xs gap-1" data-testid={`badge-analysis-${claim.id}`}>
+                                <Loader2 className="w-3 h-3 animate-spin" /> Analyzing
+                              </Badge>
+                            ) : (() => {
+                              const s = claimAnalysisStatus(claim);
+                              return <Badge variant={s.variant} className="text-xs" data-testid={`badge-analysis-${claim.id}`}>{s.label}</Badge>;
+                            })()}
+                          </TableCell>
                           <TableCell>
                             {canArchive && (
                               <DropdownMenu>
@@ -514,6 +542,14 @@ export default function ClaimsPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    disabled={analyzingId === claim.id}
+                                    onClick={(e) => { e.stopPropagation(); aiAnalysisMutation.mutate(claim.id); }}
+                                    data-testid={`menu-analyze-claim-${claim.id}`}
+                                  >
+                                    <Sparkles className="w-4 h-4 mr-2" />
+                                    {claim.aiAnalysisAt ? "Re-run AI Analysis" : "Run AI Analysis"}
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={(e) => { e.stopPropagation(); setConfirmDialog({ type: "archive", claim }); }}
                                     data-testid={`menu-archive-claim-${claim.id}`}

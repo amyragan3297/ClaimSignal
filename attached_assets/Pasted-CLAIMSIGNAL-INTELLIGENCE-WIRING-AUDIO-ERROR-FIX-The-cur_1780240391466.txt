@@ -1,0 +1,523 @@
+CLAIMSIGNAL INTELLIGENCE WIRING + AUDIO ERROR FIX
+
+The current ClaimSignal app has core intelligence screens, but the intelligence is not wired correctly yet.
+
+This is not just a cosmetic issue.
+
+The Signal Engine, Claim Intelligence, Adjuster Intelligence, Carrier Intelligence, Playbook, Timeline, and Audio Upload workflow must actually connect to claim data, uploaded evidence, extracted fields, and rule-based or AI analysis.
+
+Do not erase existing data.
+Do not remove working features.
+Do not rebuild the app from scratch.
+Do not weaken login, Master access, RBAC, masking, audit logs, shared masked claim visibility, or security hardening.
+
+FIX 1: CLAIMS PAGE MUST SHOW AI / SIGNAL DETECTION
+
+When I open Claims, there is no visible AI detection.
+
+The Claims page must not look like a plain claim table only.
+
+Each claim row or claim card should show:
+
+- AI / analysis status
+- risk level
+- risk score
+- escalation readiness score
+- missing documentation status
+- timeline extraction status
+- carrier friction indicator
+- adjuster friction indicator
+- vendor signal if available
+- Signal Engine summary
+- next recommended action
+
+Possible statuses:
+
+- AI analysis pending
+- MVP rule-based analysis complete
+- Timeline needs review
+- Missing documents
+- Ready for escalation review
+- Low risk
+- Needs more data
+
+Add a clear action:
+
+- Run AI Analysis
+or
+- Analyze Claim
+or
+- Run Signal Engine
+
+This action should be available from:
+
+- Claims list
+- Claim detail
+- Evidence upload result
+- Signal Engine page
+
+If LLM extraction is not fully connected, use MVP rule-based analysis from available claim fields and uploaded parsed text.
+
+Label it honestly:
+
+“MVP rule-based analysis”
+
+Do not call rule-based analysis full AI if it is not using an LLM.
+
+FIX 2: SIGNAL ENGINE MUST USE CLAIM DATA
+
+The Signal Engine currently shows no real working intelligence.
+
+It should calculate and display useful signals from existing claims and uploaded evidence.
+
+Signal Engine must show:
+
+- high risk claims
+- medium risk claims
+- low risk claims
+- active escalations
+- denied claims
+- claims missing documentation
+- claims with timeline extraction needs
+- claims with supplement opportunity
+- claims with carrier friction
+- claims with adjuster friction
+- claims with vendor involvement
+- claims needing next action
+
+Each claim should have a visible Signal Engine summary:
+
+- risk level
+- risk score
+- escalation readiness score
+- missing documentation flags
+- timeline extraction status
+- carrier friction indicator
+- adjuster friction indicator
+- vendor signal if available
+- recommended next action
+
+If the system cannot calculate a value because data is missing, show:
+
+“Needs more claim data”
+
+or
+
+“Analysis pending”
+
+Do not show meaningless 0 values unless they are truly calculated from real supporting data.
+
+FIX 3: BEHAVIOR METRICS MUST NOT SHOW FAKE ZEROES
+
+Behavior metrics currently show values like:
+
+- Avg Response Time: 0h
+- Avg Days to Determination: 0d
+- Supplement Acceptance: 0.0%
+- Reinspection Rate: 0.0%
+- Denial Rate: 0.0%
+- Escalation Trigger: 0.0%
+
+These should not display as real metrics when there is no supporting claim data.
+
+Fix behavior metric display rules:
+
+- If no data exists, show “Not enough data”
+- If one claim exists, show “Based on 1 claim - directional only”
+- If sample data exists, show “Sample data”
+- If manually entered, show “Manual intelligence”
+- If real claim data exists, show the actual calculated value
+
+Do not show 0.0 unless the system has enough data to support that calculation.
+
+FIX 4: CLAIM INTELLIGENCE PAGE MUST SHOW REAL ANALYSIS STATUS
+
+Claim Intelligence should connect to actual claim data.
+
+Claim Intelligence must show:
+
+- claims analyzed
+- average friction score
+- supplement opportunity
+- denied claims
+- approval probability
+- top missing documents
+- top carrier issues
+- top adjuster behavior signals
+- top vendor signals
+- most common denial reasons
+- claims needing review
+- claims with extracted timeline candidates
+
+If values are unavailable, explain why:
+
+- Not enough data
+- No uploaded evidence yet
+- Analysis pending
+- Awaiting timeline extraction
+- Awaiting outcome data
+
+Do not leave intelligence boxes empty or misleading.
+
+FIX 5: ADJUSTER INTELLIGENCE MUST SHOW SOURCE BASIS
+
+Cody Vines is a real adjuster, but the app currently shows Cody Vines without explaining whether that profile came from:
+
+- real claim data
+- manual entry
+- sample/demo data
+- imported reference
+- pending evidence
+
+Every adjuster profile must show source transparency.
+
+Add visible fields or labels:
+
+- source type
+- linked claim count
+- last seen date
+- carrier
+- confidence level
+- evidence status
+- metrics basis
+
+Source type values:
+
+- real_claim_data
+- manually_entered
+- sample_demo
+- imported_reference
+- pending_evidence
+- mixed
+
+If Cody Vines has no linked claim records yet, show:
+
+“Profile exists. No linked claim evidence yet.”
+
+Do not show friction scores, denial rates, supplement reduction, or behavior metrics as if they are evidence-based unless claim data supports them.
+
+If there is insufficient data, show:
+
+“Insufficient claim evidence”
+
+or
+
+“Pending evidence”
+
+Do not show meaningless 0.0 values as if they are real intelligence.
+
+FIX 6: PLAYBOOK MUST SHOW MATCHING LOGIC
+
+The Playbook cannot just be manual cards.
+
+Playbook must show:
+
+- whether entry is sample, manual, rule-based, AI-suggested, or derived from closed claims
+- match reason
+- confidence score
+- source claim count
+- related carrier
+- related adjuster if available
+- related vendor if available
+- related denial reason
+- related missing scope
+- related outcome
+- recommended next step
+
+When viewing a claim, Playbook should be able to recommend a relevant playbook using MVP rule-based matching.
+
+Match using:
+
+- carrier
+- adjuster
+- vendor
+- claim status
+- denial reason
+- missing documentation
+- missing scope category
+- supplement status
+- escalation status
+- risk score
+- claim type
+- region if available
+
+Example recommendation:
+
+Recommended Playbook:
+Denial Overturned After Reinspection
+
+Why matched:
+- Current claim is denied
+- Repairability is disputed
+- Missing documentation includes labeled photos
+- Similar prior outcome: denial overturned to approval
+
+Recommendation type:
+MVP rule-based recommendation
+
+Do not pretend this is full AI if it is rule-based.
+
+FIX 7: DEMO MODE BUTTON MUST WORK OR BE REPLACED
+
+The Demo Mode button or pill does not work or is misleading.
+
+Fix it one of two ways.
+
+Option A:
+Make it a non-clickable status label:
+
+“MVP Rule-Based Intelligence”
+
+Supporting text:
+
+“Current scoring uses available claim data and rule-based signals. LLM-powered document extraction and transcription analysis can expand scoring as more data is added.”
+
+Option B:
+If it remains clickable, clicking it must open a modal explaining:
+
+- what data is sample
+- what data is real
+- what is manually entered
+- what is rule-based
+- what is pending AI integration
+- which records are demo-only
+- which records are claim-sourced
+
+Do not leave it as a fake button.
+
+FIX 8: AUDIO UPLOAD RUNTIME ERROR
+
+The Audio Upload or Evidence Upload workflow is throwing this runtime error:
+
+“A <Select.Item /> must have a value prop that is not an empty string.”
+
+Fix all Select components causing this issue.
+
+Search for Select.Item components with:
+
+value=""
+
+or empty string values.
+
+Replace empty string values with a non-empty safe value such as:
+
+- none
+- unassigned
+- auto_match
+- unknown
+- pending
+- other
+
+Example:
+
+Do not use:
+
+<Select.Item value="">None</Select.Item>
+
+Use:
+
+<Select.Item value="none">None</Select.Item>
+
+Then convert “none” to null or undefined in the submit handler if needed.
+
+This must be fixed anywhere it appears:
+
+- audio upload
+- evidence upload
+- claim pre-select
+- document category
+- claim assignment
+- timeline event type
+- Playbook fields
+- Carrier / adjuster / vendor selectors
+- any other Select component
+
+After fixing, audio upload must not crash the app.
+
+FIX 9: AUDIO UPLOAD MUST CONNECT TO CLAIM INTELLIGENCE
+
+Audio upload should not just upload a file.
+
+Audio workflow must support:
+
+- select claim or auto-match claim
+- upload audio
+- attach audio to claim
+- show transcription status
+- create audit log
+- create timeline event
+- show analysis status
+
+If transcription is not connected, show:
+
+“Audio uploaded. Transcription pending integration.”
+
+If transcript text exists, AI or MVP extraction should attempt to detect:
+
+- communication date
+- adjuster name
+- carrier name
+- vendor name
+- claim status
+- denial language
+- approval language
+- supplement discussion
+- reinspection discussion
+- escalation language
+- timeline events
+
+FIX 10: TIMELINE EXTRACTION MUST BE VISIBLE
+
+Claims must show timeline extraction status.
+
+Each claim should show one of:
+
+- No documents uploaded
+- AI extraction pending
+- Timeline candidates found
+- Timeline needs review
+- Timeline verified
+- Extraction unavailable
+
+When documents or transcripts are uploaded, the system must attempt to extract actual event dates from content.
+
+Upload date is the audit log date only.
+
+Timeline event date must come from extracted content date when available.
+
+FIX 11: CARRIER INTELLIGENCE MUST NOT SHOW FAKE ZEROES
+
+Carrier Intelligence must show whether metrics are calculated, directional, sample, or unavailable.
+
+For each carrier, show:
+
+- claim count
+- source quality
+- low sample size warning
+- last updated
+- approval rate
+- denial rate
+- partial approval rate
+- supplement win rate
+- escalation win rate
+- average RCV
+- average ACV
+- supplement delta
+- friction index
+
+If the sample size is too low, show:
+
+“Low sample size - directional only.”
+
+If data is missing, show:
+
+“Not enough data.”
+
+Do not show blank dashes or 0% values without explanation.
+
+FIX 12: DATA SOURCE TRANSPARENCY
+
+Every intelligence module should show whether the data is:
+
+- real claim data
+- manually entered
+- sample/demo data
+- rule-based
+- AI extracted
+- pending evidence
+- not enough data
+
+This applies to:
+
+- Claims
+- Signal Engine
+- Claim Intelligence
+- Adjuster Intelligence
+- Carrier Intelligence
+- Playbook
+- Timeline
+- Audio / Transcript analysis
+
+FIX 13: AUDIT LOGS
+
+Log these actions:
+
+- AI analysis run
+- Signal Engine run
+- Playbook recommendation generated
+- Demo / MVP status modal opened
+- adjuster profile viewed
+- adjuster source status viewed
+- carrier intelligence viewed
+- claim intelligence viewed
+- timeline extraction run
+- audio uploaded
+- audio analysis attempted
+- denied access attempt
+
+FIX 14: DO NOT BREAK EXISTING FUNCTIONALITY
+
+Do not break:
+
+- login
+- Master access
+- masking
+- RBAC
+- audit logs
+- claims
+- evidence upload
+- expanded intake
+- carrier intelligence
+- adjuster intelligence
+- vendor capture
+- Playbook
+- Signal Engine
+- shared masked claim library
+- security hardening
+
+VALIDATION REQUIRED
+
+After fixing, confirm:
+
+1. Claims page shows AI or Signal Engine status.
+2. Claim rows/cards show risk or analysis status.
+3. Run AI Analysis or Analyze Claim action exists.
+4. Signal Engine uses actual claim data or clearly labels pending data.
+5. Behavior metrics do not show fake 0.0 values.
+6. Adjuster profiles show source type and linked claim count.
+7. Cody Vines profile shows whether it is real, manual, sample, imported, or pending evidence.
+8. Playbook shows recommendation logic or match reasons.
+9. Playbook entries identify whether they are sample, manual, rule-based, AI suggested, or claim-derived.
+10. Demo Mode button is functional or replaced with a non-clickable status label.
+11. Audio upload no longer throws the Select.Item empty string runtime error.
+12. Audio upload can attach to claim or use auto-match safely.
+13. Timeline extraction status appears on claims.
+14. Carrier Intelligence shows source quality and does not show fake zeroes.
+15. Existing data remains intact.
+16. Masking still works.
+17. Audit logs still work.
+18. Tests still pass.
+19. App remains safe to demo.
+
+FINAL REPORT REQUIRED
+
+Report:
+
+- files changed
+- database changes made
+- whether changes were additive
+- commands run
+- tests passed
+- tests failed
+- Claims AI detection status
+- Signal Engine wiring status
+- Behavior metrics display status
+- Playbook matching status
+- Demo Mode / status label fix
+- Audio upload error fix
+- Cody Vines source-data status
+- Adjuster Intelligence source transparency status
+- Carrier Intelligence source transparency status
+- Timeline extraction visibility status
+- remaining limitations
+- whether the app remains safe to demo

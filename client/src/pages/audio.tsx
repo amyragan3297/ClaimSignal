@@ -68,7 +68,7 @@ export default function AudioPage() {
   const isMaster = userRole === "super_admin";
   const canArchive = !["carrier_analyst"].includes(userRole);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedClaimId, setSelectedClaimId] = useState("");
+  const [selectedClaimId, setSelectedClaimId] = useState("none");
   const [fileName, setFileName] = useState("");
   const [duration, setDuration] = useState("");
   const [notes, setNotes] = useState("");
@@ -95,7 +95,7 @@ export default function AudioPage() {
       setFileName("");
       setDuration("");
       setNotes("");
-      setSelectedClaimId("");
+      setSelectedClaimId("none");
     },
     onError: (err: Error) => {
       toast({ title: "Failed to log recording", description: err.message, variant: "destructive" });
@@ -114,7 +114,7 @@ export default function AudioPage() {
       setFileName("");
       setDuration("");
       setNotes("");
-      setSelectedClaimId("");
+      setSelectedClaimId("none");
       setAudioFile(null);
     },
     onError: (err: Error) => {
@@ -144,6 +144,7 @@ export default function AudioPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const claimId = selectedClaimId && selectedClaimId !== "none" ? selectedClaimId : undefined;
     // If an audio file is attached, run AI transcription.
     if (audioFile) {
       try {
@@ -151,7 +152,7 @@ export default function AudioPage() {
         transcribeMutation.mutate({
           audioBase64,
           fileName: audioFile.name,
-          claimId: selectedClaimId || undefined,
+          claimId,
           durationSeconds: duration ? parseInt(duration) * 60 : undefined,
         });
       } catch {
@@ -165,7 +166,7 @@ export default function AudioPage() {
       return;
     }
     createMutation.mutate({
-      claimId: selectedClaimId || undefined,
+      claimId,
       fileUrl: `#manual/${fileName}`,
       durationSeconds: duration ? parseInt(duration) * 60 : undefined,
       transcriptText: notes || undefined,
@@ -228,7 +229,7 @@ export default function AudioPage() {
                     <SelectValue placeholder="Select claim..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No claim linked</SelectItem>
+                    <SelectItem value="none">No claim linked</SelectItem>
                     {claims?.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.claimNumber}</SelectItem>
                     ))}

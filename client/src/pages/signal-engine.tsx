@@ -53,8 +53,9 @@ export default function SignalEnginePage() {
   const mediumRisk = claims?.filter(c => !highRisk.includes(c) && ((c.riskScore ?? 0) >= 4 || (c.frictionScore ?? 0) >= 4)) ?? [];
   const lowRisk = claims?.filter(c => !highRisk.includes(c) && !mediumRisk.includes(c)) ?? [];
 
-  const avgFriction = claims?.length
-    ? (claims.reduce((s, c) => s + (c.frictionScore ?? 0), 0) / claims.length).toFixed(1)
+  const scoredClaims = claims?.filter(c => (c.frictionScore ?? 0) > 0) ?? [];
+  const avgFriction = scoredClaims.length
+    ? (scoredClaims.reduce((s, c) => s + (c.frictionScore ?? 0), 0) / scoredClaims.length).toFixed(1)
     : "—";
 
   const deniedCount = claims?.filter(c => c.status === "denied").length ?? 0;
@@ -252,9 +253,9 @@ export default function SignalEnginePage() {
               <p className="text-xs text-muted-foreground mb-1">Platform Signal Status</p>
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3 h-3 text-blue-500" />
-                <p className="text-sm font-semibold text-blue-400">Demo Mode</p>
+                <p className="text-sm font-semibold text-blue-400">MVP Rule-Based</p>
               </div>
-              <p className="text-xs text-muted-foreground">Live AI signals pending integration</p>
+              <p className="text-xs text-muted-foreground">Signals derived from real claim data</p>
             </div>
           </div>
         </CardContent>

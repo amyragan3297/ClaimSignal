@@ -32,12 +32,12 @@ const createAdjusterSchema = z.object({
 });
 
 function formatPercent(val: number | null | undefined): string {
-  if (val == null) return "0%";
+  if (val == null) return "\u2014";
   return `${(val * 100).toFixed(1)}%`;
 }
 
 function formatScore(val: number | null | undefined): string {
-  if (val == null) return "0.0";
+  if (val == null) return "\u2014";
   return val.toFixed(1);
 }
 
@@ -59,6 +59,13 @@ function ScoreCard({ label, value, max = 10 }: { label: string; value: number | 
 }
 
 function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () => void }) {
+  const tracked = adjuster.totalClaimsTracked ?? 0;
+  const basisNote =
+    tracked === 0
+      ? "No linked claim evidence yet — scores shown are seeded/directional, not yet derived from your claims."
+      : tracked < 5
+        ? `Based on ${tracked} tracked claim${tracked === 1 ? "" : "s"} — directional only.`
+        : null;
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -74,6 +81,13 @@ function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () =
           {adjuster.isDeskAdjuster && <Badge variant="secondary" data-testid="badge-desk-adjuster">Desk</Badge>}
         </div>
       </div>
+
+      {basisNote && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-500" data-testid="text-adjuster-basis">
+          <Activity className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>{basisNote}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -125,11 +139,11 @@ function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () =
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               <div>
                 <p className="text-xs text-muted-foreground">Avg Response Time</p>
-                <p className="text-sm font-semibold" data-testid="text-avg-response">{adjuster.avgResponseTimeHours ?? 0}h</p>
+                <p className="text-sm font-semibold" data-testid="text-avg-response">{adjuster.avgResponseTimeHours != null ? `${adjuster.avgResponseTimeHours}h` : "\u2014"}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Avg Days to Determination</p>
-                <p className="text-sm font-semibold" data-testid="text-avg-determination">{adjuster.avgDaysToInitialDetermination ?? 0}d</p>
+                <p className="text-sm font-semibold" data-testid="text-avg-determination">{adjuster.avgDaysToInitialDetermination != null ? `${adjuster.avgDaysToInitialDetermination}d` : "\u2014"}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Supplement Acceptance</p>

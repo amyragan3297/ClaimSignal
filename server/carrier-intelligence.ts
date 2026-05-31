@@ -14,7 +14,9 @@ export interface CarrierIntelligence {
   denialRate: number;
   partialApprovalRate: number;
   supplementSuccessRate: number;
+  supplementSampleSize: number;
   escalationSuccessRate: number;
+  escalationSampleSize: number;
   avgResponseTimeDays: number | null;
   commonDenialReasons: { reason: string; count: number }[];
   commonMissingScopeItems: { item: string; count: number }[];
@@ -100,7 +102,9 @@ export function computeCarrierIntelligence(claims: Claim[]): CarrierIntelligence
       denialRate: Math.round(denialRate * 100) / 100,
       partialApprovalRate: n ? Math.round((partial / n) * 100) / 100 : 0,
       supplementSuccessRate: supReq.length ? Math.round((supWon.length / supReq.length) * 100) / 100 : 0,
+      supplementSampleSize: supReq.length,
       escalationSuccessRate: escalated.length ? Math.round((escalationWon.length / escalated.length) * 100) / 100 : 0,
+      escalationSampleSize: escalated.length,
       avgResponseTimeDays: avg(group.map((c) => c.lifecycleVelocityScore)),
       commonDenialReasons: topCounts(group.map((c) => c.denialReason)),
       commonMissingScopeItems: topCounts(group.map((c) => c.vendorFinding)).map((x) => ({ item: x.reason, count: x.count })),

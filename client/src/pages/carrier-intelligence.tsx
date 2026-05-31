@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Building2, TrendingUp, TrendingDown, AlertTriangle, Shield } from "lucide-react";
+import { sampleSizeLabel } from "@/lib/data-source";
 
 interface CarrierIntelligence {
   carrierName: string;
@@ -11,7 +12,9 @@ interface CarrierIntelligence {
   denialRate: number;
   partialApprovalRate: number;
   supplementSuccessRate: number;
+  supplementSampleSize: number;
   escalationSuccessRate: number;
+  escalationSampleSize: number;
   avgResponseTimeDays: number | null;
   commonDenialReasons: { reason: string; count: number }[];
   commonMissingScopeItems: { item: string; count: number }[];
@@ -73,10 +76,17 @@ export default function CarrierIntelligencePage() {
                   <Metric label="Approval" value={pct(c.approvalRate)} good />
                   <Metric label="Partial" value={pct(c.partialApprovalRate)} />
                   <Metric label="Denial" value={pct(c.denialRate)} bad />
-                  <Metric label="Suppl. Win" value={pct(c.supplementSuccessRate)} good />
-                  <Metric label="Escal. Win" value={pct(c.escalationSuccessRate)} good />
+                  <Metric label="Suppl. Win" value={c.supplementSampleSize > 0 ? pct(c.supplementSuccessRate) : "—"} good />
+                  <Metric label="Escal. Win" value={c.escalationSampleSize > 0 ? pct(c.escalationSuccessRate) : "—"} good />
                   <Metric label="Friction" value={c.frictionIndex == null ? "—" : String(c.frictionIndex)} />
                 </div>
+
+                {sampleSizeLabel(c.claimsCount) && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-1.5 text-xs text-amber-500" data-testid="text-carrier-basis">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>{sampleSizeLabel(c.claimsCount)} — rates reflect a small sample and may shift as more claims are added.</span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div><div className="text-xs text-muted-foreground">Avg RCV</div><div className="font-medium">{money(c.avgRcv)}</div></div>
