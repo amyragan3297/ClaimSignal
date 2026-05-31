@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import logoImg from "@assets/ClaimSignal_top_logo_panel-1_1780180101332.png";
+import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -125,7 +125,7 @@ export default function Homepage() {
           </Link>
           <div className="flex items-center gap-3">
             <Link href="/login">
-              <Button variant="ghost" size="sm" data-testid="link-login">Log In</Button>
+              <Button variant="ghost" size="sm" data-testid="link-login">Log In to Platform</Button>
             </Link>
             <Link href="/login?tab=register">
               <Button size="sm" data-testid="button-nav-request-access">
@@ -168,7 +168,7 @@ export default function Homepage() {
             </Link>
             <Link href="/login">
               <Button variant="outline" size="lg" className="px-8" data-testid="button-hero-secondary">
-                View Platform
+                Log In to Platform
               </Button>
             </Link>
           </div>

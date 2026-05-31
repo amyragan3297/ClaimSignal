@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import logoImg from "@assets/ClaimSignal_top_logo_panel-1_1780180101332.png";
+import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { loginSchema, signupSchema } from "@shared/schema";

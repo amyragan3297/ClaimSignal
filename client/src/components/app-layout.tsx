@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import logoImg from "@assets/ClaimSignal_top_logo_panel-1_1780180101332.png";
+import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { useAuth } from "@/lib/auth";
 import { useLocation, Link, Redirect } from "wouter";
 import {
