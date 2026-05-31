@@ -102,6 +102,10 @@ export default function LoginPage() {
                     <Input
                       id="login-email"
                       type="email"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       placeholder="you@company.com"
                       data-testid="input-login-email"
                       {...loginForm.register("email")}
@@ -149,6 +153,10 @@ export default function LoginPage() {
                     <Input
                       id="register-email"
                       type="email"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       placeholder="you@company.com"
                       data-testid="input-register-email"
                       {...registerForm.register("email")}

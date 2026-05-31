@@ -700,7 +700,7 @@ export type StormEvent = typeof stormEvents.$inferSelect;
 export type InsertStormEvent = z.infer<typeof insertStormEventSchema>;
 
 export const signupSchema = z.object({
-  email: z.string().email("Valid email required"),
+  email: z.string().trim().toLowerCase().email("Valid email required"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   fullName: z.string().min(2, "Full name required"),
   orgName: z.string().min(2, "Organization name required"),
@@ -711,7 +711,7 @@ export const signupSchema = z.object({
 export const registerSchema = signupSchema;
 
 export const loginSchema = z.object({
-  email: z.string().email("Valid email required"),
+  email: z.string().trim().toLowerCase().email("Valid email required"),
   password: z.string().min(1, "Password required"),
 });
 
