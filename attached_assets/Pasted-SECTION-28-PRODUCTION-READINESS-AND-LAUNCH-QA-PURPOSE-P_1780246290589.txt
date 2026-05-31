@@ -1,0 +1,277 @@
+SECTION 28
+
+PRODUCTION READINESS AND LAUNCH QA
+
+PURPOSE
+
+Prepare ClaimSignal for real user testing, investor demonstrations, founder onboarding, and paid subscription launch.
+
+This section focuses on stability, usability, security, performance, mobile experience, and trust.
+
+⸻
+
+CORE OBJECTIVE
+
+Before launch, verify that ClaimSignal is stable enough for:
+
+* Founder demos
+* Investor demos
+* Contractor beta users
+* Paid users
+* Team accounts
+* Real claim uploads
+
+Do not add new major features during this phase unless required to fix a launch-blocking issue.
+
+⸻
+
+LOGIN AND AUTHENTICATION QA
+
+Verify:
+
+* Login works
+* Logout works
+* Password reset works
+* New user registration works
+* Role assignment works
+* Master Admin access works
+* Team Admin access works
+* Individual access works
+* Executive access works
+* Investor access works
+
+No user should access data outside their permitted role.
+
+⸻
+
+MOBILE QA
+
+Verify on mobile:
+
+* Login page displays correctly
+* Logo has no visible square background
+* Claim dashboard is readable
+* Upload buttons work
+* Navigation works
+* Tables do not break layout
+* Text is not cut off
+* Buttons are large enough to tap
+* Forms are usable
+
+Mobile usability is mandatory.
+
+⸻
+
+BRANDING QA
+
+Verify:
+
+* ClaimSignal™ appears consistently
+* ClaimSignal® is not used
+* Logo background is transparent
+* Footer is correct
+* Product name is consistent
+* Login page looks professional
+* Dashboard branding looks complete
+
+Footer should read:
+
+© 2026 ClaimSignal™
+Operational Intelligence for Property Claims
+
+⸻
+
+MASKING AND PRIVACY QA
+
+Verify:
+
+Master Admin:
+Full unmasked access.
+
+All other applicable roles:
+Masked or restricted access based on permissions.
+
+Confirm masking for:
+
+* Claim numbers
+* Addresses
+* Policy numbers
+* Phone numbers
+* Email addresses
+* Homeowner names in aggregate views
+* Investor reports
+
+No protected claim data should appear in investor-safe or executive aggregate views.
+
+⸻
+
+CLAIM WORKFLOW QA
+
+Test full workflow:
+
+1. Create claim.
+2. Upload document.
+3. Extract claim data.
+4. Review suggested data.
+5. Confirm carrier.
+6. Confirm adjuster.
+7. Confirm outcome.
+8. Generate timeline.
+9. View dashboard.
+10. Search playbooks.
+11. Export report.
+
+All steps must work without breaking existing data.
+
+⸻
+
+DUPLICATE PREVENTION QA
+
+Verify duplicate warning appears when matching:
+
+* Claim number
+* Property address
+* Homeowner name
+* Carrier
+* Date of loss
+* Existing uploaded file
+* Existing adjuster relationship
+
+Do not silently create duplicate claims.
+
+⸻
+
+INTELLIGENCE QA
+
+Verify:
+
+* Adjuster scorecards use real data
+* Carrier scorecards use real data
+* Storm intelligence does not claim live integration unless connected
+* Playbook results use real historical outcomes
+* AI Copilot responses are grounded in available data
+* Insufficient data messages display correctly
+* No fake metrics appear
+
+⸻
+
+BILLING QA
+
+Verify:
+
+* Stripe checkout works
+* Billing portal works
+* Subscription status saves correctly
+* Plan access is enforced
+* Seat limits work
+* Failed payment restrictions work
+* Canceled users do not lose data
+* Founder pricing is preserved
+* Master Admin retains full access
+
+⸻
+
+PERFORMANCE QA
+
+Verify:
+
+* Dashboard loads quickly
+* Claim pages load correctly
+* Search does not time out
+* Uploads complete reliably
+* Large claim records remain usable
+* Reports generate without crashing
+
+⸻
+
+ERROR HANDLING
+
+Create clear user-facing messages for:
+
+* Upload failed
+* Document analysis failed
+* Payment failed
+* Duplicate claim found
+* Missing required fields
+* Insufficient data
+* Unauthorized access
+* Search returned no results
+
+Avoid technical error dumps on user-facing pages.
+
+⸻
+
+AUDIT LOG QA
+
+Verify audit logs capture:
+
+* Login
+* Claim creation
+* Claim edits
+* Uploads
+* Extractions
+* Adjuster links
+* Outcome changes
+* Playbook searches
+* Billing events
+* Report exports
+* Permission changes
+
+⸻
+
+BACKUP AND DATA SAFETY
+
+Verify:
+
+* No user action deletes claim data without confirmation
+* Downgrades do not delete data
+* Failed payments do not delete data
+* Deleted records are recoverable if supported
+* Exports work before major data changes
+
+⸻
+
+DEMO READINESS
+
+Create demo-ready sample data using fictional claim information only.
+
+Include:
+
+* Sample carrier
+* Sample adjuster
+* Sample denial
+* Sample approval
+* Sample overturned outcome
+* Sample playbook
+* Sample dashboard metrics
+
+Clearly label:
+
+Demo Claim
+Fictional Sample Data
+
+⸻
+
+FINAL LAUNCH CHECKLIST
+
+Verify:
+
+1. Authentication works.
+2. Roles work.
+3. Billing works.
+4. Claim workflow works.
+5. Upload workflow works.
+6. Intelligence dashboards work.
+7. Playbook search works.
+8. Masking works.
+9. Mobile layout works.
+10. Reports export correctly.
+11. No fake data appears as real data.
+12. No protected data appears in investor views.
+13. Logo and branding are clean.
+14. Stripe subscriptions are enforced.
+15. Audit logs are active.
+
+SUCCESS CONDITION
+
+ClaimSignal is stable, secure, mobile-usable, properly branded, subscription-ready, demo-ready, and safe for founder testing, contractor beta onboarding, investor demonstrations, and paid launch preparation.
