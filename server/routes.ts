@@ -927,7 +927,45 @@ export async function registerRoutes(
           ipAddress: getClientIp(req),
         });
 
-        res.json(recording);
+        // Connect audio to claim intelligence: when the recording is linked to a
+        // claim, run MVP timeline/date extraction over the transcript so spoken
+        // events (loss date, inspection, denial, etc.) feed the claim's timeline.
+        let extractedEventCount = 0;
+        if (claimId && transcriptText && transcriptText.trim()) {
+          try {
+            const linkedClaim = await storage.getClaim(claimId, req.auth!.organizationId);
+            if (linkedClaim) {
+              const created = await createCandidatesFromText({
+                text: transcriptText,
+                claimId: linkedClaim.id,
+                orgId: req.auth!.organizationId,
+                createdByUserId: req.auth!.userId,
+                sourceHint: "transcript",
+                sourceAudioId: recording.id,
+              });
+              extractedEventCount = created.length;
+              if (extractedEventCount > 0) {
+                await storage.createAuditLog({
+                  organizationId: req.auth!.organizationId,
+                  actorUserId: req.auth!.userId,
+                  actorRole: req.auth!.role,
+                  isImpersonation: req.auth!.isImpersonation,
+                  impersonatorUserId: req.auth!.impersonatorUserId,
+                  actionType: "TIMELINE_EXTRACTION_RUN",
+                  entityType: "claim",
+                  entityId: linkedClaim.id,
+                  afterJson: { createdCount: extractedEventCount, source: "audio_transcript", audioId: recording.id },
+                  ipAddress: getClientIp(req),
+                });
+              }
+            }
+          } catch (extractErr) {
+            // Extraction is best-effort; transcription itself already succeeded.
+            console.error("[audio/transcribe] timeline extraction failed:", (extractErr as Error)?.message);
+          }
+        }
+
+        res.json({ ...recording, extractedEventCount });
       } catch (err: any) {
         res.status(500).json({ message: err.message });
       }

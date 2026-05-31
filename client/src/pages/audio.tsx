@@ -107,9 +107,15 @@ export default function AudioPage() {
       const res = await apiRequest("POST", "/api/audio/transcribe", data);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (rec: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/audio"] });
-      toast({ title: "Audio transcribed", description: "AI transcription complete." });
+      const n = rec?.extractedEventCount ?? 0;
+      toast({
+        title: "Audio transcribed",
+        description: n > 0
+          ? `AI transcription complete. ${n} timeline event${n === 1 ? "" : "s"} extracted to the linked claim.`
+          : "AI transcription complete.",
+      });
       setDialogOpen(false);
       setFileName("");
       setDuration("");

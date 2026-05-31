@@ -1,0 +1,166 @@
+START ITEM 2 ONLY — ADD AI / SIGNAL STATUS TO CLAIMS PAGE
+
+Now that the audio upload Select.Item runtime error has been addressed or is being handled, start Item 2 only.
+
+Objective:
+The Claims page must show ClaimSignal intelligence directly in the claim list or claim cards. It should not look like a plain claim table.
+
+Do not rebuild the app.
+Do not erase data.
+Do not remove working features.
+Do not weaken login, masking, RBAC, audit logs, shared masked claim visibility, or security.
+
+CLAIMS PAGE REQUIREMENT
+
+Each claim row or claim card should show visible intelligence fields:
+
+- AI / analysis status
+- risk level
+- risk score
+- escalation readiness score
+- missing documentation status
+- timeline extraction status
+- carrier friction indicator
+- adjuster friction indicator
+- vendor signal if available
+- Signal Engine summary
+- next recommended action
+
+POSSIBLE CLAIM INTELLIGENCE STATUSES
+
+Use clear statuses such as:
+
+- AI analysis pending
+- MVP rule-based analysis complete
+- Timeline needs review
+- Missing documents
+- Ready for escalation review
+- Low risk
+- Needs more data
+- No evidence uploaded
+
+RUN ANALYSIS ACTION
+
+Add or verify a visible action:
+
+- Run AI Analysis
+or
+- Analyze Claim
+or
+- Run Signal Engine
+
+This action should be available from:
+
+- Claims list
+- Claim detail
+- Evidence upload result if applicable
+- Signal Engine page if applicable
+
+If full LLM extraction is not connected yet, use MVP rule-based analysis from available claim fields and uploaded parsed text.
+
+Label rule-based output honestly:
+
+“MVP rule-based analysis”
+
+Do not label rule-based analysis as full AI.
+
+RULE-BASED MVP SIGNALS
+
+For now, calculate basic signals from existing claim data:
+
+High risk if:
+- claim is denied
+- denial reason exists
+- missing documentation exists
+- no denial letter uploaded
+- no photos uploaded
+- supplement is pending
+- timeline needs review
+- escalation is active
+- carrier friction indicator exists
+- adjuster friction indicator exists
+
+Escalation readiness should increase when:
+- denial letter exists
+- estimate exists
+- photos exist
+- supplement exists
+- timeline events exist
+- communication records exist
+- code or manufacturer documentation exists
+
+Missing documentation should flag:
+- no denial letter
+- no estimate
+- no photos
+- no supplement
+- no communication records
+- no timeline events
+- no storm report if storm/date-of-loss is relevant
+
+NEXT RECOMMENDED ACTION EXAMPLES
+
+Use practical recommendations such as:
+
+- Upload denial letter
+- Upload estimate
+- Upload labeled photos
+- Review extracted timeline dates
+- Add adjuster information
+- Add carrier response
+- Prepare supplement
+- Request reinspection
+- Review Playbook match
+- Add communication record
+- Add outcome information
+
+DISPLAY RULES
+
+Do not show fake certainty.
+
+If data is missing, show:
+- Needs more data
+- Analysis pending
+- No evidence uploaded
+- Not enough data
+
+Do not show meaningless 0.0 values.
+
+AUDIT LOGS
+
+Log:
+- claim intelligence viewed
+- AI analysis run
+- Signal Engine run
+- denied access attempt
+
+VALIDATION REQUIRED
+
+After fixing, confirm:
+
+1. Claims page shows AI / Signal status.
+2. Each claim row or card shows risk or analysis status.
+3. Claims page has a Run AI Analysis, Analyze Claim, or Run Signal Engine action.
+4. Rule-based analysis is labeled as MVP rule-based analysis if full AI is not connected.
+5. Missing documentation flags appear when data is missing.
+6. Next recommended action appears.
+7. No fake 0.0 metrics are displayed.
+8. Existing data remains intact.
+9. Login still works.
+10. Masking still works.
+11. Audit logs still work.
+12. Tests still pass.
+
+FINAL REPORT REQUIRED
+
+Report:
+- files changed
+- database changes made
+- whether changes were additive
+- commands run
+- tests passed
+- tests failed
+- Claims AI / Signal status implementation
+- Run analysis action status
+- remaining limitations
+- whether the app remains safe to demo

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,6 +56,8 @@ const createClaimSchema = z.object({
   supplementApproved: z.string().optional(),
   denialReason: z.string().optional(),
   initialOutcome: z.string().optional(),
+  finalOutcome: z.string().optional(),
+  denialOverturned: z.boolean().optional(),
 });
 
 const statusColors: Record<string, string> = {
@@ -165,6 +168,8 @@ export default function ClaimsPage() {
       supplementApproved: "",
       denialReason: "",
       initialOutcome: "",
+      finalOutcome: "",
+      denialOverturned: false,
     },
   });
 
@@ -408,6 +413,25 @@ export default function ClaimsPage() {
                   <Label>Denial Reason</Label>
                   <Input placeholder="If denied/partial, why?" data-testid="input-denial-reason" {...form.register("denialReason")} />
                 </div>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div className="space-y-2">
+                    <Label>Final Outcome</Label>
+                    <Input placeholder="Final result after escalation" data-testid="input-final-outcome" {...form.register("finalOutcome")} />
+                  </div>
+                  <div className="flex items-end pb-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <Checkbox
+                        checked={form.watch("denialOverturned")}
+                        onCheckedChange={(v) => form.setValue("denialOverturned", v === true)}
+                        data-testid="checkbox-denial-overturned"
+                      />
+                      <span className="text-sm">Denial later overturned</span>
+                    </label>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Record the initial decision and, if it changed (e.g. denied → overturned), the final outcome. This builds outcome history for intelligence.
+                </p>
               </div>
 
               <div className="flex justify-end gap-2">

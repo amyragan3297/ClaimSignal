@@ -236,15 +236,18 @@ export default function Homepage() {
                 Built for sensitive claim data.
               </h2>
               <p className="text-muted-foreground leading-relaxed text-sm">
-                ClaimSignal uses role-aware access concepts, masked views, audit-ready workflows, and controlled data visibility. Master Admin users may view full unmasked records. Restricted users see masked claim numbers, carrier names, and property addresses.
+                ClaimSignal enforces role-based access control with organization-level tenant isolation. PII masking is on by default and enforced server-side — only the Master role can view unmasked records, and every unmasking action is written to an immutable audit log. Restricted roles see masked claim numbers, carrier names, and property addresses across dashboards and exports.
+              </p>
+              <p className="text-muted-foreground/80 leading-relaxed text-xs mt-3">
+                Authentication, role-based access, PII masking, and audit logging are implemented and active. Behavioral scoring is currently MVP rule-based analysis, clearly labeled in-product.
               </p>
             </div>
             <div className="space-y-4">
               {[
-                { icon: Lock, label: "Role-aware access control with tenant isolation" },
-                { icon: Eye, label: "Masked PII views by default for restricted users" },
-                { icon: FileText, label: "Audit-ready event logging for all platform actions" },
-                { icon: Shield, label: "Controlled data visibility with unmasking audit trail" },
+                { icon: Lock, label: "JWT authentication with tenant-isolated, role-based access" },
+                { icon: Eye, label: "Server-enforced PII masking — on by default for non-Master roles" },
+                { icon: FileText, label: "Immutable audit logging for all major platform actions" },
+                { icon: Shield, label: "Master-only unmasking, with every access recorded to the audit trail" },
               ].map((item) => (
                 <div key={item.label} className="flex items-start gap-3">
                   <div className="mt-0.5 w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
@@ -265,10 +268,10 @@ export default function Homepage() {
             Current Stage
           </Badge>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
-            Pre-implementation pilot platform.
+            MVP platform — live core, roadmap intelligence.
           </h2>
           <p className="text-muted-foreground leading-relaxed text-sm max-w-2xl mx-auto">
-            ClaimSignal is currently being prepared for technical validation, pilot workflows, and commercialization support. Production services such as authentication hardening, payment processing, file storage, OCR, AI extraction, storm APIs, and audit logging will be finalized during backend implementation.
+            Live today: authentication, role-based access, tenant isolation, server-enforced PII masking, audit logging, Stripe billing, claim and evidence management, AI claim analysis, and audio transcription. Behavioral scoring (friction, escalation, supplement resistance) runs as MVP rule-based analysis. On the roadmap: live storm/weather API integration, geographic heat-map visualization, and OCR-driven document extraction. We label what is rule-based and never display fabricated metrics — empty data shows as "Not enough data" rather than a false zero.
           </p>
           <div className="mt-8">
             <Link href="/login?tab=register">
