@@ -370,6 +370,62 @@ export async function registerRoutes(
     }
   });
 
+  // ── Section 13 — Claim Deduplication Intelligence ─────────────────────────
+  // Must be registered BEFORE /api/claims/:id routes (literal path wins over param).
+  app.post("/api/claims/check-duplicates", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const role = req.auth!.role;
+      const { claimNumber, homeownerName, propertyAddress, carrier, dateOfLoss } = req.body;
+
+      const allClaims = isMaster(role)
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
+
+      const norm = (s: unknown) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+
+      const matches: Array<{ claim: Record<string, any>; reasons: string[]; strength: "strong" | "medium" }> = [];
+
+      for (const c of allClaims) {
+        const a = c as any;
+        const reasons: string[] = [];
+        let strength: "strong" | "medium" = "medium";
+
+        if (claimNumber && c.claimNumber && norm(claimNumber) === norm(c.claimNumber)) {
+          reasons.push("Identical claim number"); strength = "strong";
+        }
+        if (homeownerName && a.homeownerName && norm(homeownerName) === norm(a.homeownerName)) {
+          reasons.push("Same homeowner name");
+          if (propertyAddress && a.propertyAddress && norm(propertyAddress) === norm(a.propertyAddress)) {
+            reasons.push("Same property address"); strength = "strong";
+          }
+        }
+        if (carrier && c.carrier && norm(carrier) === norm(c.carrier) && dateOfLoss && a.dateOfLoss) {
+          const d1 = new Date(dateOfLoss); const d2 = new Date(a.dateOfLoss);
+          if (!isNaN(d1.getTime()) && !isNaN(d2.getTime()) && d1.toDateString() === d2.toDateString()) {
+            reasons.push("Same carrier and date of loss");
+          }
+        }
+
+        if (reasons.length > 0) {
+          matches.push({ claim: { id: c.id, ...applyPiiMasking(c, role) }, reasons, strength });
+        }
+      }
+
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "CLAIM_DUPLICATE_CHECK", entityType: "claim", entityId: "dedup_check",
+        afterJson: { matchCount: matches.length, hasStrongMatch: matches.some((m) => m.strength === "strong") },
+        ipAddress: getClientIp(req),
+      });
+
+      res.json({ matches, hasStrongMatch: matches.some((m) => m.strength === "strong") });
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
   app.post("/api/claims", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
