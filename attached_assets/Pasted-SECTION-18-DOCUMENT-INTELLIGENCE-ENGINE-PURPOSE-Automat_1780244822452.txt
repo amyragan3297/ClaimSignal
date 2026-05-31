@@ -1,0 +1,190 @@
+SECTION 18
+
+DOCUMENT INTELLIGENCE ENGINE
+
+PURPOSE
+
+Automatically extract intelligence from uploaded claim documents and populate ClaimSignal fields.
+
+The user should not have to manually enter information already present in documents.
+
+SUPPORTED DOCUMENT TYPES
+
+* Carrier estimates
+* Xactimate estimates
+* Denial letters
+* Coverage letters
+* Reservation of rights letters
+* Engineer reports
+* Inspection reports
+* Invoices
+* Contracts
+* ITEL reports
+* Photographs
+* Email exports
+* PDF claim packets
+* Audio transcripts
+
+⸻
+
+AUTOMATIC EXTRACTION
+
+When a document is uploaded, extract:
+
+Claim Information
+
+* Claim number
+* Date of loss
+* Carrier
+* Policy number
+* Property address
+* Claim status
+
+Financial Information
+
+* RCV
+* ACV
+* Recoverable depreciation
+* Deductible
+* Net payment
+* O&P
+* Supplements
+* Permit costs
+
+Adjuster Information
+
+* Adjuster name
+* Adjuster role
+* Supervisor name
+* Independent adjusting firm
+* Carrier representative
+
+Property Information
+
+* Roof type
+* Number of stories
+* Steep designation
+* Detached structures
+* Interior damages
+* Additional structures
+
+⸻
+
+DENIAL DETECTION
+
+Automatically detect:
+
+* Full denial
+* Partial denial
+* Coverage limitation
+* Matching dispute
+* Repairability dispute
+* Wear and tear language
+* Mechanical damage language
+* Installation defect language
+* Maintenance language
+
+Display:
+
+Detected Denial Reasons
+
+Confidence Level
+
+⸻
+
+MISSING ITEM DETECTION
+
+Compare uploaded estimates against ClaimSignal standards.
+
+Flag possible omissions:
+
+* Drip edge
+* Starter
+* Ridge cap
+* Ridge vent
+* Ice and water shield
+* Valley liner
+* Pipe jacks
+* Flashing
+* Permit
+* Dumpster
+* O&P
+* Steep charges
+* High charges
+* Detachment items
+
+Display:
+
+Potential Missing Line Items
+
+Confidence Level
+
+⸻
+
+TIMELINE EXTRACTION
+
+Automatically identify:
+
+* Inspection dates
+* Reinspection dates
+* Payment dates
+* Denial dates
+* Coverage dates
+* Escalation dates
+
+Create timeline entries automatically.
+
+⸻
+
+PLAYBOOK LINKING
+
+After extraction:
+
+Search historical claims.
+
+Suggest:
+
+* Similar carriers
+* Similar adjusters
+* Similar denial reasons
+* Similar outcomes
+
+Display:
+
+Related Historical Playbooks
+
+⸻
+
+AUDIT LOGGING
+
+Record:
+
+* Document uploaded
+* Document analyzed
+* Data extracted
+* Timeline generated
+* Missing items detected
+* Denial reason detected
+* Playbook linked
+
+⸻
+
+SAFETY
+
+Never overwrite user-entered data automatically.
+
+Always show:
+
+Review Suggested Data
+
+Accept
+Reject
+Edit
+
+before modifying claim records.
+
+⸻
+
+SUCCESS CONDITION
+
+Users upload documents and ClaimSignal automatically extracts structured intelligence, identifies denial patterns, flags possible omissions, builds timelines, and recommends relevant historical playbooks while preserving user control.
