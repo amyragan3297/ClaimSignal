@@ -31,16 +31,30 @@ import {
   Brain,
   Calendar,
   Eye,
+  Wrench,
+  ShieldCheck,
+  ListChecks,
+  Sparkles,
+  Cloud,
+  Wind,
+  Droplets,
+  Snowflake,
+  Thermometer,
+  BookOpen,
+  ArrowRight,
+  Pencil,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { computeDefensibility, type AiAnalysis } from "@/lib/claim-intelligence";
 
 const LIFECYCLE_PHASES = [
   { key: "pre_claim", label: "Pre-Claim" },
@@ -199,6 +213,71 @@ export default function ClaimDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/timeline", claimId] });
     },
     onError: (err: Error) => toast({ title: "Review failed", description: err.message, variant: "destructive" }),
+  });
+
+  // ── AI claim analysis ──
+  const [aiResult, setAiResult] = useState<AiAnalysis | null>(null);
+  const aiMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/claims/${claimId}/ai-analysis`, {});
+      return res.json() as Promise<{ analysis: AiAnalysis }>;
+    },
+    onSuccess: (data) => {
+      setAiResult(data.analysis);
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId] });
+      toast({ title: "AI analysis generated" });
+    },
+    onError: (err: Error) => toast({ title: "Analysis failed", description: err.message, variant: "destructive" }),
+  });
+
+  // ── Weather ──
+  const { data: weatherData, isLoading: weatherLoading } = useQuery<{ available: boolean; weather?: any; reason?: string }>({
+    queryKey: ["/api/claims", claimId, "weather"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/claims/${claimId}/weather`);
+      return res.json();
+    },
+    enabled: !!claimId,
+  });
+
+  // ── Vendor tracking edit ──
+  const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
+  const vendorForm = useForm<Record<string, string>>({ defaultValues: {} });
+  const vendorMutation = useMutation({
+    mutationFn: async (data: Record<string, string>) => {
+      await apiRequest("PATCH", `/api/claims/${claimId}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId] });
+      toast({ title: "Vendor details updated" });
+      setVendorDialogOpen(false);
+    },
+    onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+  });
+
+  // ── Capture outcome as playbook (Master only) ──
+  const [playbookDialogOpen, setPlaybookDialogOpen] = useState(false);
+  const playbookForm = useForm<{ title: string; actionTaken: string; whatWorked: string; outcome: string; recommendedNextStep: string }>({
+    defaultValues: { title: "", actionTaken: "", whatWorked: "", outcome: "", recommendedNextStep: "" },
+  });
+  const playbookMutation = useMutation({
+    mutationFn: async (data: any) => {
+      await apiRequest("POST", `/api/playbooks`, {
+        ...data,
+        sourceClaimId: claimId,
+        carrier: claim?.carrier || undefined,
+        claimType: claim?.claimType || claim?.lossType || undefined,
+        denialReason: claim?.denialReason || undefined,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/playbooks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId, "playbook-recommendations"] });
+      toast({ title: "Outcome captured as playbook" });
+      setPlaybookDialogOpen(false);
+      playbookForm.reset();
+    },
+    onError: (err: Error) => toast({ title: "Failed to capture playbook", description: err.message, variant: "destructive" }),
   });
 
   const handleExport = async (type: string, format: string) => {
@@ -583,7 +662,362 @@ export default function ClaimDetailPage() {
             <InfoRow label="Policy Number" value={claim.policyNumber || "\u2014"} testId="detail-policy-number" />
           </CardContent>
         </Card>
+
+        <Card data-testid="card-weather">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Cloud className="w-4 h-4 text-primary" />
+              Weather at Loss
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {weatherLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ) : !weatherData?.available ? (
+              <p className="text-sm text-muted-foreground py-2" data-testid="weather-unavailable">
+                {weatherData?.reason || "Weather data not available for this claim."}
+              </p>
+            ) : (
+              <div className="space-y-3" data-testid="weather-content">
+                <p className="text-sm" data-testid="weather-summary">{weatherData.weather.summary}</p>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span data-testid="weather-location">{weatherData.weather.location}</span>
+                  <span data-testid="weather-date">{weatherData.weather.date}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {weatherData.weather.tempMaxC != null && (
+                    <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-temp">
+                      <Thermometer className="w-4 h-4 text-orange-400" />
+                      <span className="text-sm">{Math.round(weatherData.weather.tempMinC)}° / {Math.round(weatherData.weather.tempMaxC)}°C</span>
+                    </div>
+                  )}
+                  {weatherData.weather.windGustMaxKmh != null && (
+                    <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-wind">
+                      <Wind className="w-4 h-4 text-sky-400" />
+                      <span className="text-sm">{Math.round(weatherData.weather.windGustMaxKmh)} km/h gust</span>
+                    </div>
+                  )}
+                  {weatherData.weather.precipitationMm != null && weatherData.weather.precipitationMm > 0 && (
+                    <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-precip">
+                      <Droplets className="w-4 h-4 text-blue-400" />
+                      <span className="text-sm">{weatherData.weather.precipitationMm.toFixed(1)} mm</span>
+                    </div>
+                  )}
+                  {weatherData.weather.snowfallCm != null && weatherData.weather.snowfallCm > 0 && (
+                    <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-snow">
+                      <Snowflake className="w-4 h-4 text-cyan-300" />
+                      <span className="text-sm">{weatherData.weather.snowfallCm.toFixed(1)} cm</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground/70">Historical data via Open-Meteo</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-vendor-tracking">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Wrench className="w-4 h-4 text-primary" />
+              Vendor Tracking
+            </CardTitle>
+            <Dialog open={vendorDialogOpen} onOpenChange={(open) => {
+              setVendorDialogOpen(open);
+              if (open) {
+                vendorForm.reset({
+                  vendorName: claim.vendorName || "",
+                  inspectionVendor: claim.inspectionVendor || "",
+                  ladderAssistVendor: claim.ladderAssistVendor || "",
+                  engineeringFirm: claim.engineeringFirm || "",
+                  itelVendor: claim.itelVendor || "",
+                  photoInspectionVendor: claim.photoInspectionVendor || "",
+                  vendorFinding: claim.vendorFinding || "",
+                  vendorImpact: claim.vendorImpact || "",
+                  vendorNotes: claim.vendorNotes || "",
+                });
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" data-testid="button-edit-vendor">
+                  <Pencil className="w-3 h-3" />
+                  Edit
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Edit Vendor Tracking</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={vendorForm.handleSubmit((d) => vendorMutation.mutate(d))} className="space-y-3">
+                  {[
+                    { name: "vendorName", label: "Primary Vendor" },
+                    { name: "inspectionVendor", label: "Inspection Vendor" },
+                    { name: "ladderAssistVendor", label: "Ladder Assist Vendor" },
+                    { name: "engineeringFirm", label: "Engineering Firm" },
+                    { name: "itelVendor", label: "ITEL Vendor" },
+                    { name: "photoInspectionVendor", label: "Photo Inspection Vendor" },
+                  ].map((f) => (
+                    <div className="space-y-1.5" key={f.name}>
+                      <Label>{f.label}</Label>
+                      <Input data-testid={`input-${f.name}`} {...vendorForm.register(f.name)} />
+                    </div>
+                  ))}
+                  <div className="space-y-1.5">
+                    <Label>Vendor Finding</Label>
+                    <Textarea rows={2} data-testid="input-vendorFinding" {...vendorForm.register("vendorFinding")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Impact</Label>
+                    <Textarea rows={2} data-testid="input-vendorImpact" {...vendorForm.register("vendorImpact")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Vendor Notes</Label>
+                    <Textarea rows={2} data-testid="input-vendorNotes" {...vendorForm.register("vendorNotes")} />
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" disabled={vendorMutation.isPending} data-testid="button-save-vendor">
+                      {vendorMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <InfoRow label="Primary Vendor" value={claim.vendorName || "\u2014"} testId="detail-vendor-name" />
+            <InfoRow label="Inspection Vendor" value={claim.inspectionVendor || "\u2014"} testId="detail-inspection-vendor" />
+            <InfoRow label="Ladder Assist" value={claim.ladderAssistVendor || "\u2014"} testId="detail-ladder-vendor" />
+            <InfoRow label="Engineering Firm" value={claim.engineeringFirm || "\u2014"} testId="detail-engineering-firm" />
+            <InfoRow label="ITEL Vendor" value={claim.itelVendor || "\u2014"} testId="detail-itel-vendor" />
+            <InfoRow label="Photo Inspection" value={claim.photoInspectionVendor || "\u2014"} testId="detail-photo-vendor" />
+            {claim.vendorFinding && (
+              <div>
+                <span className="text-sm text-muted-foreground block mb-1">Finding</span>
+                <p className="text-sm bg-muted/50 rounded-md p-3" data-testid="detail-vendor-finding">{claim.vendorFinding}</p>
+              </div>
+            )}
+            {claim.vendorImpact && (
+              <div>
+                <span className="text-sm text-muted-foreground block mb-1">Impact</span>
+                <p className="text-sm bg-muted/50 rounded-md p-3" data-testid="detail-vendor-impact">{claim.vendorImpact}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {(() => {
+        const def = computeDefensibility(claim);
+        const levelColor = def.level === "strong" ? "text-emerald-400" : def.level === "moderate" ? "text-amber-400" : "text-red-400";
+        const barColor = def.level === "strong" ? "bg-emerald-500" : def.level === "moderate" ? "bg-amber-500" : "bg-red-500";
+        return (
+          <Card data-testid="card-defensibility">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-primary" />
+                Defensibility Score
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div>
+                <div className="flex items-end justify-between mb-1.5">
+                  <span className={`text-3xl font-bold ${levelColor}`} data-testid="defensibility-score">{def.score}<span className="text-base text-muted-foreground">/100</span></span>
+                  <Badge variant="outline" className={`capitalize ${levelColor}`} data-testid="defensibility-level">{def.level}</Badge>
+                </div>
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div className={`h-full ${barColor}`} style={{ width: `${def.score}%` }} />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1.5">{def.completed} of {def.total} documentation items present</p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-x-6 gap-y-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <ListChecks className="w-3.5 h-3.5" /> Documentation Checklist
+                  </p>
+                  <ul className="space-y-1.5">
+                    {def.checklist.map((item) => (
+                      <li key={item.key} className="flex items-center gap-2 text-sm" data-testid={`checklist-${item.key}`}>
+                        {item.done ? <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" /> : <XCircle className="w-4 h-4 text-muted-foreground/50 shrink-0" />}
+                        <span className={item.done ? "" : "text-muted-foreground"}>{item.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Gaps to Address
+                  </p>
+                  {def.gaps.length === 0 ? (
+                    <p className="text-sm text-emerald-400" data-testid="gaps-none">No documentation gaps — claim is fully supported.</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {def.gaps.map((g, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground" data-testid={`gap-${i}`}>
+                          <ArrowRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-400" />
+                          <span>{g}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      <Card data-testid="card-ai-intelligence">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            AI Claim Intelligence
+          </CardTitle>
+          <Button size="sm" variant="outline" disabled={aiMutation.isPending} onClick={() => aiMutation.mutate()} data-testid="button-generate-ai">
+            {aiMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {claim.aiAnalysisAt || aiResult ? "Regenerate" : "Generate Analysis"}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {(() => {
+            const analysis: AiAnalysis | null = aiResult || (claim.aiAnalysisJson as AiAnalysis | null) || null;
+            if (aiMutation.isPending) {
+              return (
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              );
+            }
+            if (!analysis) {
+              return <p className="text-sm text-muted-foreground py-2" data-testid="ai-empty">No AI analysis yet. Generate a narrative, risk breakdown, and recommended actions from this claim's data.</p>;
+            }
+            return (
+              <div className="space-y-4" data-testid="ai-content">
+                {analysis.narrative && (
+                  <p className="text-sm leading-relaxed" data-testid="ai-narrative">{analysis.narrative}</p>
+                )}
+                {analysis.riskExplanation && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Risk Assessment</p>
+                    <p className="text-sm" data-testid="ai-risk">{analysis.riskExplanation}</p>
+                  </div>
+                )}
+                {analysis.codeCompliance && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Code Compliance</p>
+                    <p className="text-sm" data-testid="ai-code">{analysis.codeCompliance}</p>
+                  </div>
+                )}
+                {analysis.topMissingScope?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Top Missing Scope</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysis.topMissingScope.map((s, i) => (
+                        <Badge key={i} variant="secondary" data-testid={`ai-scope-${i}`}>{s}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {analysis.suggestedAction && (
+                  <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1">Suggested Next Move</p>
+                    <p className="text-sm" data-testid="ai-suggested">{analysis.suggestedAction}</p>
+                  </div>
+                )}
+                {claim.aiAnalysisAt && !aiResult && (
+                  <p className="text-[10px] text-muted-foreground/70">Generated {new Date(claim.aiAnalysisAt).toLocaleString()}</p>
+                )}
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
+      {(() => {
+        const analysis: AiAnalysis | null = aiResult || (claim.aiAnalysisJson as AiAnalysis | null) || null;
+        if (!analysis?.recommendedActions?.length) return null;
+        const prioColor = (p: string) => p === "high" ? "text-red-400 border-red-400/40" : p === "medium" ? "text-amber-400 border-amber-400/40" : "text-emerald-400 border-emerald-400/40";
+        return (
+          <Card data-testid="card-recommended-actions">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-primary" />
+                Recommended Actions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {analysis.recommendedActions.map((a, i) => (
+                <div key={i} className="rounded-md border border-border p-3" data-testid={`recommended-action-${i}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">{a.title}</p>
+                    <Badge variant="outline" className={`shrink-0 capitalize ${prioColor(a.priority)}`}>{a.priority}</Badge>
+                  </div>
+                  {a.detail && <p className="text-xs text-muted-foreground mt-1">{a.detail}</p>}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {isMaster && (
+        <Card data-testid="card-capture-outcome">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" />
+              Capture Outcome as Playbook
+            </CardTitle>
+            <Dialog open={playbookDialogOpen} onOpenChange={setPlaybookDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" data-testid="button-capture-outcome">
+                  <Plus className="w-3 h-3" />
+                  Capture
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Capture Outcome as Playbook</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={playbookForm.handleSubmit((d) => playbookMutation.mutate(d))} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Title *</Label>
+                    <Input data-testid="input-playbook-title" {...playbookForm.register("title", { required: true })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Action Taken</Label>
+                    <Textarea rows={2} data-testid="input-playbook-action" {...playbookForm.register("actionTaken")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>What Worked</Label>
+                    <Textarea rows={2} data-testid="input-playbook-worked" {...playbookForm.register("whatWorked")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Outcome</Label>
+                    <Input data-testid="input-playbook-outcome" {...playbookForm.register("outcome")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Recommended Next Step</Label>
+                    <Textarea rows={2} data-testid="input-playbook-next" {...playbookForm.register("recommendedNextStep")} />
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" disabled={playbookMutation.isPending} data-testid="button-save-playbook">
+                      {playbookMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save Playbook"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Turn this claim's resolution into a reusable playbook entry that powers recommendations on similar future claims.</p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">

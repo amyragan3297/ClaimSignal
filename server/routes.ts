@@ -15,6 +15,9 @@ import evidenceRouter from "./evidence";
 import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
+import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured } from "./ai-services";
+import { getClaimWeather } from "./weather";
+import express from "express";
 import { createHash } from "crypto";
 import { isDemoSeedingAllowed, resolveSeedMasterCredentials } from "./config";
 import {
@@ -750,6 +753,86 @@ export async function registerRoutes(
     }
   });
 
+  // AI-generated claim analysis (OpenAI). Persists narrative + structured intelligence.
+  app.post("/api/claims/:id/ai-analysis", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      if (!isOpenAIConfigured()) {
+        return res.status(503).json({ message: "AI analysis is not configured." });
+      }
+      const orgId = req.auth!.organizationId;
+      const role = req.auth!.role;
+      let claim = await storage.getClaim(req.params.id as string, orgId);
+      if (!claim && role === "super_admin") {
+        const all = await storage.getAllClaimsAcrossTenants();
+        claim = all.find((c) => c.id === req.params.id) || undefined;
+      }
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+      const analysis = await generateClaimAnalysis(claim);
+      const generatedAt = new Date();
+      const updated = await storage.updateClaim(claim.id, claim.organizationId, {
+        aiClaimSummary: analysis.narrative,
+        aiAnalysisJson: analysis as any,
+        aiAnalysisAt: generatedAt,
+      });
+
+      await storage.createAuditLog({
+        organizationId: claim.organizationId,
+        actorUserId: req.auth!.userId,
+        actorRole: role,
+        isImpersonation: req.auth!.isImpersonation,
+        impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "CLAIM_AI_ANALYSIS_GENERATED",
+        entityType: "claim",
+        entityId: claim.id,
+        ipAddress: getClientIp(req),
+      });
+
+      res.json({ analysis, generatedAt: generatedAt.toISOString(), claim: updated });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Historical weather for the claim's date of loss (keyless Open-Meteo).
+  app.get("/api/claims/:id/weather", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const role = req.auth!.role;
+      let claim = await storage.getClaim(req.params.id as string, orgId);
+      if (!claim && role === "super_admin") {
+        const all = await storage.getAllClaimsAcrossTenants();
+        claim = all.find((c) => c.id === req.params.id) || undefined;
+      }
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+      const weather = await getClaimWeather(claim);
+      if (!weather) {
+        return res.json({ available: false, reason: "Insufficient location or date-of-loss data to resolve weather." });
+      }
+
+      // Audit cross-tenant access (super_admin viewing another org's claim).
+      if (claim.organizationId !== orgId) {
+        await storage.createAuditLog({
+          organizationId: claim.organizationId,
+          actorUserId: req.auth!.userId,
+          actorRole: role,
+          isImpersonation: req.auth!.isImpersonation,
+          impersonatorUserId: req.auth!.impersonatorUserId,
+          actionType: "CLAIM_WEATHER_VIEWED_CROSS_TENANT",
+          entityType: "claim",
+          entityId: claim.id,
+          ipAddress: getClientIp(req),
+        });
+      }
+
+      const { latitude, longitude, ...safeWeather } = weather;
+      res.json({ available: true, weather: safeWeather });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.use("/api/evidence", requireAuth, requireActiveSubscription, evidenceRouter);
   app.use("/api/intelligence", requireAuth, requireActiveSubscription, intelligenceRouter);
 
@@ -797,6 +880,59 @@ export async function registerRoutes(
       res.status(500).json({ message: err.message });
     }
   });
+
+  // AI transcription: accepts a base64-encoded audio file, transcribes via OpenAI,
+  // and creates an audio_recording with the resulting transcript text.
+  app.post(
+    "/api/audio/transcribe",
+    express.json({ limit: "30mb" }),
+    requireAuth,
+    requireActiveSubscription,
+    async (req: AuthRequest, res) => {
+      try {
+        if (!isOpenAIConfigured()) {
+          return res.status(503).json({ message: "Transcription is not configured." });
+        }
+        const { audioBase64, fileName, claimId, durationSeconds } = req.body || {};
+        if (!audioBase64 || typeof audioBase64 !== "string") {
+          return res.status(400).json({ message: "audioBase64 is required" });
+        }
+        const base64 = audioBase64.includes(",") ? audioBase64.split(",")[1] : audioBase64;
+        const buffer = Buffer.from(base64, "base64");
+        if (buffer.length === 0) return res.status(400).json({ message: "Empty audio payload" });
+
+        const sha256Hash = createHash("sha256").update(buffer).digest("hex");
+        const transcriptText = await transcribeAudio(buffer);
+
+        const recording = await storage.createAudioRecording({
+          organizationId: req.auth!.organizationId,
+          uploadedByUserId: req.auth!.userId,
+          claimId: claimId || null,
+          fileUrl: fileName ? `#upload/${fileName}` : null,
+          durationSeconds: durationSeconds ? Number(durationSeconds) : null,
+          sha256Hash,
+          transcriptText,
+          processedAt: new Date(),
+        } as any);
+
+        await storage.createAuditLog({
+          organizationId: req.auth!.organizationId,
+          actorUserId: req.auth!.userId,
+          actorRole: req.auth!.role,
+          isImpersonation: req.auth!.isImpersonation,
+          impersonatorUserId: req.auth!.impersonatorUserId,
+          actionType: "AUDIO_TRANSCRIBED",
+          entityType: "audio_recording",
+          entityId: recording.id,
+          ipAddress: getClientIp(req),
+        });
+
+        res.json(recording);
+      } catch (err: any) {
+        res.status(500).json({ message: err.message });
+      }
+    }
+  );
 
   // Communications (emails table)
   app.get("/api/communications", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {

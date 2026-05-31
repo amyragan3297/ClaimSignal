@@ -72,6 +72,7 @@ export default function AudioPage() {
   const [fileName, setFileName] = useState("");
   const [duration, setDuration] = useState("");
   const [notes, setNotes] = useState("");
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ type: "archive" | "delete"; rec: AudioRecording } | null>(null);
 
   const { data: recordings, isLoading } = useQuery<AudioRecording[]>({
@@ -101,6 +102,26 @@ export default function AudioPage() {
     },
   });
 
+  const transcribeMutation = useMutation({
+    mutationFn: async (data: { audioBase64: string; fileName: string; claimId?: string; durationSeconds?: number }) => {
+      const res = await apiRequest("POST", "/api/audio/transcribe", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/audio"] });
+      toast({ title: "Audio transcribed", description: "AI transcription complete." });
+      setDialogOpen(false);
+      setFileName("");
+      setDuration("");
+      setNotes("");
+      setSelectedClaimId("");
+      setAudioFile(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Transcription failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   const archiveMutation = useMutation({
     mutationFn: async (id: string) => { await apiRequest("PATCH", `/api/audio/${id}/archive`); },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/audio"] }); toast({ title: "Recording archived" }); setConfirmDialog(null); },
@@ -113,15 +134,39 @@ export default function AudioPage() {
     onError: (err: Error) => { toast({ title: "Delete failed", description: err.message, variant: "destructive" }); },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // If an audio file is attached, run AI transcription.
+    if (audioFile) {
+      try {
+        const audioBase64 = await fileToBase64(audioFile);
+        transcribeMutation.mutate({
+          audioBase64,
+          fileName: audioFile.name,
+          claimId: selectedClaimId || undefined,
+          durationSeconds: duration ? parseInt(duration) * 60 : undefined,
+        });
+      } catch {
+        toast({ title: "Could not read audio file", variant: "destructive" });
+      }
+      return;
+    }
+    // Otherwise log a recording with a manually-entered transcript/notes.
     if (!fileName) {
-      toast({ title: "File name required", variant: "destructive" });
+      toast({ title: "Attach an audio file or enter a file name", variant: "destructive" });
       return;
     }
     createMutation.mutate({
       claimId: selectedClaimId || undefined,
-      fileUrl: `#demo/${fileName}`,
+      fileUrl: `#manual/${fileName}`,
       durationSeconds: duration ? parseInt(duration) * 60 : undefined,
       transcriptText: notes || undefined,
     });
@@ -153,6 +198,20 @@ export default function AudioPage() {
               <DialogTitle>Log Audio Recording</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Audio File (for AI transcription)</Label>
+                <Input
+                  type="file"
+                  accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg,.mp4"
+                  onChange={e => {
+                    const f = e.target.files?.[0] || null;
+                    setAudioFile(f);
+                    if (f) setFileName(f.name);
+                  }}
+                  data-testid="input-audio-file"
+                />
+                <p className="text-xs text-muted-foreground">Upload a recording to auto-transcribe with AI, or skip and paste a transcript below.</p>
+              </div>
               <div className="space-y-2">
                 <Label>File Name / Recording Label</Label>
                 <Input
@@ -198,12 +257,18 @@ export default function AudioPage() {
               </div>
               <div className="p-3 rounded-md bg-muted/50 border border-border/50">
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Clock className="w-3 h-3" />
-                  Live transcription (AI-powered) is pending backend integration. You can paste transcripts manually.
+                  <Mic className="w-3 h-3" />
+                  Attach an audio file to transcribe it automatically with AI, or paste a transcript manually above.
                 </p>
               </div>
-              <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-audio">
-                {createMutation.isPending ? "Saving..." : "Log Recording"}
+              <Button type="submit" className="w-full" disabled={createMutation.isPending || transcribeMutation.isPending} data-testid="button-submit-audio">
+                {transcribeMutation.isPending
+                  ? "Transcribing..."
+                  : createMutation.isPending
+                    ? "Saving..."
+                    : audioFile
+                      ? "Transcribe with AI"
+                      : "Log Recording"}
               </Button>
             </form>
           </DialogContent>
@@ -220,10 +285,10 @@ export default function AudioPage() {
             <div>
               <p className="text-sm font-medium">Transcription Engine</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                AI-powered transcription, behavioral scoring, and delay/deflection language detection are part of the ClaimSignal backend integration. Manual transcript entry is available now.
+                AI-powered transcription is live — upload an adjuster call or voicemail and ClaimSignal generates the transcript automatically. Manual transcript entry is also available.
               </p>
             </div>
-            <Badge variant="outline" className="text-xs shrink-0">Demo Mode</Badge>
+            <Badge variant="outline" className="text-xs shrink-0 text-green-500 border-green-500/30">AI Live</Badge>
           </div>
         </CardContent>
       </Card>
@@ -257,7 +322,7 @@ export default function AudioPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium" data-testid={`audio-filename-${rec.id}`}>
-                        {rec.fileUrl?.replace("#demo/", "") ?? "Recording"}
+                        {rec.fileUrl?.replace(/^#(demo|manual|upload)\//, "") ?? "Recording"}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {rec.claimId ? `Claim linked` : "No claim linked"} · {formatDuration(rec.durationSeconds)} · {new Date(rec.createdAt).toLocaleDateString()}

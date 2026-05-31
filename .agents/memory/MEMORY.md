@@ -5,4 +5,6 @@
 - [ClaimSignal approved logo](brand-logo.md) — use only the orange shield + signal-lines PNG; never the lucide Shield icon as brand mark.
 - [Cross-tenant governance pattern](cross-tenant-governance.md) — super_admin governance ops must pass undefined orgId to storage; non-null falsy (null) causes wrong filter.
 - [TSX hot-reload caveat](tsx-hot-reload.md) — storage.ts changes may not hot-reload reliably; restart the workflow to guarantee new code runs.
-- [PII masking model](pii-masking-model.md) — Master always unmasked (auto, no toggle), own-org claims unmasked for all roles, shared library always masked server-side.
+- [PII masking model](pii-masking-model.md) — Master always unmasked (auto, no toggle), own-org claims unmasked for all roles, shared library always masked server-side; also exclude PII identifiers (claim/policy #, names, address) from LLM prompts.
+- [Express body parser ordering](express-body-parser-ordering.md) — global express.json runs first; route-level limit overrides need the path excluded from the global parser (see /api/audio/transcribe).
+- [Open-Meteo geocoding](open-meteo-geocoding.md) — geocoder needs bare city name (no "City, State"/zip); use zippopotam for zip→latlon, match city result by state.

@@ -15,13 +15,19 @@ declare module "http" {
 
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 
-app.use(
-  express.json({
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
+const jsonParser = express.json({
+  verify: (req, _res, buf) => {
+    req.rawBody = buf;
+  },
+});
+
+// The audio transcribe route accepts large base64 payloads and installs its own
+// higher-limit JSON parser; skip the default (100kb) global parser for that path
+// so the route-level parser is the one that runs.
+app.use((req, res, next) => {
+  if (req.path === "/api/audio/transcribe") return next();
+  return jsonParser(req, res, next);
+});
 
 app.use(express.urlencoded({ extended: false }));
 

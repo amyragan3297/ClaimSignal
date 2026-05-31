@@ -106,6 +106,7 @@ export function sanitizeSharedClaimRecord<T extends Record<string, any>>(row: T,
     // internal contractor-side content
     notes: null,
     aiClaimSummary: null,
+    aiAnalysisJson: null,
     // exact-location fields (city/state are retained for pattern intelligence)
     address: null,
     zipCode: null,

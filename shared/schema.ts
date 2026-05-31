@@ -149,6 +149,8 @@ export const claims = pgTable("claims", {
   riskScore: integer("risk_score"),
   lossDate: timestamp("loss_date"),
   aiClaimSummary: text("ai_claim_summary"),
+  aiAnalysisJson: json("ai_analysis_json"),
+  aiAnalysisAt: timestamp("ai_analysis_at"),
   adjusterFrictionScore: real("adjuster_friction_score"),
   supplementProbabilityScore: real("supplement_probability_score"),
   ircComplianceRiskScore: real("irc_compliance_risk_score"),
