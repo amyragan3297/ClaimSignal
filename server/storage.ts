@@ -170,6 +170,7 @@ export interface IStorage {
   createExtractedEntity(entity: InsertExtractedEntity): Promise<ExtractedEntity>;
 
   getClaimDrafts(orgId: string): Promise<ClaimDraft[]>;
+  getAllClaimDraftsAcrossTenants(): Promise<ClaimDraft[]>;
   getClaimDraft(id: string, orgId: string): Promise<ClaimDraft | undefined>;
   createClaimDraft(draft: InsertClaimDraft): Promise<ClaimDraft>;
   updateClaimDraft(id: string, orgId: string, data: Partial<ClaimDraft>): Promise<ClaimDraft | undefined>;
@@ -812,6 +813,10 @@ export class DatabaseStorage implements IStorage {
 
   async getClaimDrafts(orgId: string): Promise<ClaimDraft[]> {
     return db.select().from(claimDrafts).where(eq(claimDrafts.organizationId, orgId)).orderBy(desc(claimDrafts.createdAt));
+  }
+
+  async getAllClaimDraftsAcrossTenants(): Promise<ClaimDraft[]> {
+    return db.select().from(claimDrafts).orderBy(desc(claimDrafts.createdAt));
   }
 
   async getClaimDraft(id: string, orgId: string): Promise<ClaimDraft | undefined> {

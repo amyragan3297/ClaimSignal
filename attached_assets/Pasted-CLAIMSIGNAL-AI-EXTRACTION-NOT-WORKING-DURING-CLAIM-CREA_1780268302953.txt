@@ -1,0 +1,330 @@
+CLAIMSIGNAL AI EXTRACTION NOT WORKING DURING CLAIM CREATION
+
+The current Create New Claim flow is still manual-only.
+
+This is not acceptable for ClaimSignal.
+
+The first screenshot shows the Create New Claim modal only asks for:
+
+* Claim Number
+* Carrier
+* Property Address
+
+That is not AI extraction.
+That is manual data entry.
+
+ClaimSignal must support creating a claim from uploaded claim documents, not just typing a claim manually.
+
+Do not rebuild the app from scratch.
+Do not erase existing data.
+Do not remove working features.
+Do not weaken Master access, RBAC, masking, audit logs, evidence upload, claims, adjusters, carrier intelligence, Playbook, or security.
+
+CORE ISSUE
+
+AI extraction is still not working when creating or uploading claims.
+
+The platform currently behaves like:
+
+User manually creates claim
+-> User manually uploads evidence
+-> User manually matches evidence
+-> User manually reviews data
+
+That is not the intended ClaimSignal workflow.
+
+The intended workflow is:
+
+User uploads claim document
+-> System parses/extracts content
+-> System identifies claim facts
+-> System creates an Extraction Review
+-> System creates or suggests a Claim Draft
+-> User reviews extracted data
+-> User accepts, edits, or rejects fields
+-> System creates or updates the claim
+-> System creates timeline candidates
+-> System links adjusters, carriers, vendors, outcomes, and financials
+-> System updates Signal Engine and Playbook intelligence
+
+REQUIRED FIX 1 - CREATE NEW CLAIM MUST HAVE TWO PATHS
+
+The Create New Claim modal must support two paths:
+
+1. Manual Entry
+2. Upload and Extract
+
+Add clear options at the top of Create New Claim:
+
+* Create Manually
+* Upload Claim Document
+
+Manual Entry may stay, but it cannot be the only path.
+
+UPLOAD AND EXTRACT PATH
+
+The Upload Claim Document path should allow the user to upload:
+
+* estimate
+* scope
+* denial letter
+* approval letter
+* carrier letter
+* photos
+* invoice
+* contract
+* supplement
+* code documentation
+* manufacturer documentation
+* communication
+* audio
+* transcript
+* storm report
+* other
+
+After upload, the app must attempt extraction.
+
+REQUIRED FIX 2 - EXTRACTION REVIEW MUST APPEAR AFTER UPLOAD
+
+After a claim document is uploaded, show an Extraction Review screen.
+
+Extraction Review must show:
+
+* source file name
+* detected document type
+* extraction status
+* extraction confidence
+* extracted claim number
+* extracted homeowner / policyholder
+* extracted property address
+* extracted city
+* extracted state
+* extracted zip code
+* extracted carrier
+* extracted adjuster
+* extracted IA firm
+* extracted vendor
+* extracted date of loss
+* extracted inspection date
+* extracted estimate date
+* extracted denial date
+* extracted approval date
+* extracted payment date
+* extracted RCV
+* extracted ACV
+* extracted deductible
+* extracted recoverable depreciation
+* extracted supplement requested
+* extracted supplement approved
+* extracted denial reason
+* extracted initial outcome
+* extracted final outcome
+* extracted missing scope items
+* extracted code items
+* extracted communication dates
+* extracted timeline events
+
+Each extracted field must allow:
+
+* accept
+* edit
+* reject
+* mark needs review
+
+REQUIRED FIX 3 - CLAIM DRAFTS MUST COME FROM EXTRACTION
+
+Claim Drafts should not be random cards.
+
+Claim Drafts should be created from extracted claim data.
+
+A Claim Draft should show:
+
+* source file name
+* extracted claim number
+* extracted homeowner
+* extracted carrier
+* extracted address
+* extracted date of loss
+* extracted adjuster
+* extracted RCV
+* extracted ACV
+* extraction confidence
+* reason it needs review
+* action buttons
+
+Actions:
+
+* Review Extraction
+* Create Claim
+* Match to Existing Claim
+* Merge With Existing Claim
+* Archive Draft
+* Mark Duplicate
+
+Do not show generic “Number” and “Address” labels if actual values were not extracted correctly.
+
+REQUIRED FIX 4 - FILE UPLOAD MUST NOT STOP AT STORAGE
+
+Evidence Upload cannot stop at storing the file.
+
+After upload, the app must run:
+
+1. duplicate check
+2. text parsing or OCR if available
+3. document classification
+4. extraction
+5. match suggestion
+6. draft creation if needed
+7. timeline candidate creation
+8. audit log entry
+
+If extraction fails, show:
+
+“Extraction failed. Manual review required.”
+
+If extraction is pending, show:
+
+“Extraction pending.”
+
+If extraction is rule-based only, show:
+
+“MVP rule-based extraction.”
+
+If real AI/LLM extraction is connected, show:
+
+“AI extraction complete.”
+
+Do not claim AI extraction unless an actual model is reading and extracting data.
+
+REQUIRED FIX 5 - MATCH TO CLAIM MUST USE EXTRACTED CLUES
+
+Match to Claim must not be a simple dropdown.
+
+Match to Claim must show:
+
+* extracted claim number
+* extracted homeowner
+* extracted carrier
+* extracted property address
+* extracted date of loss
+* extracted adjuster
+* suggested matching claim
+* confidence score
+* reason for suggested match
+
+If no match is found, show:
+
+“No matching claim found from extracted data. Create a new claim, save as unmatched evidence, or manually search existing claims.”
+
+Buttons:
+
+* Create New Claim From Extraction
+* Save as Unmatched Evidence
+* Search Existing Claims
+* Cancel
+
+REQUIRED FIX 6 - DUPLICATE FILE ERROR MUST BE CLEAN
+
+The app currently shows raw JSON when a duplicate document is uploaded.
+
+Do not show raw JSON.
+
+If a duplicate document already exists, show:
+
+“This document already exists.”
+
+Then show:
+
+* existing file name
+* existing upload date
+* existing claim match if any
+* existing extraction status
+* option to open existing document
+* option to match existing document to a claim
+* option to review extracted data
+* option to archive duplicate attempt
+
+Do not treat duplicate upload as a dead-end failure.
+
+REQUIRED FIX 7 - MASTER MUST HAVE EXTRACTION CONTROL
+
+Master Admin must be able to:
+
+* upload documents
+* trigger extraction
+* re-run extraction
+* review extracted data
+* edit extracted data
+* reject extracted data
+* create claim from extraction
+* match extraction to existing claim
+* merge duplicate claim drafts
+* view unmatched evidence
+* view all claim drafts
+* view extraction status for all files
+
+Master must not be forced into a manual-only workflow.
+
+REQUIRED FIX 8 - CLAIM CREATION SHOULD UPDATE INTELLIGENCE
+
+When extracted data is accepted and a claim is created or updated, it must feed:
+
+* claim record
+* timeline candidates
+* adjuster intelligence
+* carrier intelligence
+* vendor capture
+* Signal Engine scoring
+* Playbook recommendations
+* audit logs
+
+This is the whole point of ClaimSignal.
+
+REQUIRED VALIDATION
+
+After implementation, confirm:
+
+1. Create New Claim has Manual Entry and Upload and Extract options.
+2. Upload and Extract creates an extraction attempt.
+3. Extraction Review screen exists.
+4. Extracted fields can be accepted, edited, or rejected.
+5. Claim Drafts are created from extracted data, not random placeholder records.
+6. Evidence Upload runs extraction after upload.
+7. Match to Claim uses extracted clues and match reasons.
+8. Duplicate upload errors are clean and do not expose raw JSON.
+9. Master can re-run extraction and review extracted fields.
+10. Accepted extracted data updates the claim.
+11. Accepted extracted dates create timeline candidates.
+12. Accepted extracted adjusters link to claim intelligence.
+13. Accepted carrier and vendor data are preserved.
+14. Signal Engine updates from accepted data.
+15. Playbook can reference accepted outcome patterns.
+16. Existing data remains intact.
+17. Masking still works.
+18. Audit logs still work.
+19. Tests still pass.
+
+FINAL REPORT REQUIRED
+
+Report:
+
+* files changed
+* database changes made
+* whether changes were additive
+* Create New Claim workflow status
+* Upload and Extract status
+* extraction pipeline status
+* extraction review status
+* claim draft status
+* match to claim status
+* duplicate handling status
+* Master extraction controls status
+* whether real AI/LLM extraction is connected
+* whether MVP rule-based extraction is being used
+* fields currently extracted
+* fields not yet extracted
+* commands run
+* tests passed
+* tests failed
+* remaining limitations
+* whether the app is safe to demo honestly

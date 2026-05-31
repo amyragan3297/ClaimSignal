@@ -413,6 +413,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       }
     }
     
+    // Only create a Claim Draft when extraction finds at least one meaningful
+    // claim indicator. Do NOT create a draft just because a file was uploaded.
     let draft = null;
     if (!claimId) {
       const claimNum = entities.find(e => e.entityType === "claim_number");
@@ -420,17 +422,37 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       const addr = entities.find(e => e.entityType === "property_address");
       const carrier = entities.find(e => e.entityType === "carrier_name");
       const dol = entities.find(e => e.entityType === "date_of_loss");
-      const dolDate = dol ? new Date(dol.rawValue) : null;
-      
-      draft = await storage.createClaimDraft({
-        organizationId,
-        createdFromEvidenceFileId: evidenceFile.id,
-        extractedClaimNumber: claimNum?.rawValue,
-        extractedInsured: insured?.rawValue,
-        extractedAddress: addr?.rawValue,
-        extractedCarrier: carrier?.rawValue,
-        extractedDateOfLoss: dolDate && !isNaN(dolDate.getTime()) ? dolDate : undefined,
-      });
+
+      // LLM extraction supplements rule-based entities for richer indicators
+      const llmCn = llmExtraction?.claimNumber;
+      const llmInsured = llmExtraction?.homeownerName || llmExtraction?.insuredName;
+      const llmAddr = llmExtraction?.propertyAddress;
+      const llmCarrier = llmExtraction?.carrier;
+      const llmAdjuster = llmExtraction?.adjusterName;
+      const llmDol = llmExtraction?.dateOfLoss;
+      const llmRcv = llmExtraction?.rcv;
+
+      const hasClaimIndicators = !!(
+        claimNum || insured || addr || carrier || dol ||
+        llmCn || llmInsured || llmAddr || llmCarrier || llmAdjuster || llmRcv
+      );
+
+      if (hasClaimIndicators) {
+        const dolRaw = dol?.rawValue || llmDol;
+        const dolDate = dolRaw ? new Date(dolRaw) : null;
+        draft = await storage.createClaimDraft({
+          organizationId,
+          createdFromEvidenceFileId: evidenceFile.id,
+          extractedClaimNumber: claimNum?.rawValue || llmCn || undefined,
+          extractedInsured: insured?.rawValue || llmInsured || undefined,
+          extractedAddress: addr?.rawValue || llmAddr || undefined,
+          extractedCarrier: carrier?.rawValue || llmCarrier || undefined,
+          extractedAdjuster: llmAdjuster || undefined,
+          extractionConfidence: llmExtraction?.confidence ?? undefined,
+          sourceFileName: req.file!.originalname,
+          extractedDateOfLoss: dolDate && !isNaN(dolDate.getTime()) ? dolDate : undefined,
+        } as any);
+      }
     }
     
     await storage.createAuditLog({
@@ -579,7 +601,10 @@ router.get("/files/:id/match-suggestions", async (req: AuthRequest, res: Respons
 router.get("/files/:id", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
-    const file = await storage.getEvidenceFile(req.params.id as string, req.auth.organizationId);
+    const master = isMaster(req.auth.role);
+    const file = master
+      ? await storage.getEvidenceFileAnyTenant(req.params.id as string)
+      : await storage.getEvidenceFile(req.params.id as string, req.auth.organizationId);
     if (!file) return res.status(404).json({ message: "File not found" });
     res.json(file);
   } catch (err: any) {
@@ -857,8 +882,42 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
 router.get("/drafts", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
-    const drafts = await storage.getClaimDrafts(req.auth.organizationId);
+    const master = isMaster(req.auth.role);
+    const drafts = master
+      ? await storage.getAllClaimDraftsAcrossTenants()
+      : await storage.getClaimDrafts(req.auth.organizationId);
     res.json(drafts);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// Archive a claim draft (sets status to "discarded", preserves record).
+router.post("/drafts/:id/archive", async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    const { role, organizationId, userId } = req.auth;
+    const master = isMaster(role);
+
+    // Resolve org for master (draft may belong to any tenant)
+    let draft = master
+      ? (await storage.getAllClaimDraftsAcrossTenants()).find(d => d.id === req.params.id)
+      : await storage.getClaimDraft(req.params.id as string, organizationId);
+    if (!draft) return res.status(404).json({ message: "Draft not found" });
+
+    const updated = await storage.updateClaimDraft(req.params.id as string, draft.organizationId, { status: "discarded" } as any);
+
+    await storage.createAuditLog({
+      organizationId: draft.organizationId,
+      actorUserId: userId,
+      actorRole: role,
+      actionType: "CLAIM_DRAFT_ARCHIVED",
+      entityType: "claim_draft",
+      entityId: draft.id,
+      afterJson: { reason: req.body.reason || null, actorOrganizationId: organizationId },
+    });
+
+    res.json({ archived: true, draft: updated });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }

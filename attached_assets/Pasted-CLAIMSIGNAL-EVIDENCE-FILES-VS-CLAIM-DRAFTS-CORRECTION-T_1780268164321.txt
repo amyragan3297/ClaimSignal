@@ -1,0 +1,228 @@
+CLAIMSIGNAL EVIDENCE FILES VS CLAIM DRAFTS CORRECTION
+
+The current workflow is confusing Evidence Files, Claim Drafts, and Match to Claim.
+
+These must be clearly separated.
+
+Do not rebuild the app from scratch.
+Do not erase existing data.
+Do not remove working features.
+Do not weaken Master access, RBAC, masking, audit logs, claims, adjusters, carrier intelligence, Playbook, or evidence upload.
+
+DEFINITIONS
+
+1. Evidence Files
+
+Evidence Files are uploaded source materials.
+
+Examples:
+- estimate
+- scope
+- denial letter
+- approval letter
+- photos
+- invoice
+- contract
+- supplement
+- code documentation
+- manufacturer documentation
+- communication
+- audio
+- transcript
+- storm report
+- other
+
+Evidence Files should exist as uploaded files even if they are not matched yet.
+
+Evidence Files should show:
+- file name
+- file type
+- category
+- upload date
+- uploaded by
+- source claim if matched
+- status
+- extraction status
+- duplicate status
+- hash / fingerprint if available
+
+Evidence File statuses:
+- uploaded
+- duplicate_detected
+- extraction_pending
+- extraction_complete
+- extraction_failed
+- needs_review
+- matched_to_claim
+- unmatched
+- archived
+
+2. Claim Drafts
+
+Claim Drafts are not the same as Evidence Files.
+
+A Claim Draft should only be created when uploaded content produces enough extracted claim data to suggest a new claim may exist.
+
+Do not create a Claim Draft just because a file was uploaded.
+
+Create a Claim Draft only when extraction finds at least some claim indicators, such as:
+- claim number
+- homeowner / policyholder name
+- property address
+- carrier
+- date of loss
+- adjuster
+- estimate data
+- denial / approval data
+- financial data
+
+Claim Drafts should show:
+- draft id
+- extracted claim number if found
+- extracted homeowner if found
+- extracted address if found
+- extracted carrier if found
+- extracted adjuster if found
+- extracted date of loss if found
+- source file name
+- extraction confidence
+- reason it needs review
+- actions
+
+Claim Draft actions:
+- Review Draft
+- Create New Claim
+- Match to Existing Claim
+- Merge With Existing Claim
+- Mark Duplicate
+- Archive Draft
+
+3. Match to Claim
+
+Match to Claim is the action of linking an Evidence File or Claim Draft to an existing claim.
+
+Match to Claim should not be the first and only workflow.
+
+Correct workflow:
+
+Upload Evidence File
+-> Detect duplicate
+-> Parse / extract content if possible
+-> Decide whether it matches an existing claim
+-> If high confidence, suggest match with reasons
+-> If new claim data exists, create Claim Draft
+-> If no useful claim data exists, keep as Unmatched Evidence
+-> User reviews and confirms
+
+MATCH TO CLAIM MODAL
+
+The Match to Claim modal should show extracted clues before asking the user to pick a claim.
+
+Show:
+- extracted claim number
+- extracted homeowner
+- extracted carrier
+- extracted address
+- extracted date of loss
+- extracted adjuster
+- suggested match
+- match confidence
+- reason for match
+
+If no match is found, show:
+
+“No matching claim found from extracted data. Create a new claim, save as unmatched evidence, or manually search existing claims.”
+
+The modal should include buttons:
+- Create New Claim From Extraction
+- Save as Unmatched Evidence
+- Search Existing Claims
+- Cancel
+
+Do not just show a dropdown and make Master guess.
+
+DUPLICATE FILE HANDLING
+
+The app currently shows raw duplicate JSON when a document already exists.
+
+Do not show raw JSON errors to the user.
+
+If a duplicate file is uploaded, show:
+
+“This document already exists.”
+
+Then show:
+- existing file name
+- existing upload date
+- existing matched claim if any
+- current status
+- option to open existing file
+- option to match existing file to a claim
+- option to archive duplicate attempt
+
+Do not treat duplicate upload as a total failure if the existing file can still be used.
+
+MASTER BEHAVIOR
+
+Master should be able to:
+- see all Evidence Files
+- see all Claim Drafts
+- see all Unmatched Evidence
+- open existing duplicate files
+- match existing files to claims
+- create claims from drafts
+- merge drafts into existing claims
+- archive bad drafts
+- override match suggestions
+
+Master should not be forced into a limited upload flow.
+
+UI LABELING
+
+Rename or clarify sections:
+
+Evidence Files:
+“Uploaded evidence and source documents.”
+
+Claim Drafts:
+“Potential claims created from extracted document data.”
+
+Unmatched Evidence:
+“Uploaded files not yet linked to a claim.”
+
+Match to Claim:
+“Link this file or draft to an existing claim.”
+
+VALIDATION REQUIRED
+
+Confirm:
+
+1. Evidence Files and Claim Drafts are separate concepts.
+2. Uploading a file does not automatically create a claim draft unless extraction finds claim data.
+3. Claim Drafts show extracted fields, source file, confidence, and review actions.
+4. Match to Claim shows extracted clues and suggested match reasons.
+5. Duplicate uploads show a clean user message, not raw JSON.
+6. Existing duplicate files can be opened or matched.
+7. Master can see all Evidence Files, Claim Drafts, and Unmatched Evidence.
+8. Master can create a claim from extracted draft data.
+9. Master can match an existing evidence file to a claim.
+10. Existing data remains intact.
+11. Audit logs still record upload, duplicate detection, extraction, match, merge, archive, and claim creation.
+12. Tests still pass.
+
+FINAL REPORT REQUIRED
+
+Report:
+- files changed
+- database changes made
+- whether changes were additive
+- Evidence Files status
+- Claim Drafts status
+- Match to Claim status
+- duplicate handling status
+- Master evidence access status
+- extraction review status
+- commands run
+- tests passed
+- tests failed
+- remaining limitations

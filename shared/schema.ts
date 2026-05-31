@@ -438,7 +438,10 @@ export const claimDrafts = pgTable("claim_drafts", {
   extractedInsured: text("extracted_insured"),
   extractedAddress: text("extracted_address"),
   extractedCarrier: text("extracted_carrier"),
+  extractedAdjuster: text("extracted_adjuster"),
   extractedDateOfLoss: timestamp("extracted_date_of_loss"),
+  extractionConfidence: real("extraction_confidence"),
+  sourceFileName: text("source_file_name"),
   status: claimDraftStatusEnum("status").default("needs_review"),
   createdAt: timestamp("created_at").defaultNow(),
 });
