@@ -722,19 +722,28 @@ export const insertIntelligenceEventSchema = createInsertSchema(intelligenceEven
 export const stormEventTypeEnum = pgEnum("storm_event_type", ["hail", "wind", "hail_and_wind", "other"]);
 export const stormReportSourceEnum = pgEnum("storm_report_source", ["noaa", "spc", "ncei", "radar_report", "contractor_observation", "homeowner_statement", "other"]);
 export const locationMatchConfidenceEnum = pgEnum("location_match_confidence", ["high", "medium", "low"]);
+export const weatherVerificationStatusEnum = pgEnum("weather_verification_status", ["verified", "partially_verified", "pending_verification", "no_supporting_data"]);
 
 export const stormEvents = pgTable("storm_events", {
   id: text("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: text("organization_id").notNull(),
   claimId: text("claim_id"),
   dateOfLoss: date("date_of_loss"),
+  stormEventDate: date("storm_event_date"),
   propertyLocation: text("property_location"),
   eventType: stormEventTypeEnum("event_type"),
+  hailEvent: boolean("hail_event").default(false),
+  windEvent: boolean("wind_event").default(false),
+  hurricaneEvent: boolean("hurricane_event").default(false),
+  tornadoEvent: boolean("tornado_event").default(false),
   reportSource: stormReportSourceEnum("report_source"),
   hailSize: text("hail_size"),
   windSpeed: text("wind_speed"),
   distanceFromProperty: text("distance_from_property"),
   locationMatchConfidence: locationMatchConfidenceEnum("location_match_confidence"),
+  weatherVerificationStatus: weatherVerificationStatusEnum("weather_verification_status").default("pending_verification"),
+  weatherConfidenceScore: real("weather_confidence_score"),
+  weatherSource: text("weather_source"),
   weatherEvidenceUploaded: boolean("weather_evidence_uploaded").default(false),
   notes: text("notes"),
   createdByUserId: text("created_by_user_id"),

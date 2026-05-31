@@ -6,6 +6,8 @@ import cookieParser from "cookie-parser";
 import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema } from "@shared/schema";
 import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked, sanitizeSharedClaimList, sanitizePlaybookList, sanitizePlaybookRecord, toPlaybookAggregate, isMaster } from "./masking";
 import { computeCarrierIntelligence } from "./carrier-intelligence";
+import { computeAdjusterScorecard } from "./adjuster-scorecard";
+import { parseQueryToFilters, filterClaims, buildStrategySummary, similarityScore, isUsableOutcome, type PlaybookFilters } from "./playbook-engine";
 import { createCandidatesFromText, sampleClaimDocumentText } from "./timeline-extraction";
 import { seedSamplePlaybooks } from "./playbook-seed";
 import { insertPlaybookEntrySchema } from "@shared/schema";
@@ -700,6 +702,37 @@ export async function registerRoutes(
       });
 
       res.json({ linkedClaimCount: claimIds.length, links: enriched });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Adjuster Scorecard (Section 14) — behavioral metrics from REAL linked claims.
+  // Separate from cross-claim history; never fabricates; < 3 claims => insufficient.
+  app.get("/api/adjusters/:id/scorecard", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      const orgId = req.auth!.organizationId;
+      const adjusterId = req.params.id as string;
+
+      const links = isMaster(role)
+        ? await storage.getAdjusterClaims(adjusterId)
+        : await storage.getAdjusterClaims(adjusterId, orgId);
+      const allClaims = isMaster(role)
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
+
+      const scorecard = computeAdjusterScorecard(links, allClaims);
+
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "ADJUSTER_SCORECARD_VIEWED", entityType: "adjuster", entityId: adjusterId,
+        afterJson: { linkedClaimCount: scorecard.linkedClaimCount, insufficient: scorecard.insufficient },
+        ipAddress: getClientIp(req),
+      });
+
+      res.json({ method: "MVP rule-based", ...scorecard });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

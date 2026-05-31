@@ -1,0 +1,211 @@
+SECTION 17
+PLAYBOOK SEARCH ENGINE
+
+PURPOSE
+
+Allow users to search historical claim outcomes and reusable strategies using plain-language questions.
+
+The Playbook Search Engine should help users answer:
+
+What has worked before in similar claims?
+
+This must remain separate from the Action Engine.
+
+ACTION ENGINE
+
+Answers:
+
+What should I do right now on this claim?
+
+PLAYBOOK SEARCH ENGINE
+
+Answers:
+
+What worked before in similar claims?
+
+⸻
+
+CORE SEARCH EXAMPLES
+
+Support searches such as:
+
+Show me every State Farm denial that was overturned after reinspection.
+
+Show me claims involving Cody Vines that eventually reached approval.
+
+Show me Allstate claims where repairability was disputed.
+
+Show me claims where a brittle test helped force approval.
+
+Show me claims where DOI escalation was used.
+
+Show me claims where the carrier denied first but later paid.
+
+Show me claims involving missing line items.
+
+Show me claims involving matching disputes.
+
+Show me claims where supplement resistance was overcome.
+
+Show me claims that moved from partial approval to full approval.
+
+⸻
+
+SEARCHABLE FIELDS
+
+Search must be able to filter by:
+
+* Carrier
+* Adjuster
+* Claim status
+* Initial outcome
+* Final outcome
+* Damage type
+* Denial reason
+* Escalation type
+* Reinspection status
+* Supplement status
+* DOI involvement
+* Repairability issue
+* Matching issue
+* Brittle test
+* Code dispute
+* Missing line items
+* Date of loss
+* Claim cycle time
+* Documents submitted
+* Strategy used
+* Result
+
+⸻
+
+PLAYBOOK RESULT CARD
+
+Each result should display:
+
+* Claim nickname or masked claim identifier
+* Carrier
+* Adjuster or adjusters
+* Initial outcome
+* Final outcome
+* Escalation used
+* Timeline summary
+* Key evidence submitted
+* Strategy used
+* Result
+* Confidence level
+
+Do not expose full claim numbers, addresses, or homeowner information unless the user is Master Admin.
+
+⸻
+
+REUSABLE STRATEGY SUMMARY
+
+Each successful claim result should generate a reusable strategy summary.
+
+Example:
+
+Initial Outcome:
+Denied
+
+Final Outcome:
+Approved
+
+Path:
+Reinspection requested after supporting photo documentation was submitted.
+
+Key Evidence:
+Annotated photos, repairability concern, slope-specific damage documentation, estimate comparison.
+
+Reusable Strategy:
+Request reinspection, submit organized photo evidence, identify repairability issues, document slope inconsistencies, and preserve timeline notes.
+
+⸻
+
+NATURAL LANGUAGE SEARCH
+
+Allow plain-language search queries.
+
+User should not need to know database field names.
+
+Example:
+
+User asks:
+Show me claims where State Farm denied first but later approved after reinspection.
+
+System should translate into filters:
+
+Carrier = State Farm
+Initial Outcome = Denied
+Final Outcome = Approved
+Escalation = Reinspection
+
+⸻
+
+INSUFFICIENT DATA HANDLING
+
+If no matching playbook results exist, display:
+
+No matching playbook history found yet.
+
+If data is limited, display:
+
+Limited historical evidence available.
+
+Never fabricate playbook examples.
+
+Never invent claim outcomes.
+
+⸻
+
+SECURITY AND MASKING
+
+Master Admin:
+Can view full claim details.
+
+Team Admin:
+Can view team claim details.
+
+Team Member:
+Can view permitted team claim details.
+
+Individual:
+Can view own claim details only.
+
+Executive:
+Can view aggregate intelligence only. No claim-level details.
+
+All non-master views must preserve PII masking.
+
+⸻
+
+AUDIT LOGGING
+
+Create audit events for:
+
+* Playbook search performed
+* Playbook result viewed
+* Playbook strategy reused
+* Playbook filter applied
+* Claim linked to playbook outcome
+
+⸻
+
+FINAL VALIDATION
+
+Verify:
+
+1. Playbook Search remains separate from Action Engine.
+2. Search works by carrier.
+3. Search works by adjuster.
+4. Search works by initial outcome.
+5. Search works by final outcome.
+6. Search works by escalation type.
+7. Search works by denial reason.
+8. Search results respect role permissions.
+9. Masked users cannot see full claim numbers, addresses, or homeowner details.
+10. No fake results are displayed.
+
+SUCCESS CONDITION
+
+Users can search historical ClaimSignal intelligence and identify proven strategies from prior claim outcomes without exposing protected claim data or fabricating results.

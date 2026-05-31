@@ -26,6 +26,15 @@ export interface CarrierIntelligence {
   frictionIndex: number | null;
   regionPatterns: { region: string; count: number }[];
   behaviorNotes: string[];
+  // Section 15 — Carrier Scorecard additions
+  insufficient: boolean;
+  dataConfidence: "low" | "medium" | "high";
+  overturnRate: number | null;
+  reinspectionRate: number | null;
+  escalationRate: number | null;
+  avgResolutionDays: number | null;
+  deniedThenApprovedCount: number;
+  commonSignals: string[];
 }
 
 function avg(nums: (number | null | undefined)[]): number | null {
@@ -95,6 +104,33 @@ export function computeCarrierIntelligence(claims: Claim[]): CarrierIntelligence
     if (escalated.length && escalationWon.length / escalated.length >= 0.5) behaviorNotes.push("Escalation/appraisal historically effective with this carrier.");
     if (n < 3) behaviorNotes.push("Low sample size — treat metrics as directional only.");
 
+    // ── Section 15 — Carrier Scorecard metrics (real data only)
+    const overturned = group.filter((c) => c.denialOverturned === true).length;
+    const reinspected = group.filter((c) => (c as any).reinspectionRequested === true).length;
+    const deniedThenApproved = group.filter((c) => {
+      const init = ((c as any).initialOutcome || "").toLowerCase();
+      const fin = ((c as any).finalOutcome || "").toLowerCase();
+      return (init.includes("deni") || init.includes("reject")) && (fin.includes("approv") || fin.includes("paid") || c.denialOverturned === true);
+    }).length;
+    const resDays = group.map((c) => {
+      const a = c as any;
+      const start = a.dateOfLoss ? new Date(a.dateOfLoss) : null;
+      const end = a.resolutionDate ? new Date(a.resolutionDate) : (a.determinationDate ? new Date(a.determinationDate) : null);
+      if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+      const d = Math.round((end.getTime() - start.getTime()) / 86400000);
+      return d >= 0 ? d : null;
+    }).filter((d): d is number => d !== null);
+    const overturnRate = denied > 0 ? Math.round((overturned / denied) * 100) : null;
+    const reinspectionRate = n ? Math.round((reinspected / n) * 100) : null;
+    const escalationRate = n ? Math.round((escalated.length / n) * 100) : null;
+    const avgResolutionDays = resDays.length ? Math.round(resDays.reduce((s, d) => s + d, 0) / resDays.length) : null;
+    const dataConfidence: "low" | "medium" | "high" = n >= 10 ? "high" : n >= 5 ? "medium" : "low";
+    const commonSignals: string[] = [];
+    if (overturnRate !== null && overturnRate >= 50) commonSignals.push("Denials frequently overturned on challenge");
+    if (reinspectionRate !== null && reinspectionRate >= 40) commonSignals.push("Reinspection commonly required");
+    if (escalationRate !== null && escalationRate >= 40) commonSignals.push("Escalation commonly required");
+    if (deniedThenApproved >= 2) commonSignals.push("Pattern: denies first, pays later");
+
     result.push({
       carrierName,
       claimsCount: n,
@@ -114,6 +150,14 @@ export function computeCarrierIntelligence(claims: Claim[]): CarrierIntelligence
       frictionIndex: avg(group.map((c) => c.frictionScore)),
       regionPatterns: topCounts(group.map((c) => c.state || c.city)).map((x) => ({ region: x.reason, count: x.count })),
       behaviorNotes,
+      insufficient: n < 3,
+      dataConfidence,
+      overturnRate,
+      reinspectionRate,
+      escalationRate,
+      avgResolutionDays,
+      deniedThenApprovedCount: deniedThenApproved,
+      commonSignals,
     });
   }
   result.sort((a, b) => b.claimsCount - a.claimsCount);
