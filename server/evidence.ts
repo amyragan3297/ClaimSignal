@@ -3,6 +3,7 @@ import multer from "multer";
 import crypto from "crypto";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
+import { isMaster, canViewUnmasked, applyPiiMasking } from "./masking";
 
 interface AuthRequest extends Request {
   auth?: {
@@ -96,41 +97,135 @@ function extractEntities(text: string): Array<{ entityType: string; rawValue: st
   
   const addrMatch = /property\s+address\s*[:.]?\s*(.+?)(?:\n|$)/gi.exec(text);
   if (addrMatch) entities.push({ entityType: "property_address", rawValue: addrMatch[1].trim(), confidence: 0.7 });
-  
+
+  const carrierMatch = /(?:carrier|insurer|insurance\s+company)\s*[:.]?\s*([A-Z][A-Za-z&.,'\- ]{2,40}?)(?:\n|$)/g.exec(text);
+  if (carrierMatch) entities.push({ entityType: "carrier_name", rawValue: carrierMatch[1].trim(), confidence: 0.65 });
+
   return entities;
 }
 
-async function autoMatchClaim(
-  orgId: string, 
-  entities: Array<{ entityType: string; rawValue: string; confidence: number }>
-): Promise<string | null> {
-  const claimNum = entities.find(e => e.entityType === "claim_number");
-  if (claimNum) {
-    const allClaims = await storage.getClaims(orgId);
-    const match = allClaims.find(c => c.claimNumber === claimNum.rawValue);
-    if (match) return match.id;
+// extracted_entities.entity_type is a DB enum; carrier_name is used only for
+// in-memory matching, so it must be filtered out before persistence.
+const PERSISTABLE_ENTITY_TYPES = new Set([
+  "claim_number", "policy_number", "adjuster_name", "adjuster_email", "adjuster_phone",
+  "insured_name", "property_address", "date_of_loss", "inspection_date", "determination_date",
+  "payment_date", "rcv", "acv", "deductible", "depreciation", "supplement_amount",
+  "check_amount", "coverage_type",
+]);
+
+type Entity = { entityType: string; rawValue: string; confidence: number };
+type ClaimLike = Awaited<ReturnType<typeof storage.getClaims>>[number];
+
+export interface MatchCandidate {
+  claimId: string;
+  score: number;
+  reasons: string[];
+}
+
+const HIGH_CONFIDENCE = 0.7;
+const REVIEW_CONFIDENCE = 0.4;
+
+function matchConfidenceLabel(score: number): string {
+  if (score >= HIGH_CONFIDENCE) return "Suggested match found.";
+  if (score >= REVIEW_CONFIDENCE) return "Match needs review.";
+  return "No matching claim found. Create new claim or save as draft.";
+}
+
+function norm(v: string | null | undefined): string {
+  return (v || "").toLowerCase().trim();
+}
+
+// Rule-based MVP scoring across multiple signals. Returns a 0..1 confidence
+// plus human-readable reasons. Never fabricates — only scores real overlaps.
+function scoreClaimMatch(claim: ClaimLike, entities: Entity[], fileName: string): { score: number; reasons: string[] } {
+  const get = (t: string) => entities.find(e => e.entityType === t)?.rawValue;
+  const fname = norm(fileName);
+  let score = 0;
+  const reasons: string[] = [];
+
+  const claimNum = get("claim_number");
+  if (claimNum && claim.claimNumber && norm(claim.claimNumber) === norm(claimNum)) {
+    score += 0.6;
+    reasons.push(`Claim number ${claimNum} matches`);
   }
-  
-  const policyNum = entities.find(e => e.entityType === "policy_number");
-  if (policyNum) {
-    const allClaims = await storage.getClaims(orgId);
-    const match = allClaims.find(c => c.policyNumber === policyNum.rawValue);
-    if (match) return match.id;
+
+  const policyNum = get("policy_number");
+  if (policyNum && claim.policyNumber && norm(claim.policyNumber) === norm(policyNum)) {
+    score += 0.4;
+    reasons.push("Policy number matches");
   }
-  
-  const insured = entities.find(e => e.entityType === "insured_name");
-  const addr = entities.find(e => e.entityType === "property_address");
-  if (insured && addr) {
-    const allClaims = await storage.getClaims(orgId);
-    const match = allClaims.find(c => {
-      const nameMatch = (c.insuredName || c.homeownerName || "").toLowerCase().includes(insured.rawValue.toLowerCase());
-      const addrMatch = (c.propertyAddress || c.address || "").toLowerCase().includes(addr.rawValue.toLowerCase().slice(0, 10));
-      return nameMatch && addrMatch;
-    });
-    if (match) return match.id;
+
+  const insured = get("insured_name");
+  const claimName = claim.insuredName || claim.homeownerName || "";
+  if (insured && claimName && norm(claimName).includes(norm(insured))) {
+    score += 0.25;
+    reasons.push("Homeowner / insured name matches");
   }
-  
+
+  const addr = get("property_address");
+  const claimAddr = claim.propertyAddress || claim.address || "";
+  if (addr && claimAddr && norm(claimAddr).slice(0, 14).includes(norm(addr).slice(0, 14))) {
+    score += 0.2;
+    reasons.push("Property address matches");
+  }
+
+  const carrier = get("carrier_name");
+  if (carrier && claim.carrier && norm(claim.carrier).includes(norm(carrier))) {
+    score += 0.15;
+    reasons.push("Carrier matches");
+  }
+
+  const dol = get("date_of_loss");
+  if (dol && claim.dateOfLoss) {
+    const d = new Date(dol);
+    const claimDol = new Date(claim.dateOfLoss);
+    if (!isNaN(d.getTime()) && !isNaN(claimDol.getTime()) &&
+        Math.abs(d.getTime() - claimDol.getTime()) < 1000 * 60 * 60 * 24 * 2) {
+      score += 0.15;
+      reasons.push("Date of loss matches");
+    }
+  }
+
+  if (claim.claimNumber && fname.includes(norm(claim.claimNumber)) && norm(claim.claimNumber).length > 3) {
+    score += 0.2;
+    reasons.push("Claim number appears in file name");
+  }
+  const lastName = norm(claimName).split(" ").pop();
+  if (lastName && lastName.length > 2 && fname.includes(lastName)) {
+    score += 0.1;
+    reasons.push("Homeowner name appears in file name");
+  }
+
+  return { score: Math.min(score, 1), reasons };
+}
+
+// Rank a pool of claims for a file by match score, best first.
+function rankClaimMatches(claims: ClaimLike[], entities: Entity[], fileName: string): MatchCandidate[] {
+  return claims
+    .map(claim => {
+      const { score, reasons } = scoreClaimMatch(claim, entities, fileName);
+      return { claimId: claim.id, score: Number(score.toFixed(2)), reasons };
+    })
+    .filter(c => c.score > 0)
+    .sort((a, b) => b.score - a.score);
+}
+
+// Returns the best claim id ONLY if confidence is high; otherwise null so the
+// file is left unmatched for review (never force a bad match).
+function autoMatchClaim(
+  claims: ClaimLike[],
+  entities: Entity[],
+  fileName: string
+): MatchCandidate | null {
+  const ranked = rankClaimMatches(claims, entities, fileName);
+  const best = ranked[0];
+  if (best && best.score >= HIGH_CONFIDENCE) return best;
   return null;
+}
+
+// Master sees all claims cross-tenant; everyone else is scoped to their org.
+async function getClaimPool(role: string, orgId: string): Promise<ClaimLike[]> {
+  return isMaster(role) ? storage.getAllClaimsAcrossTenants() : storage.getClaims(orgId);
 }
 
 async function generateTimelineEvents(
@@ -231,9 +326,23 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     
     const classification = classifyDocument(textContent);
     const entities = extractEntities(textContent);
-    
-    const claimId = req.body.claimId || await autoMatchClaim(organizationId, entities);
-    
+
+    // Pre-selected claim wins; otherwise attempt high-confidence auto-match.
+    const claimPool = await getClaimPool(req.auth.role, organizationId);
+    let claimId: string | null = req.body.claimId || null;
+    let autoMatch: MatchCandidate | null = null;
+    if (!claimId) {
+      autoMatch = autoMatchClaim(claimPool, entities, req.file.originalname);
+      if (autoMatch) claimId = autoMatch.claimId;
+    }
+    // Build a ranked list for confidence reporting (best candidate even if below
+    // the auto-assign threshold, so the UI can say "needs review").
+    const ranked = rankClaimMatches(claimPool, entities, req.file.originalname);
+    const bestScore = ranked[0]?.score ?? 0;
+
+    const matchedClaim = claimId ? claimPool.find(c => c.id === claimId) : undefined;
+    const timelineOrgId = matchedClaim?.organizationId || organizationId;
+
     const evidenceFile = await storage.createEvidenceFile({
       organizationId,
       uploadedByUserId: userId,
@@ -250,6 +359,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     });
     
     for (const entity of entities) {
+      if (!PERSISTABLE_ENTITY_TYPES.has(entity.entityType)) continue;
       await storage.createExtractedEntity({
         evidenceFileId: evidenceFile.id,
         claimId: claimId || undefined,
@@ -261,7 +371,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     }
     
     if (claimId) {
-      await generateTimelineEvents(claimId, organizationId, evidenceFile.id, classification.category, entities, userId);
+      await generateTimelineEvents(claimId, timelineOrgId, evidenceFile.id, classification.category, entities, userId);
       // AI date-extraction MVP: derive event-dated timeline candidates from the
       // document text. Low-confidence dates become needsReview candidates. Never
       // allowed to break the upload pipeline.
@@ -270,7 +380,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
           await createCandidatesFromText({
             text: textContent,
             claimId,
-            orgId: organizationId,
+            orgId: timelineOrgId,
             createdByUserId: userId,
             sourceDocumentId: evidenceFile.id,
             sourceHint: classification.category === "denial_letter" ? "letter_date" : undefined,
@@ -286,6 +396,9 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       const claimNum = entities.find(e => e.entityType === "claim_number");
       const insured = entities.find(e => e.entityType === "insured_name");
       const addr = entities.find(e => e.entityType === "property_address");
+      const carrier = entities.find(e => e.entityType === "carrier_name");
+      const dol = entities.find(e => e.entityType === "date_of_loss");
+      const dolDate = dol ? new Date(dol.rawValue) : null;
       
       draft = await storage.createClaimDraft({
         organizationId,
@@ -293,6 +406,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         extractedClaimNumber: claimNum?.rawValue,
         extractedInsured: insured?.rawValue,
         extractedAddress: addr?.rawValue,
+        extractedCarrier: carrier?.rawValue,
+        extractedDateOfLoss: dolDate && !isNaN(dolDate.getTime()) ? dolDate : undefined,
       });
     }
     
@@ -305,12 +420,33 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       entityId: evidenceFile.id,
       afterJson: { fileName: req.file.originalname, docCategory: classification.category, claimId },
     });
+
+    // Audit the auto-match attempt and its outcome (additive, never fabricated).
+    await storage.createAuditLog({
+      organizationId,
+      actorUserId: userId,
+      actorRole: req.auth.role,
+      actionType: claimId && autoMatch ? "EVIDENCE_AUTO_MATCH_ACCEPTED" : "EVIDENCE_AUTO_MATCH_ATTEMPTED",
+      entityType: "evidence_file",
+      entityId: evidenceFile.id,
+      afterJson: {
+        matchedClaimId: claimId,
+        autoMatched: !!autoMatch,
+        bestScore,
+        reasons: ranked[0]?.reasons || [],
+        confidenceLabel: matchConfidenceLabel(bestScore),
+      },
+    });
     
     res.json({
       file: evidenceFile,
       entities,
       classification,
       matchedClaimId: claimId,
+      autoMatched: !!autoMatch,
+      matchConfidence: bestScore,
+      matchConfidenceLabel: matchConfidenceLabel(bestScore),
+      matchReasons: ranked[0]?.reasons || [],
       draft,
     });
   } catch (err: any) {
@@ -323,8 +459,95 @@ router.get("/files", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
     const claimId = req.query.claimId as string | undefined;
-    const files = await storage.getEvidenceFiles(req.auth.organizationId, claimId);
+    // Master sees all evidence files across tenants; others scoped to their org.
+    const files = isMaster(req.auth.role) && !claimId
+      ? await storage.getAllEvidenceFilesAcrossTenants()
+      : await storage.getEvidenceFiles(req.auth.organizationId, claimId);
     res.json(files);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// Unmatched evidence files needing review. Master sees all tenants.
+router.get("/files-unmatched", async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    const master = isMaster(req.auth.role);
+    const files = await storage.getUnmatchedEvidenceFiles(
+      master ? undefined : req.auth.organizationId
+    );
+    await storage.createAuditLog({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      actorRole: req.auth.role,
+      actionType: "EVIDENCE_UNMATCHED_VIEWED",
+      entityType: "evidence_file",
+      entityId: null as any,
+      afterJson: { count: files.length, crossTenant: master },
+    });
+    res.json(files);
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// Ranked match suggestions for a file, with claim context (PII-masked per role).
+router.get("/files/:id/match-suggestions", async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    const { role, organizationId } = req.auth;
+    const file = isMaster(role)
+      ? await storage.getEvidenceFileAnyTenant(req.params.id as string)
+      : await storage.getEvidenceFile(req.params.id as string, organizationId);
+    if (!file) return res.status(404).json({ message: "File not found" });
+
+    const storedEntities = await storage.getExtractedEntities(req.params.id as string);
+    const entities: Entity[] = storedEntities.map(e => ({
+      entityType: e.entityType,
+      rawValue: e.rawValue,
+      confidence: e.confidence || 0,
+    }));
+
+    const claimPool = await getClaimPool(role, organizationId);
+    const ranked = rankClaimMatches(claimPool, entities, file.fileName);
+    const byId = new Map(claimPool.map(c => [c.id, c]));
+
+    const unmask = canViewUnmasked(role);
+    const candidates = ranked.slice(0, 10).map(r => {
+      const claim = byId.get(r.claimId)!;
+      const view: any = unmask ? claim : applyPiiMasking(claim as any, role as any);
+      return {
+        claimId: claim.id,
+        score: r.score,
+        confidenceLabel: matchConfidenceLabel(r.score),
+        reasons: r.reasons,
+        claimNumber: view.claimNumber,
+        carrier: claim.carrier,
+        homeownerName: view.homeownerName || view.insuredName || null,
+        propertyLocation: [view.propertyAddress || view.address, claim.city, claim.state].filter(Boolean).join(", ") || null,
+        status: claim.status,
+        dateOfLoss: claim.dateOfLoss,
+      };
+    });
+
+    const best = candidates[0];
+    await storage.createAuditLog({
+      organizationId: file.organizationId,
+      actorUserId: req.auth.userId,
+      actorRole: role,
+      actionType: "EVIDENCE_MATCH_SUGGESTIONS_VIEWED",
+      entityType: "evidence_file",
+      entityId: file.id,
+      afterJson: { candidateCount: candidates.length, bestScore: best?.score ?? 0, actorOrganizationId: organizationId, crossTenant: file.organizationId !== organizationId },
+    });
+
+    res.json({
+      candidates,
+      bestScore: best?.score ?? 0,
+      confidenceLabel: matchConfidenceLabel(best?.score ?? 0),
+      masked: !unmask,
+    });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }
@@ -354,25 +577,157 @@ router.get("/files/:id/entities", async (req: AuthRequest, res: Response) => {
 router.post("/files/:id/match", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    const { role, organizationId, userId } = req.auth;
     const { claimId } = req.body;
     if (!claimId) return res.status(400).json({ message: "claimId required" });
-    
-    const file = await storage.getEvidenceFile(req.params.id as string, req.auth.organizationId);
+
+    const master = isMaster(role);
+    const file = master
+      ? await storage.getEvidenceFileAnyTenant(req.params.id as string)
+      : await storage.getEvidenceFile(req.params.id as string, organizationId);
     if (!file) return res.status(404).json({ message: "File not found" });
-    
-    await storage.updateEvidenceFile(req.params.id as string, req.auth.organizationId, { claimId });
-    
+
+    // Verify the target claim exists and is authorized for this user.
+    const claim = master
+      ? await storage.getClaimAnyTenant(claimId as string)
+      : await storage.getClaim(claimId as string, organizationId);
+    if (!claim) return res.status(404).json({ message: "Claim not found or not authorized" });
+
+    await storage.updateEvidenceFile(req.params.id as string, file.organizationId, { claimId });
+
     const entities = await storage.getExtractedEntities(req.params.id as string);
     await generateTimelineEvents(
-      claimId as string, 
-      req.auth.organizationId, 
-      req.params.id as string, 
+      claimId as string,
+      claim.organizationId,
+      req.params.id as string,
       file.docCategory || "unknown",
       entities.map(e => ({ entityType: e.entityType, rawValue: e.rawValue, confidence: e.confidence || 0 })),
-      req.auth.userId
+      userId
     );
-    
+
+    await storage.createAuditLog({
+      organizationId: claim.organizationId,
+      actorUserId: userId,
+      actorRole: role,
+      actionType: "EVIDENCE_MANUAL_MATCH",
+      entityType: "evidence_file",
+      entityId: file.id,
+      afterJson: { claimId, claimNumber: claim.claimNumber, actorOrganizationId: organizationId, crossTenant: file.organizationId !== claim.organizationId },
+    });
+
     res.json({ matched: true, claimId });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// Create a brand-new claim from an uploaded file's extracted fields, then link
+// the file to it. Honest MVP: only fields actually extracted are pre-filled.
+router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    const { role, organizationId, userId } = req.auth;
+    const master = isMaster(role);
+    const file = master
+      ? await storage.getEvidenceFileAnyTenant(req.params.id as string)
+      : await storage.getEvidenceFile(req.params.id as string, organizationId);
+    if (!file) return res.status(404).json({ message: "File not found" });
+
+    const storedEntities = await storage.getExtractedEntities(req.params.id as string);
+    const get = (t: string) => storedEntities.find(e => e.entityType === t)?.rawValue;
+    const overrides = req.body || {};
+
+    const claimNumber = overrides.claimNumber || get("claim_number") || `DRAFT-${Date.now().toString().slice(-6)}`;
+    const dolRaw = overrides.dateOfLoss || get("date_of_loss");
+    const dol = dolRaw ? new Date(dolRaw) : null;
+
+    // The claim lives in the file's organization (uploader's tenant).
+    const claim = await storage.createClaim({
+      organizationId: file.organizationId,
+      claimNumber,
+      policyNumber: overrides.policyNumber || get("policy_number") || undefined,
+      homeownerName: overrides.homeownerName || get("insured_name") || undefined,
+      insuredName: overrides.insuredName || get("insured_name") || undefined,
+      propertyAddress: overrides.propertyAddress || get("property_address") || undefined,
+      carrier: overrides.carrier || undefined,
+      dateOfLoss: dol && !isNaN(dol.getTime()) ? dol : undefined,
+      status: "open",
+    } as any);
+
+    await storage.updateEvidenceFile(req.params.id as string, file.organizationId, { claimId: claim.id });
+
+    await generateTimelineEvents(
+      claim.id,
+      claim.organizationId,
+      file.id,
+      file.docCategory || "unknown",
+      storedEntities.map(e => ({ entityType: e.entityType, rawValue: e.rawValue, confidence: e.confidence || 0 })),
+      userId
+    );
+
+    // If a draft existed for this file, mark it merged.
+    const drafts = await storage.getClaimDrafts(file.organizationId);
+    const draft = drafts.find(d => d.createdFromEvidenceFileId === file.id && d.status === "needs_review");
+    if (draft) await storage.updateClaimDraft(draft.id, file.organizationId, { status: "merged" } as any);
+
+    await storage.createAuditLog({
+      organizationId: claim.organizationId,
+      actorUserId: userId,
+      actorRole: role,
+      actionType: "CLAIM_CREATED_FROM_FILE",
+      entityType: "claim",
+      entityId: claim.id,
+      afterJson: { claimNumber: claim.claimNumber, evidenceFileId: file.id, actorOrganizationId: organizationId, crossTenant: file.organizationId !== organizationId },
+    });
+
+    res.json({ created: true, claim });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// Leave a file unmatched for review: clears any claim link and ensures a draft
+// exists so it appears in the review queue. Never forces a bad match.
+router.post("/files/:id/unmatch", async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    const { role, organizationId, userId } = req.auth;
+    const master = isMaster(role);
+    const file = master
+      ? await storage.getEvidenceFileAnyTenant(req.params.id as string)
+      : await storage.getEvidenceFile(req.params.id as string, organizationId);
+    if (!file) return res.status(404).json({ message: "File not found" });
+
+    await storage.updateEvidenceFile(req.params.id as string, file.organizationId, { claimId: null as any });
+
+    const storedEntities = await storage.getExtractedEntities(req.params.id as string);
+    const get = (t: string) => storedEntities.find(e => e.entityType === t)?.rawValue;
+    const drafts = await storage.getClaimDrafts(file.organizationId);
+    let draft = drafts.find(d => d.createdFromEvidenceFileId === file.id);
+    if (!draft) {
+      const dolRaw = get("date_of_loss");
+      const dol = dolRaw ? new Date(dolRaw) : null;
+      draft = await storage.createClaimDraft({
+        organizationId: file.organizationId,
+        createdFromEvidenceFileId: file.id,
+        extractedClaimNumber: get("claim_number"),
+        extractedInsured: get("insured_name"),
+        extractedAddress: get("property_address"),
+        extractedDateOfLoss: dol && !isNaN(dol.getTime()) ? dol : undefined,
+      });
+    }
+
+    await storage.createAuditLog({
+      organizationId: file.organizationId,
+      actorUserId: userId,
+      actorRole: role,
+      actionType: "EVIDENCE_SAVED_UNMATCHED",
+      entityType: "evidence_file",
+      entityId: file.id,
+      afterJson: { draftId: draft?.id, actorOrganizationId: organizationId, crossTenant: file.organizationId !== organizationId },
+    });
+
+    res.json({ unmatched: true, draft });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }

@@ -95,7 +95,31 @@ interface UploadResult {
   file: EvidenceFile;
   entities: ExtractedEntity[];
   matchedClaimId: string | null;
+  autoMatched?: boolean;
+  matchConfidence?: number;
+  matchConfidenceLabel?: string;
+  matchReasons?: string[];
   draft: ClaimDraft | null;
+}
+
+interface MatchCandidate {
+  claimId: string;
+  score: number;
+  confidenceLabel: string;
+  reasons: string[];
+  claimNumber: string | null;
+  carrier: string | null;
+  homeownerName: string | null;
+  propertyLocation: string | null;
+  status: string | null;
+  dateOfLoss: string | null;
+}
+
+interface MatchSuggestionsResponse {
+  candidates: MatchCandidate[];
+  bestScore: number;
+  confidenceLabel: string;
+  masked: boolean;
 }
 
 export default function EvidencePage() {
@@ -109,7 +133,9 @@ export default function EvidencePage() {
   const [selectedClaimId, setSelectedClaimId] = useState<string>("");
   const [matchingFileId, setMatchingFileId] = useState<string | null>(null);
   const [draftsOpen, setDraftsOpen] = useState(false);
+  const [unmatchedOpen, setUnmatchedOpen] = useState(true);
   const [preSelectClaimId, setPreSelectClaimId] = useState<string>("");
+  const [claimSearch, setClaimSearch] = useState("");
 
   const { data: evidenceFiles, isLoading: filesLoading } = useQuery<
     (EvidenceFile & { entities?: ExtractedEntity[] })[]
@@ -124,6 +150,31 @@ export default function EvidencePage() {
   const { data: drafts, isLoading: draftsLoading } = useQuery<ClaimDraft[]>({
     queryKey: ["/api/evidence/drafts"],
   });
+
+  const { data: unmatchedFiles, isLoading: unmatchedLoading } = useQuery<
+    EvidenceFile[]
+  >({
+    queryKey: ["/api/evidence/files-unmatched"],
+  });
+
+  const { data: matchSuggestions, isLoading: suggestionsLoading } =
+    useQuery<MatchSuggestionsResponse>({
+      queryKey: ["/api/evidence/files", matchingFileId, "match-suggestions"],
+      queryFn: async () => {
+        const res = await fetch(
+          `/api/evidence/files/${matchingFileId}/match-suggestions`,
+          {
+            headers: getAccessToken()
+              ? { Authorization: `Bearer ${getAccessToken()}` }
+              : {},
+            credentials: "include",
+          }
+        );
+        if (!res.ok) throw new Error("Failed to load match suggestions");
+        return res.json();
+      },
+      enabled: !!matchingFileId && matchDialogOpen,
+    });
 
   const selectedFile = evidenceFiles?.find((f) => f.id === selectedFileId);
 
@@ -214,6 +265,44 @@ export default function EvidencePage() {
       });
     },
   });
+
+  const createClaimMutation = useMutation({
+    mutationFn: async (fileId: string) => {
+      return apiRequest("POST", `/api/evidence/files/${fileId}/create-claim`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
+      toast({ title: "Claim created from file" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Create claim failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const unmatchMutation = useMutation({
+    mutationFn: async (fileId: string) => {
+      return apiRequest("POST", `/api/evidence/files/${fileId}/unmatch`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
+      toast({ title: "Saved as unmatched evidence for review" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Action failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const openMatchDialog = useCallback((fileId: string) => {
+    setMatchingFileId(fileId);
+    setSelectedClaimId("");
+    setClaimSearch("");
+    setMatchDialogOpen(true);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -355,18 +444,36 @@ export default function EvidencePage() {
                   Claim Match
                 </p>
                 {uploadResult.matchedClaimId ? (
-                  <span
-                    className="text-sm font-mono"
-                    data-testid="text-upload-claim-match"
-                  >
-                    {uploadResult.matchedClaimId}
-                  </span>
+                  <div className="space-y-1">
+                    <span
+                      className="text-sm font-mono block"
+                      data-testid="text-upload-claim-match"
+                    >
+                      {uploadResult.matchedClaimId}
+                    </span>
+                    {uploadResult.matchConfidence != null && (
+                      <span className="text-xs text-muted-foreground" data-testid="text-upload-match-confidence">
+                        Auto-matched · {Math.round(uploadResult.matchConfidence * 100)}% confidence
+                      </span>
+                    )}
+                  </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline" data-testid="badge-needs-review">
                       <AlertTriangle className="w-3 h-3 mr-1" />
-                      Needs Review
+                      {(uploadResult.matchConfidence ?? 0) >= 0.4
+                        ? "Match needs review"
+                        : "No matching claim found"}
                     </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openMatchDialog(uploadResult.file.id)}
+                      data-testid="button-upload-match"
+                    >
+                      <LinkIcon className="w-4 h-4" />
+                      Match to Claim
+                    </Button>
                   </div>
                 )}
               </div>
@@ -648,23 +755,107 @@ export default function EvidencePage() {
               )}
 
             {!selectedFile.claimId && (
-              <div className="pt-2">
+              <div className="pt-2 flex flex-wrap gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    setMatchingFileId(selectedFile.id);
-                    setMatchDialogOpen(true);
-                  }}
+                  onClick={() => openMatchDialog(selectedFile.id)}
                   data-testid="button-match-claim"
                 >
                   <LinkIcon className="w-4 h-4" />
                   Match to Claim
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={createClaimMutation.isPending}
+                  onClick={() => createClaimMutation.mutate(selectedFile.id)}
+                  data-testid="button-create-claim-from-file"
+                >
+                  {createClaimMutation.isPending && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  Create Claim from File
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={unmatchMutation.isPending}
+                  onClick={() => unmatchMutation.mutate(selectedFile.id)}
+                  data-testid="button-leave-unmatched"
+                >
+                  {unmatchMutation.isPending && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  Leave Unmatched
                 </Button>
               </div>
             )}
           </CardContent>
         </Card>
       )}
+
+      <Collapsible open={unmatchedOpen} onOpenChange={setUnmatchedOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer flex flex-row items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base">Unmatched Evidence</CardTitle>
+                {!!unmatchedFiles?.length && (
+                  <Badge variant="outline" className="text-xs" data-testid="badge-unmatched-count">
+                    {unmatchedFiles.length}
+                  </Badge>
+                )}
+              </div>
+              <ChevronDown
+                className={`w-4 h-4 text-muted-foreground transition-transform ${
+                  unmatchedOpen ? "rotate-180" : ""
+                }`}
+              />
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              {unmatchedLoading ? (
+                <div className="space-y-2">
+                  {[...Array(2)].map((_, i) => (
+                    <Skeleton key={i} className="h-14 w-full" />
+                  ))}
+                </div>
+              ) : !unmatchedFiles?.length ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No unmatched files. Every uploaded document is linked to a claim.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {unmatchedFiles.map((f) => (
+                    <div
+                      key={f.id}
+                      className="border border-border rounded-md p-3 flex items-center justify-between gap-3 flex-wrap"
+                      data-testid={`card-unmatched-${f.id}`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" data-testid={`text-unmatched-name-${f.id}`}>
+                          {f.fileName}
+                        </p>
+                        <p className="text-xs text-muted-foreground capitalize">
+                          {(f.docCategory || "unknown").replace(/_/g, " ")}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openMatchDialog(f.id)}
+                        data-testid={`button-match-unmatched-${f.id}`}
+                      >
+                        <LinkIcon className="w-4 h-4" />
+                        Match
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <Collapsible open={draftsOpen} onOpenChange={setDraftsOpen}>
         <Card>
@@ -758,54 +949,177 @@ export default function EvidencePage() {
       </Collapsible>
 
       <Dialog open={matchDialogOpen} onOpenChange={setMatchDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Match to Claim</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <Select
-              value={selectedClaimId}
-              onValueChange={setSelectedClaimId}
-            >
-              <SelectTrigger data-testid="select-match-claim">
-                <SelectValue placeholder="Select a claim" />
-              </SelectTrigger>
-              <SelectContent>
-                {claims?.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.claimNumber}
-                    {c.carrier ? ` — ${c.carrier}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex justify-end gap-2">
+            {suggestionsLoading ? (
+              <Skeleton className="h-20 w-full" />
+            ) : (
+              (() => {
+                const top = matchSuggestions?.candidates?.[0];
+                const best = matchSuggestions?.bestScore ?? 0;
+                const summary =
+                  matchSuggestions?.confidenceLabel ||
+                  "No matching claim found. Pick a claim manually or create a new one.";
+                const hasSuggestion = best >= 0.4 && !!top;
+                return (
+                  <div
+                    className="rounded-md border border-border bg-muted/40 p-3 space-y-2"
+                    data-testid="panel-match-summary"
+                  >
+                    <p className="text-sm font-medium" data-testid="text-match-summary">
+                      {summary}
+                    </p>
+                    {hasSuggestion && top && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-sm" data-testid="text-suggested-claim-number">
+                            {top.claimNumber || "No claim number"}
+                            {top.carrier ? ` · ${top.carrier}` : ""}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            {Math.round(top.score * 100)}% match
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {top.homeownerName && <span>Homeowner: {top.homeownerName}</span>}
+                          {top.propertyLocation && <span>Location: {top.propertyLocation}</span>}
+                          {top.status && <span className="capitalize">Status: {top.status.replace(/_/g, " ")}</span>}
+                          {top.dateOfLoss && (
+                            <span>DOL: {new Date(top.dateOfLoss).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                        {!!top.reasons?.length && (
+                          <p className="text-xs text-muted-foreground/80">
+                            Why: {top.reasons.join(", ")}
+                          </p>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setSelectedClaimId(top.claimId)}
+                          data-testid="button-use-suggested"
+                        >
+                          Use this match
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            )}
+
+            <div className="space-y-2">
+              <Input
+                placeholder="Search claims by number, carrier, homeowner, location..."
+                value={claimSearch}
+                onChange={(e) => setClaimSearch(e.target.value)}
+                data-testid="input-claim-search"
+              />
+              <div className="max-h-56 overflow-y-auto rounded-md border border-border divide-y divide-border">
+                {(() => {
+                  const q = claimSearch.trim().toLowerCase();
+                  const filtered = (claims || []).filter((c) => {
+                    if (!q) return true;
+                    return [
+                      c.claimNumber,
+                      c.carrier,
+                      c.homeownerName,
+                      c.insuredName,
+                      c.propertyAddress,
+                      c.city,
+                      c.state,
+                      c.status,
+                    ]
+                      .filter(Boolean)
+                      .some((v) => String(v).toLowerCase().includes(q));
+                  });
+                  if (!filtered.length) {
+                    return (
+                      <p className="text-sm text-muted-foreground py-6 text-center">
+                        No claims match your search.
+                      </p>
+                    );
+                  }
+                  return filtered.map((c) => {
+                    const loc = [c.city, c.state].filter(Boolean).join(", ");
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setSelectedClaimId(c.id)}
+                        className={`w-full text-left p-2.5 hover-elevate transition-colors ${
+                          selectedClaimId === c.id ? "bg-accent" : ""
+                        }`}
+                        data-testid={`row-claim-${c.id}`}
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-sm font-medium">
+                            {c.claimNumber || "No claim number"}
+                          </span>
+                          {c.status && (
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {c.status.replace(/_/g, " ")}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-2">
+                          {c.carrier && <span>{c.carrier}</span>}
+                          {c.homeownerName && <span>· {c.homeownerName}</span>}
+                          {loc && <span>· {loc}</span>}
+                          {c.dateOfLoss && (
+                            <span>· DOL {new Date(c.dateOfLoss).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            <div className="flex justify-between gap-2 flex-wrap">
               <Button
-                variant="outline"
-                onClick={() => setMatchDialogOpen(false)}
-                data-testid="button-cancel-match"
-              >
-                Cancel
-              </Button>
-              <Button
-                disabled={
-                  !selectedClaimId || matchMutation.isPending
-                }
+                variant="ghost"
+                disabled={unmatchMutation.isPending || !matchingFileId}
                 onClick={() => {
-                  if (matchingFileId && selectedClaimId) {
-                    matchMutation.mutate({
-                      fileId: matchingFileId,
-                      claimId: selectedClaimId,
-                    });
+                  if (matchingFileId) {
+                    unmatchMutation.mutate(matchingFileId);
+                    setMatchDialogOpen(false);
                   }
                 }}
-                data-testid="button-confirm-match"
+                data-testid="button-dialog-leave-unmatched"
               >
-                {matchMutation.isPending && (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                )}
-                Confirm Match
+                Leave Unmatched
               </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setMatchDialogOpen(false)}
+                  data-testid="button-cancel-match"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={!selectedClaimId || matchMutation.isPending}
+                  onClick={() => {
+                    if (matchingFileId && selectedClaimId) {
+                      matchMutation.mutate({
+                        fileId: matchingFileId,
+                        claimId: selectedClaimId,
+                      });
+                    }
+                  }}
+                  data-testid="button-confirm-match"
+                >
+                  {matchMutation.isPending && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  Confirm Match
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

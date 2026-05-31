@@ -236,7 +236,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </Badge>
               )}
               <Badge variant="outline" className="text-xs" data-testid="badge-header-plan">
-                {planLabel} · {roleLabel}
+                Plan: {planLabel} · Role: {roleLabel}
               </Badge>
             </div>
           </header>

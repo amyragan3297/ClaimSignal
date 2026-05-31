@@ -21,6 +21,14 @@ const ok = await storage.archiveClaim(id, scopedOrgId);
 
 **Important:** Do NOT pass `null` — JavaScript `null` is falsy so it evaluates the same as `undefined` in `if (orgId)` checks, but TypeScript may warn. Always use `undefined` explicitly for the cross-tenant path.
 
+## Audit attribution for cross-tenant Master actions
+When a Master (super_admin) acts on another tenant's resource, write the audit log's `organizationId` to the AFFECTED resource's org (e.g. `file.organizationId` / `claim.organizationId`), NOT the actor's `req.auth.organizationId`. Stash the actor's org in `afterJson.actorOrganizationId` plus a `crossTenant` boolean.
+
+**Why:** Filing the audit row under the actor's (platform) org breaks tenant-local audit traceability — the affected tenant can't see who touched their data. Each tenant's audit trail must contain actions performed on its own resources.
+
+**How to apply:** Same for write-side mutations (match/create-claim/unmatch) and even read/list endpoints over cross-tenant data (e.g. match-suggestions, files-unmatched view events). All evidence-matching routes in `server/evidence.ts` follow this.
+
 ## Files
 - `server/storage.ts` — all governance methods accept optional orgId
 - `server/routes.ts` — all governance PATCH/DELETE routes implement the isSuperAdmin pattern above
+- `server/evidence.ts` — cross-tenant evidence-matching routes audit under affected tenant org

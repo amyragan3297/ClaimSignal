@@ -44,7 +44,7 @@ import {
   type Escalation, type InsertEscalation, escalations,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, count, desc, gt, isNull, sql } from "drizzle-orm";
+import { eq, and, or, count, desc, gt, isNull, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -82,6 +82,7 @@ export interface IStorage {
   getClaims(orgId: string): Promise<Claim[]>;
   getAllClaimsAcrossTenants(): Promise<Claim[]>;
   getClaim(id: string, orgId: string): Promise<Claim | undefined>;
+  getClaimAnyTenant(id: string): Promise<Claim | undefined>;
   createClaim(claim: InsertClaim): Promise<Claim>;
   updateClaim(id: string, orgId: string, data: Partial<InsertClaim>): Promise<Claim | undefined>;
   softDeleteClaim(id: string, orgId: string): Promise<boolean>;
@@ -156,7 +157,10 @@ export interface IStorage {
   getAuditLogs(orgId?: string): Promise<AuditLog[]>;
 
   getEvidenceFiles(orgId: string, claimId?: string): Promise<EvidenceFile[]>;
+  getAllEvidenceFilesAcrossTenants(): Promise<EvidenceFile[]>;
   getEvidenceFile(id: string, orgId: string): Promise<EvidenceFile | undefined>;
+  getEvidenceFileAnyTenant(id: string): Promise<EvidenceFile | undefined>;
+  getUnmatchedEvidenceFiles(orgId?: string): Promise<EvidenceFile[]>;
   getEvidenceFileBySha256(sha256: string, orgId: string): Promise<EvidenceFile | undefined>;
   createEvidenceFile(file: InsertEvidenceFile): Promise<EvidenceFile>;
   updateEvidenceFile(id: string, orgId: string, data: Partial<EvidenceFile>): Promise<EvidenceFile | undefined>;
@@ -430,6 +434,13 @@ export class DatabaseStorage implements IStorage {
   async getClaim(id: string, orgId: string): Promise<Claim | undefined> {
     const [claim] = await db.select().from(claims).where(
       and(eq(claims.id, id), eq(claims.organizationId, orgId), isNull(claims.deletedAt))
+    );
+    return claim;
+  }
+
+  async getClaimAnyTenant(id: string): Promise<Claim | undefined> {
+    const [claim] = await db.select().from(claims).where(
+      and(eq(claims.id, id), isNull(claims.deletedAt))
     );
     return claim;
   }
@@ -745,11 +756,26 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(evidenceFiles).where(eq(evidenceFiles.organizationId, orgId)).orderBy(desc(evidenceFiles.uploadedAt));
   }
 
+  async getAllEvidenceFilesAcrossTenants(): Promise<EvidenceFile[]> {
+    return db.select().from(evidenceFiles).where(isNull(evidenceFiles.deletedAt)).orderBy(desc(evidenceFiles.uploadedAt));
+  }
+
   async getEvidenceFile(id: string, orgId: string): Promise<EvidenceFile | undefined> {
     const [file] = await db.select().from(evidenceFiles).where(
       and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId))
     );
     return file;
+  }
+
+  async getEvidenceFileAnyTenant(id: string): Promise<EvidenceFile | undefined> {
+    const [file] = await db.select().from(evidenceFiles).where(eq(evidenceFiles.id, id));
+    return file;
+  }
+
+  async getUnmatchedEvidenceFiles(orgId?: string): Promise<EvidenceFile[]> {
+    const conditions = [isNull(evidenceFiles.claimId), isNull(evidenceFiles.archivedAt), isNull(evidenceFiles.deletedAt)];
+    if (orgId) conditions.push(eq(evidenceFiles.organizationId, orgId));
+    return db.select().from(evidenceFiles).where(and(...conditions)).orderBy(desc(evidenceFiles.uploadedAt));
   }
 
   async getEvidenceFileBySha256(sha256: string, orgId: string): Promise<EvidenceFile | undefined> {
