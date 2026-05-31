@@ -286,6 +286,7 @@ export interface IStorage {
   // Section 19 — Escalations
   getEscalations(claimId: string, orgId: string): Promise<Escalation[]>;
   getAllOrgEscalations(orgId: string): Promise<Escalation[]>;
+  getAllEscalationsAcrossTenants(): Promise<Escalation[]>;
   getEscalation(id: string, orgId: string): Promise<Escalation | undefined>;
   createEscalation(data: InsertEscalation): Promise<Escalation>;
   updateEscalation(id: string, orgId: string, data: Partial<InsertEscalation>): Promise<Escalation | undefined>;
@@ -1305,6 +1306,10 @@ export class DatabaseStorage implements IStorage {
   async getAllOrgEscalations(orgId: string): Promise<Escalation[]> {
     return db.select().from(escalations).where(eq(escalations.organizationId, orgId))
       .orderBy(desc(escalations.createdAt));
+  }
+
+  async getAllEscalationsAcrossTenants(): Promise<Escalation[]> {
+    return db.select().from(escalations).orderBy(desc(escalations.createdAt));
   }
 
   async getEscalation(id: string, orgId: string): Promise<Escalation | undefined> {

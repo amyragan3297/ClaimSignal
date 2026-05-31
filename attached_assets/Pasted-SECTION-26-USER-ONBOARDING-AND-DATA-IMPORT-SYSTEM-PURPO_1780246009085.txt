@@ -1,0 +1,259 @@
+SECTION 26
+
+USER ONBOARDING AND DATA IMPORT SYSTEM
+
+PURPOSE
+
+Create a guided onboarding and import process so new users can start using ClaimSignal without confusion, duplicate data, or incomplete claim records.
+
+The system should help users understand what to upload, what information is missing, and how ClaimSignal turns claim data into intelligence.
+
+⸻
+
+ONBOARDING FLOW
+
+Create a first-time user onboarding flow.
+
+Steps:
+
+1. Create organization or individual account.
+2. Select user type.
+3. Add first claim.
+4. Upload claim documents.
+5. Review extracted data.
+6. Confirm adjusters.
+7. Confirm carrier.
+8. Confirm claim outcome.
+9. View first Claim Intelligence Dashboard.
+
+⸻
+
+USER TYPE SETUP
+
+Support onboarding for:
+
+* Individual User
+* Team Admin
+* Team Member
+* Founder Account
+* Executive Viewer
+* Investor Viewer
+
+Each role should only see the correct onboarding path.
+
+⸻
+
+FIRST CLAIM WIZARD
+
+Guide the user through:
+
+* Homeowner or claim nickname
+* Carrier
+* Claim number
+* Date of loss
+* Property location
+* Claim status
+* Initial outcome
+* Current outcome
+* Adjuster names
+* Documents available
+
+Allow skipping fields, but mark skipped fields as incomplete.
+
+⸻
+
+DOCUMENT UPLOAD GUIDANCE
+
+Prompt users to upload:
+
+* Carrier estimate
+* Denial letter
+* Coverage letter
+* Photos
+* Contractor estimate
+* Supplement
+* Invoice
+* Weather report
+* Emails
+* Audio transcript
+
+Display:
+
+Recommended Documents
+
+Required:
+
+* Carrier
+* Date of loss
+* Claim status
+
+Helpful:
+
+* Denial letter
+* Estimate
+* Photos
+* Adjuster name
+* Payment summary
+
+⸻
+
+DUPLICATE DETECTION
+
+Before creating a claim, check for possible duplicates using:
+
+* Claim number
+* Property address
+* Homeowner name
+* Carrier
+* Date of loss
+* Uploaded file names
+* Adjuster names
+
+If a possible duplicate exists, display:
+
+Possible duplicate claim detected.
+
+Options:
+
+* Review existing claim
+* Merge with existing claim
+* Continue creating new claim
+
+Do not silently create duplicate claims.
+
+⸻
+
+IMPORT REVIEW SCREEN
+
+After upload and extraction, display:
+
+Review Suggested Data
+
+Fields:
+
+* Carrier
+* Claim number
+* Date of loss
+* Property address
+* Adjuster
+* Financial totals
+* Claim status
+* Initial outcome
+* Current outcome
+* Denial reasons
+* Missing line items
+
+Actions:
+
+* Accept
+* Edit
+* Reject
+
+Never overwrite user-entered data without confirmation.
+
+⸻
+
+DATA COMPLETENESS SCORE
+
+Display:
+
+Claim Setup Completeness
+
+Examples:
+
+* 25 percent complete
+* 50 percent complete
+* 75 percent complete
+* Ready for intelligence analysis
+
+Completeness factors:
+
+* Carrier present
+* Date of loss present
+* Claim status present
+* Adjuster linked
+* Estimate uploaded
+* Denial letter uploaded if denied
+* Financial totals extracted
+* Timeline started
+* Outcome selected
+
+⸻
+
+SAMPLE CLAIM OPTION
+
+Provide a demo sample claim for new users.
+
+Purpose:
+
+Let users understand ClaimSignal before uploading real claim data.
+
+Sample claim must use fictional data only.
+
+Label clearly:
+
+Demo Claim
+Fictional Sample Data
+
+⸻
+
+ONBOARDING CHECKLIST
+
+Display:
+
+Get Started Checklist
+
+* Add first claim
+* Upload estimate
+* Upload denial or coverage letter
+* Confirm adjuster
+* Confirm carrier
+* Review missing fields
+* View intelligence dashboard
+* Search playbooks
+
+⸻
+
+SECURITY AND MASKING
+
+Apply role-based access immediately during onboarding.
+
+Do not expose sample or real claim data across organizations.
+
+Preserve tenant isolation.
+
+⸻
+
+AUDIT LOGGING
+
+Log:
+
+* User onboarded
+* Organization created
+* First claim created
+* Document uploaded
+* Duplicate warning shown
+* Data accepted
+* Data edited
+* Data rejected
+
+⸻
+
+FINAL VALIDATION
+
+Verify:
+
+1. New users can create an account and complete onboarding.
+2. First claim wizard works.
+3. Duplicate detection works.
+4. Upload guidance is clear.
+5. Extracted data requires review before saving.
+6. Sample claim uses fictional data only.
+7. Role permissions apply during onboarding.
+8. Tenant isolation remains intact.
+9. Audit logs capture onboarding activity.
+10. No real claim data leaks across accounts.
+
+SUCCESS CONDITION
+
+New users can enter ClaimSignal, add a claim, upload documents, review extracted data, avoid duplicates, and reach their first intelligence dashboard without confusion or data integrity issues.

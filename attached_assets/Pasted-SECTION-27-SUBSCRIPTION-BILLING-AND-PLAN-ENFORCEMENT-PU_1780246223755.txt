@@ -1,0 +1,256 @@
+SECTION 27
+
+SUBSCRIPTION BILLING AND PLAN ENFORCEMENT
+
+PURPOSE
+
+Create the commercial subscription system for ClaimSignal so users can sign up, select a plan, pay through Stripe, and access features based on their subscription tier.
+
+This section controls monetization, plan access, seat limits, billing status, and subscription enforcement.
+
+⸻
+
+SUBSCRIPTION PLANS
+
+Create plan structure for:
+
+FOUNDER PLAN
+
+* Locked founder pricing
+* Limited availability
+* Early access features
+* ClaimSignal intelligence access
+* Playbook access
+* Adjuster intelligence access
+* Carrier intelligence access
+
+INDIVIDUAL PLAN
+
+* Single user
+* Own claims only
+* Claim intelligence dashboard
+* Document intelligence
+* Playbook search
+* Adjuster and carrier intelligence based on permitted data
+
+TEAM PLAN
+
+* Team Admin
+* Team Members
+* Shared team claims
+* Team intelligence dashboard
+* Multi-user claim management
+* Seat-based billing
+* Additional seats billed separately
+
+EXECUTIVE PLAN
+
+* Read-only dashboards
+* Aggregate reporting
+* No claim editing
+* No homeowner-level claim access unless specifically authorized
+
+INVESTOR VIEWER
+
+* Investor-safe reporting only
+* Aggregate metrics only
+* No protected claim data
+
+⸻
+
+STRIPE INTEGRATION
+
+Integrate Stripe for:
+
+* New subscription checkout
+* Monthly billing
+* Annual billing if enabled
+* Payment method updates
+* Failed payment handling
+* Subscription cancellation
+* Subscription renewal
+* Plan upgrades
+* Plan downgrades
+* Seat quantity updates
+
+⸻
+
+BILLING STATUS
+
+Track:
+
+* Active
+* Trialing if enabled
+* Past due
+* Canceled
+* Incomplete
+* Unpaid
+* Payment failed
+
+Do not grant paid feature access unless the subscription status allows access.
+
+⸻
+
+PLAN ENFORCEMENT
+
+Restrict access by plan.
+
+Examples:
+
+Individual Plan:
+
+* Own claims only
+* No team management
+* No investor dashboard
+* No platform-wide intelligence center
+
+Team Plan:
+
+* Team claim access
+* Team Admin controls
+* Seat management
+* Team reporting
+
+Executive Plan:
+
+* Read-only dashboards
+* Aggregate reporting only
+
+Investor Viewer:
+
+* Investor-safe dashboard only
+
+Master Admin:
+
+* Full platform access
+
+⸻
+
+SEAT MANAGEMENT
+
+For team accounts:
+
+Track:
+
+* Included seats
+* Additional seats
+* Active users
+* Pending invites
+* Removed users
+* Billing quantity
+
+Prevent users from exceeding plan seat limits unless billing quantity is updated.
+
+⸻
+
+UPGRADE AND DOWNGRADE FLOW
+
+Allow users to:
+
+* Upgrade from Individual to Team
+* Add seats
+* Remove seats
+* Change billing cycle
+* Cancel subscription
+* Reactivate subscription
+
+Downgrades should not delete data.
+
+If features become unavailable after downgrade, preserve data but restrict access.
+
+Display:
+
+This feature is not included in your current plan.
+
+⸻
+
+FOUNDER ACCOUNT PROTECTION
+
+Founder accounts should retain locked pricing unless manually changed by Master Admin.
+
+Do not automatically remove founder pricing.
+
+Founder status should be visible only to authorized roles.
+
+⸻
+
+BILLING PORTAL
+
+Provide access to:
+
+* Update payment method
+* View invoices
+* Download receipts
+* Change plan if allowed
+* Cancel subscription if allowed
+
+⸻
+
+ACCESS LOCKOUT RULES
+
+If payment fails or subscription becomes inactive:
+
+Allow user to:
+
+* Log in
+* View billing page
+* Update payment method
+* Contact support
+
+Restrict:
+
+* Claim creation
+* New uploads
+* AI Copilot
+* Playbook search
+* Intelligence dashboards
+
+Do not delete claim data.
+
+⸻
+
+AUDIT LOGGING
+
+Log:
+
+* Subscription created
+* Subscription updated
+* Subscription canceled
+* Payment failed
+* Payment restored
+* Plan upgraded
+* Plan downgraded
+* Seat added
+* Seat removed
+* Billing portal opened
+
+⸻
+
+SECURITY
+
+Billing data must not expose protected payment details.
+
+Do not store full card numbers.
+
+Use Stripe-hosted secure billing tools where possible.
+
+⸻
+
+FINAL VALIDATION
+
+Verify:
+
+1. Users can select a plan.
+2. Stripe checkout works.
+3. Subscription status is saved.
+4. Paid features are gated correctly.
+5. Team seat limits work.
+6. Founder pricing is preserved.
+7. Failed payments restrict paid features but do not delete data.
+8. Investor access remains aggregate-only.
+9. Master Admin retains full access.
+10. Audit logs capture billing events.
+
+SUCCESS CONDITION
+
+ClaimSignal supports real subscription billing, plan-based access control, team seat enforcement, founder pricing protection, and secure Stripe-powered monetization without exposing protected claim data or deleting user records.
