@@ -1,0 +1,191 @@
+SECTION 14
+ADJUSTER SCORECARD ENGINE
+
+PURPOSE
+
+Create objective adjuster intelligence profiles using real claim outcomes and historical performance.
+
+DO NOT GENERATE SCORES FROM INSUFFICIENT DATA.
+
+Track:
+
+* Total linked claims
+* Initial denials
+* Final denials
+* Partial approvals
+* Full approvals
+* Denial overturned to approval
+* Reinspection frequency
+* Escalation frequency
+* Average claim resolution time
+* Supplement approval frequency
+* Closure threat frequency
+* DOI escalation involvement
+* Carrier associations
+
+Display:
+
+ADJUSTER SCORECARD
+
+Adjuster Name:
+Primary Carriers:
+Linked Claims:
+Data Confidence:
+
+Performance Indicators:
+
+* Denial Rate
+* Overturn Rate
+* Escalation Rate
+* Reinspection Rate
+* Average Resolution Time
+
+Behavior Signals:
+
+* Frequently Escalated
+* High Reinspection Frequency
+* High Denial Frequency
+* High Overturn Frequency
+* Limited Data
+
+If fewer than 3 linked claims exist:
+
+Display:
+
+Not enough linked claim evidence yet.
+
+Never fabricate data.
+
+⸻
+
+SECTION 15
+CARRIER SCORECARD ENGINE
+
+PURPOSE
+
+Identify carrier trends and historical claim behavior patterns.
+
+Track:
+
+* Total claims
+* Initial denials
+* Final denials
+* Partial approvals
+* Full approvals
+* Overturned denials
+* Reinspection frequency
+* Escalation frequency
+* Average cycle time
+* Common denial reasons
+* Common adjusters
+* Supplement resistance
+* DOI escalation frequency
+
+Display:
+
+CARRIER SCORECARD
+
+Carrier:
+Total Claims:
+Data Confidence:
+
+Performance Indicators:
+
+* Denial Rate
+* Overturn Rate
+* Reinspection Rate
+* Escalation Rate
+* Average Resolution Time
+
+Common Signals:
+
+* Frequent Matching Disputes
+* Frequent Repairability Disputes
+* Frequent Line Item Omissions
+* Frequent Documentation Requests
+* Frequent Partial Approval Patterns
+
+If insufficient evidence exists:
+
+Display:
+
+Not enough carrier evidence yet.
+
+Never fabricate statistics.
+
+⸻
+
+SECTION 16
+STORM INTELLIGENCE ENGINE
+
+PURPOSE
+
+Provide weather validation and storm verification tools for property claims.
+
+Create database structure and UI foundation for:
+
+* Date of Loss
+* Storm Event Date
+* Storm Type
+* Hail Event
+* Wind Event
+* Hurricane Event
+* Tornado Event
+* Weather Verification Status
+* Weather Confidence Score
+* Source Information
+
+Future Support:
+
+* NOAA Integration
+* Hail Mapping
+* Wind Mapping
+* Radar Verification
+* Carrier Weather Dispute Support
+* Heat Map Visualization
+
+Display:
+
+STORM INTELLIGENCE
+
+Property:
+Date of Loss:
+Storm Event:
+Verification Status:
+Confidence Score:
+
+Statuses:
+
+* Verified
+* Partially Verified
+* Pending Verification
+* No Supporting Weather Data
+
+If live weather integrations are not active:
+
+Display:
+
+Weather integration pending.
+
+Do not claim NOAA, radar, hail map, wind map, or weather API functionality unless those services are actually connected and returning live data.
+
+⸻
+
+FINAL VALIDATION
+
+Verify:
+
+1. Existing claims remain functional.
+2. Existing adjuster profiles remain functional.
+3. Existing carrier intelligence remains functional.
+4. Multi-adjuster claims remain functional.
+5. Scorecards calculate only from actual data.
+6. No fabricated metrics are displayed.
+7. Storm intelligence supports future API integrations.
+8. Audit logs record all scorecard and weather-related actions.
+9. Role-based permissions remain intact.
+10. Existing security controls remain intact.
+
+SUCCESS CONDITION
+
+ClaimSignal evolves from a claim tracking system into a true intelligence platform capable of analyzing adjusters, carriers, outcomes, and storm events using verifiable historical evidence and structured claim data.
