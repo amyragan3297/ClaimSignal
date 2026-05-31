@@ -220,7 +220,7 @@ export function similarityScore(target: Claim, candidate: Claim, targetAdjusterI
 
   // Shared adjuster (weight 20)
   max += 20;
-  const sharedAdj = [...targetAdjusterIds].some((id) => candidateAdjusterIds.has(id));
+  const sharedAdj = Array.from(targetAdjusterIds).some((id) => candidateAdjusterIds.has(id));
   if (sharedAdj) { score += 20; factors.push("Same adjuster"); }
 
   // Similar damage type (weight 15)

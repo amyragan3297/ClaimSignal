@@ -21,7 +21,7 @@ import {
 
 const solutionCards = [
   { icon: ClipboardList, title: "Claim Intake", description: "Structured intake for loss type, carrier, policy, lifecycle phase, and key dates." },
-  { icon: Brain, title: "AI Extraction Review", description: "Document-level extraction of financials, scope fields, code items, denial signals, and risk indicators." },
+  { icon: Brain, title: "Document Intelligence", description: "Structured extraction of financials, scope fields, code items, denial signals, and risk indicators from uploaded claim documents." },
   { icon: Zap, title: "Action Engine", description: "Generates prioritized recommended actions from extracted document intelligence and scoring signals." },
   { icon: BookOpen, title: "Playbook Engine", description: "Builds adjuster-specific behavioral playbooks from historical claim pattern data." },
   { icon: BarChart2, title: "Carrier Intelligence", description: "Aggregated adjuster and carrier behavioral data for pattern analysis without homeowner PII." },

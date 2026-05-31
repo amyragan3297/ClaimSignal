@@ -12,12 +12,12 @@ const lc = (v: unknown) => String(v ?? "").toLowerCase();
 function pct(n: number, total: number) { return total === 0 ? 0 : Math.round((n / total) * 100); }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-function groupBy<T>(arr: T[], key: (item: T) => string): Map<string, T[]> {
-  const m = new Map<string, T[]>();
+function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
+  const m: Record<string, T[]> = {};
   for (const item of arr) {
     const k = key(item) || "unknown";
-    if (!m.has(k)) m.set(k, []);
-    m.get(k)!.push(item);
+    if (!m[k]) m[k] = [];
+    m[k].push(item);
   }
   return m;
 }
@@ -50,7 +50,7 @@ export function computePatterns(
 
   // 1. Carrier denial rate patterns
   const byCarrier = groupBy(allClaims, (c) => (c.carrier ?? "unknown").toLowerCase());
-  for (const [carrier, clms] of byCarrier) {
+  for (const [carrier, clms] of Object.entries(byCarrier)) {
     if (clms.length < MIN_SAMPLE || !carrier || carrier === "unknown") continue;
     const denialCount = clms.filter((c) => isDenied((c as any).initialOutcome)).length;
     const denialRate = pct(denialCount, clms.length);
@@ -72,7 +72,7 @@ export function computePatterns(
     allClaims.filter((c) => isDenied((c as any).initialOutcome) && (c as any).denialReason),
     (c) => lc((c as any).denialReason ?? "unknown"),
   );
-  for (const [reason, clms] of denialReasons) {
+  for (const [reason, clms] of Object.entries(denialReasons)) {
     if (clms.length < MIN_SAMPLE) continue;
     patterns.push({
       patternType: "denial_reason_frequency",
@@ -87,10 +87,10 @@ export function computePatterns(
 
   // 3. Escalation effectiveness patterns by type
   const byEscType = groupBy(allEscalations, (e) => e.escalationType);
-  for (const [type, escs] of byEscType) {
+  for (const [type, escs] of Object.entries(byEscType)) {
     if (escs.length < MIN_SAMPLE) continue;
     const successSet = new Set(["full_approval", "partial_approval", "supplement_approved", "payment_increased", "reinspection_scheduled", "claim_reopened"]);
-    const successes = escs.filter((e) => e.escalationResult && successSet.has(e.escalationResult)).length;
+    const successes = escs.filter((e: any) => e.escalationResult && successSet.has(e.escalationResult)).length;
     const successRate = pct(successes, escs.length);
     if (successRate > 40) {
       patterns.push({

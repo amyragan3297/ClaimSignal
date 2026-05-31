@@ -93,7 +93,7 @@ export default function BillingPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Price</span>
               <span className="text-sm font-medium" data-testid="text-plan-price">
-                {billing?.planType === "founder" ? "$99/mo"
+                {billing?.planType === "founder" ? "$79/mo"
                   : billing?.planType === "pro" ? "$199/mo"
                   : billing?.planType === "team" ? "$399/mo"
                   : billing?.planType === "enterprise" ? "Custom"
@@ -102,8 +102,7 @@ export default function BillingPage() {
             </div>
             {billing?.planType === "founder" && (
               <ul className="text-sm space-y-1 text-muted-foreground">
-                <li className="flex items-center gap-2"><Clock className="w-3 h-3 text-primary" /> 14-day free trial</li>
-                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Full unmasked data access</li>
+                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Founding Partner access</li>
                 <li className="flex items-center gap-2"><CreditCard className="w-3 h-3 text-primary" /> Permanently locked pricing</li>
               </ul>
             )}

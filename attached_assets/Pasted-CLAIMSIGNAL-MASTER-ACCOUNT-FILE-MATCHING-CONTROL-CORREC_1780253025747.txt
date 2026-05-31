@@ -1,0 +1,243 @@
+CLAIMSIGNAL MASTER ACCOUNT + FILE MATCHING CONTROL CORRECTION
+
+The current “Match to Claim” workflow feels like the user is not operating as Master.
+
+Master should not be treated like a restricted customer account.
+
+Do not rebuild the app.
+Do not erase existing data.
+Do not remove working features.
+Do not weaken login, RBAC, masking, audit logs, security, claims, evidence upload, Signal Engine, Adjuster Intelligence, Carrier Intelligence, Playbook, or current routing.
+
+OBJECTIVE
+
+Correct the Master account behavior and file matching workflow.
+
+When logged in as Master, the user should have full platform control over claim matching, claim creation, claim drafts, evidence review, AI extraction review, and manual override.
+
+MASTER ROLE DEFINITION
+
+Master is the platform owner / full administrative role.
+
+Master must be able to:
+
+- view all claims
+- view all evidence files
+- view all claim drafts
+- view all users if user management exists
+- view audit logs
+- view masked and unmasked views
+- create claims
+- edit claims
+- archive claims
+- restore claims
+- permanently delete only with explicit confirmation
+- match uploaded files to any claim
+- override auto-matches
+- create a new claim from an uploaded file
+- leave uploaded evidence unmatched for review
+- run extraction or MVP rule-based review
+- review extraction candidates
+- accept, edit, or reject extracted fields
+- review timeline date candidates
+- link adjusters, carriers, vendors, and communications
+- see source status and confidence labels
+
+Master must not be limited to “own claims only.”
+
+Master must not be forced into a restricted tenant-only flow unless specifically viewing a restricted shared view for testing.
+
+MATCH TO CLAIM WORKFLOW
+
+The “Match to Claim” button should not feel like a dead-end manual picker only.
+
+When a file is uploaded, ClaimSignal should provide these options:
+
+1. Auto-match to existing claim
+2. Manually match to existing claim
+3. Create new claim from this file
+4. Save as unmatched evidence draft
+5. Review extracted claim fields before matching
+
+MASTER-SPECIFIC FILE MATCHING
+
+For Master, the Match to Claim modal should show:
+
+- all available claims Master is authorized to view
+- claim number
+- carrier
+- homeowner name if Master unmasked view is active
+- masked homeowner name if masked preview mode is active
+- property location
+- claim status
+- date of loss if available
+- confidence match score if auto-match exists
+- reason for suggested match
+
+Do not make Master guess from a short claim number list only.
+
+AUTO-MATCH LOGIC
+
+When a file is uploaded, the system should attempt to match using:
+
+- claim number found in document
+- homeowner name found in document
+- property address found in document
+- carrier name found in document
+- date of loss found in document
+- estimate number if available
+- policyholder name if available
+- adjuster name if available
+- file name clues
+- prior uploaded file hash or duplicate detection
+
+If confidence is high, suggest:
+
+“Suggested match found.”
+
+If confidence is low, show:
+
+“Match needs review.”
+
+If no match is found, show:
+
+“No matching claim found. Create new claim or save as draft.”
+
+DO NOT FORCE BAD MATCHING
+
+Do not automatically force a file into the wrong claim.
+
+If confidence is low, create a review-needed draft.
+
+Claim draft should show:
+
+- extracted claim number if found
+- extracted homeowner if found
+- extracted property address if found
+- extracted carrier if found
+- extracted date of loss if found
+- extracted adjuster if found
+- extraction confidence
+- needs review status
+
+MASTER SHOULD SEE UNMATCHED EVIDENCE
+
+Master should have a clear section for:
+
+- Unmatched Evidence
+- Claim Drafts
+- Needs Review
+- Extraction Review
+
+Master should be able to open an unmatched file and choose:
+
+- match to existing claim
+- create new claim
+- discard duplicate
+- archive file
+- mark as reviewed
+
+ROLE DISPLAY CHECK
+
+When logged in as Master, the UI should clearly show:
+
+Role: Master
+
+or:
+
+Master Admin
+
+Avoid confusing labels like:
+
+“Pro - Master”
+
+unless Pro is a billing plan and Master is a role.
+
+If both are shown, label them clearly:
+
+Plan: Pro
+Role: Master
+
+or:
+
+Plan: Founder / Pro
+Role: Master Admin
+
+Do not blur billing plan and security role together.
+
+MASTER VIEW VS SHARED VIEW
+
+Master should be able to toggle or clearly understand:
+
+- Full administrative view
+- Masked shared preview view
+
+If Master is viewing masked data for testing, label it:
+
+“Masked Preview Mode”
+
+If Master is viewing full data, label it:
+
+“Master Full Access View”
+
+Do not accidentally show Master a restricted user experience without explaining it.
+
+AUDIT LOG REQUIREMENT
+
+Log:
+
+- file uploaded
+- auto-match attempted
+- auto-match accepted
+- auto-match rejected
+- manual claim match
+- file saved as unmatched draft
+- claim created from file
+- extraction review opened
+- extracted field accepted
+- extracted field edited
+- extracted field rejected
+- Master viewed unmasked record
+- Master switched to masked preview
+- denied match attempt
+
+VALIDATION REQUIRED
+
+After correction, confirm:
+
+1. Master is not limited to own claims only.
+2. Master can see all claims.
+3. Master can see unmatched evidence.
+4. Master can match uploaded files to any claim.
+5. Master can create a new claim from uploaded evidence.
+6. Master can leave files unmatched for review.
+7. Match to Claim modal shows enough context to pick correctly.
+8. Auto-match attempts use claim number, homeowner, property address, carrier, date of loss, adjuster, and file clues.
+9. Low-confidence matches go to review instead of being forced.
+10. Master role display is clear.
+11. Billing plan and security role are not confused.
+12. Masked preview mode is clearly labeled if used.
+13. Audit logs capture matching actions.
+14. Existing data remains intact.
+15. Masking still works.
+16. Tests still pass.
+17. App remains safe to demo.
+
+FINAL REPORT REQUIRED
+
+Report:
+
+- files changed
+- database changes made
+- whether changes were additive
+- Master role behavior status
+- Match to Claim workflow status
+- auto-match logic status
+- unmatched evidence / draft status
+- role display status
+- audit log status
+- commands run
+- tests passed
+- tests failed
+- remaining limitations
+- whether the app remains safe to demo

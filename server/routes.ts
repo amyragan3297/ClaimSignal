@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
@@ -414,7 +414,7 @@ export async function registerRoutes(
         }
 
         if (reasons.length > 0) {
-          matches.push({ claim: { id: c.id, ...applyPiiMasking(c, role) }, reasons, strength });
+          matches.push({ claim: { ...applyPiiMasking(c, role), id: c.id }, reasons, strength });
         }
       }
 
@@ -2231,20 +2231,20 @@ export async function registerRoutes(
   app.post("/api/claims/:id/evidence/:docId/analyze", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const { id: claimId, docId } = req.params;
+      const { id: claimId, docId } = req.params as Record<string, string>;
       const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       const ef = await storage.getEvidenceFile(docId, orgId);
       if (!ef) return res.status(404).json({ message: "Evidence file not found" });
-      const textToAnalyze = (ef as any).extractedText || sampleClaimDocumentText(ef.originalFilename || "");
-      const suggestions = analyzeDocumentText(textToAnalyze, ef.originalFilename || "");
-      await storage.updateEvidenceFileIntelligence(docId, orgId, { suggestions, analyzedAt: new Date().toISOString() });
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DOCUMENT_ANALYZED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), metadata: { claimId, filename: ef.originalFilename } });
+      const textToAnalyze = (ef as any).extractedText || sampleClaimDocumentText(ef.fileName || "");
+      const suggestions = analyzeDocumentText(textToAnalyze, ef.fileName || "");
+      await storage.updateEvidenceFileIntelligence(docId, orgId, { suggestions, analyzedAt: new Date().toISOString() }, "pending");
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DOCUMENT_ANALYZED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { claimId, filename: ef.fileName } });
       if ((suggestions as any).denialDetection?.isDenied) {
-        await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DENIAL_DETECTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), metadata: { denialType: (suggestions as any).denialDetection.denialType } });
+        await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DENIAL_DETECTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { denialType: (suggestions as any).denialDetection.denialType } });
       }
       if (((suggestions as any).missingLineItems?.length ?? 0) > 0) {
-        await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MISSING_ITEMS_DETECTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), metadata: { count: (suggestions as any).missingLineItems?.length } });
+        await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MISSING_ITEMS_DETECTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { count: (suggestions as any).missingLineItems?.length } });
       }
       res.json({ suggestions });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -2253,14 +2253,14 @@ export async function registerRoutes(
   app.post("/api/claims/:id/evidence/:docId/suggestions/accept", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const { id: claimId, docId } = req.params;
+      const { id: claimId, docId } = req.params as Record<string, string>;
       const { acceptedFields } = req.body as { acceptedFields: Record<string, any> };
       const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       if (acceptedFields && Object.keys(acceptedFields).length > 0) {
         await storage.updateClaim(claimId, orgId, acceptedFields);
       }
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DATA_EXTRACTED_ACCEPTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), metadata: { claimId, fields: Object.keys(acceptedFields || {}) } });
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DATA_EXTRACTED_ACCEPTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { claimId, fields: Object.keys(acceptedFields || {}) } });
       res.json({ updated: true });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2269,21 +2269,23 @@ export async function registerRoutes(
   app.get("/api/claims/:id/escalations", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId } = req.auth!;
-      const claim = await storage.getClaim(req.params.id, orgId);
+      const claimId = String(req.params.id);
+      const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
-      res.json(await storage.getEscalations(req.params.id, orgId));
+      res.json(await storage.getEscalations(claimId, orgId));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   app.post("/api/claims/:id/escalations", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const claim = await storage.getClaim(req.params.id, orgId);
+      const claimId = String(req.params.id);
+      const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
-      const parsed = insertEscalationSchema.safeParse({ ...req.body, claimId: req.params.id, organizationId: orgId, initiatedByUserId: userId });
+      const parsed = insertEscalationSchema.safeParse({ ...req.body, claimId, organizationId: orgId, initiatedByUserId: userId });
       if (!parsed.success) return res.status(400).json({ message: "Validation error", errors: parsed.error.errors });
       const esc = await storage.createEscalation(parsed.data);
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_CREATED", entityType: "escalation", entityId: esc.id, ipAddress: getClientIp(req), metadata: { claimId: req.params.id, type: esc.escalationType } });
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_CREATED", entityType: "escalation", entityId: esc.id, ipAddress: getClientIp(req), afterJson: { claimId, type: esc.escalationType } });
       res.status(201).json(esc);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2291,9 +2293,10 @@ export async function registerRoutes(
   app.patch("/api/escalations/:escId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const updated = await storage.updateEscalation(req.params.escId, orgId, req.body);
+      const escId = String(req.params.escId);
+      const updated = await storage.updateEscalation(escId, orgId, req.body);
       if (!updated) return res.status(404).json({ message: "Escalation not found" });
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_UPDATED", entityType: "escalation", entityId: req.params.escId, ipAddress: getClientIp(req) });
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_UPDATED", entityType: "escalation", entityId: escId, ipAddress: getClientIp(req) });
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2301,8 +2304,9 @@ export async function registerRoutes(
   app.delete("/api/escalations/:escId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      await storage.deleteEscalation(req.params.escId, orgId);
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_DELETED", entityType: "escalation", entityId: req.params.escId, ipAddress: getClientIp(req) });
+      const escId = String(req.params.escId);
+      await storage.deleteEscalation(escId, orgId);
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_DELETED", entityType: "escalation", entityId: escId, ipAddress: getClientIp(req) });
       res.json({ deleted: true });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2314,8 +2318,8 @@ export async function registerRoutes(
       let escs = await storage.getAllOrgEscalations(orgId);
       if (type) escs = escs.filter(e => e.escalationType === type);
       let claims = await storage.getClaims(orgId);
-      if (carrierId) claims = claims.filter(c => c.carrierId === carrierId);
-      const effectiveness = computeEscalationEffectiveness(escs, claims);
+      if (carrierId) claims = claims.filter(c => (c.carrier ?? "").toLowerCase() === carrierId.toLowerCase());
+      const effectiveness = computeEscalationEffectiveness(escs as any, carrierId, type);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_EFFECTIVENESS_VIEWED", entityType: "escalation", entityId: "effectiveness", ipAddress: getClientIp(req) });
       res.json(effectiveness);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -2324,11 +2328,12 @@ export async function registerRoutes(
   app.get("/api/claims/:id/escalation-path", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const claim = await storage.getClaim(req.params.id, orgId);
+      const claimId = String(req.params.id);
+      const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
-      const escs = await storage.getAllOrgEscalations(orgId);
-      const recommendation = buildRecommendedEscalationPath(claim, escs);
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_PATH_VIEWED", entityType: "claim", entityId: req.params.id, ipAddress: getClientIp(req) });
+      const [escs, allClaims] = await Promise.all([storage.getAllOrgEscalations(orgId), storage.getClaims(orgId)]);
+      const recommendation = buildRecommendedEscalationPath(claim, escs as any, allClaims);
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_PATH_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json(recommendation);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2337,18 +2342,19 @@ export async function registerRoutes(
   app.get("/api/claims/:id/timeline", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const claim = await storage.getClaim(req.params.id, orgId);
+      const claimId = String(req.params.id);
+      const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
-      let events = await storage.getTimelineEvents(req.params.id, orgId);
+      let events = await storage.getTimelineEvents(claimId, orgId);
       const { eventType, dateFrom, dateTo, keyword } = req.query as Record<string, string>;
       if (eventType) events = events.filter(e => e.eventType === eventType);
-      if (dateFrom) events = events.filter(e => new Date(e.eventDate) >= new Date(dateFrom));
-      if (dateTo) events = events.filter(e => new Date(e.eventDate) <= new Date(dateTo));
+      if (dateFrom) events = events.filter(e => new Date(e.eventDate ?? 0) >= new Date(dateFrom));
+      if (dateTo) events = events.filter(e => new Date(e.eventDate ?? 0) <= new Date(dateTo));
       if (keyword) {
         const kw = keyword.toLowerCase();
         events = events.filter(e => e.title.toLowerCase().includes(kw) || (e.description || "").toLowerCase().includes(kw));
       }
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "TIMELINE_VIEWED", entityType: "claim", entityId: req.params.id, ipAddress: getClientIp(req) });
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "TIMELINE_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json(events);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2356,12 +2362,13 @@ export async function registerRoutes(
   app.post("/api/claims/:id/timeline", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const claim = await storage.getClaim(req.params.id, orgId);
+      const claimId = String(req.params.id);
+      const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
-      const parsed = insertTimelineEventSchema.safeParse({ ...req.body, claimId: req.params.id, organizationId: orgId, createdByUserId: userId });
+      const parsed = insertTimelineEventSchema.safeParse({ ...req.body, claimId, organizationId: orgId, createdByUserId: userId });
       if (!parsed.success) return res.status(400).json({ message: "Validation error", errors: parsed.error.errors });
       const event = await storage.createTimelineEvent(parsed.data);
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "TIMELINE_EVENT_CREATED", entityType: "timeline_event", entityId: event.id, ipAddress: getClientIp(req), metadata: { claimId: req.params.id } });
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "TIMELINE_EVENT_CREATED", entityType: "timeline_event", entityId: event.id, ipAddress: getClientIp(req), afterJson: { claimId: String(req.params.id) } });
       res.status(201).json(event);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2369,13 +2376,14 @@ export async function registerRoutes(
   app.get("/api/claims/:id/activity-summary", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId } = req.auth!;
-      const claim = await storage.getClaim(req.params.id, orgId);
+      const claimId = String(req.params.id);
+      const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       const [events, escs, docs, adjusters] = await Promise.all([
-        storage.getTimelineEvents(req.params.id, orgId),
-        storage.getEscalations(req.params.id, orgId),
-        storage.getEvidenceFiles(orgId, req.params.id),
-        storage.getClaimAdjusters(req.params.id, orgId).catch(() => [] as any[]),
+        storage.getTimelineEvents(claimId, orgId),
+        storage.getEscalations(claimId, orgId),
+        storage.getEvidenceFiles(orgId, claimId),
+        storage.getClaimAdjusters(claimId, orgId).catch(() => [] as any[]),
       ]);
       res.json({
         totalDocuments: docs.length,
@@ -2391,21 +2399,22 @@ export async function registerRoutes(
   app.get("/api/claims/:id/dispute-export", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, role } = req.auth!;
-      const claim = await storage.getClaim(req.params.id, orgId);
+      const claimId = String(req.params.id);
+      const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       const [events, escs, docs] = await Promise.all([
-        storage.getTimelineEvents(req.params.id, orgId),
-        storage.getEscalations(req.params.id, orgId),
-        storage.getEvidenceFiles(orgId, req.params.id),
+        storage.getTimelineEvents(claimId, orgId),
+        storage.getEscalations(claimId, orgId),
+        storage.getEvidenceFiles(orgId, claimId),
       ]);
-      const safeClaim = canViewUnmasked(role, orgId, orgId) ? claim : applyPiiMasking(claim);
+      const safeClaim = canViewUnmasked(role) ? claim : applyPiiMasking(claim, role);
       res.json({
         exportType: "dispute_support",
         generatedAt: new Date().toISOString(),
         claim: safeClaim,
         timeline: events,
         escalations: escs,
-        documents: docs.map(d => ({ id: d.id, filename: d.originalFilename, category: d.documentCategory, uploadedAt: d.createdAt })),
+        documents: docs.map(d => ({ id: d.id, filename: d.fileName, category: d.docCategory, uploadedAt: d.uploadedAt })),
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2414,22 +2423,23 @@ export async function registerRoutes(
   app.get("/api/claims/:id/intelligence-dashboard", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const claim = await storage.getClaim(req.params.id, orgId);
+      const claimId = String(req.params.id);
+      const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       const [adjLinks, docs, escs, allOrgClaims] = await Promise.all([
-        storage.getClaimAdjusters(req.params.id, orgId).catch(() => [] as any[]),
-        storage.getEvidenceFiles(orgId, req.params.id),
-        storage.getEscalations(req.params.id, orgId),
+        storage.getClaimAdjusters(claimId, orgId).catch(() => [] as any[]),
+        storage.getEvidenceFiles(orgId, claimId),
+        storage.getEscalations(claimId, orgId),
         storage.getClaims(orgId),
       ]);
       const healthScore = computeClaimHealthScore(claim, adjLinks.length, docs.length, escs.length);
       const riskSignals = computeRiskSignals(claim, adjLinks.length, docs.length);
       const alerts = computeAlerts(claim, adjLinks.length);
-      const summary = buildExecutiveSummary(claim, adjLinks.length, docs.length, escs.length);
-      const carrierSignal = claim.carrierId
-        ? computeCarrierIntelligence(claim.carrierId, allOrgClaims.filter(c => c.carrierId === claim.carrierId), [])
+      const summary = buildExecutiveSummary(claim, riskSignals, healthScore, adjLinks.length, false);
+      const carrierSignal = claim.carrier
+        ? (computeCarrierIntelligence(allOrgClaims.filter(c => c.carrier === claim.carrier) as any).find(() => true) ?? null)
         : null;
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "CLAIM_INTELLIGENCE_DASHBOARD_VIEWED", entityType: "claim", entityId: req.params.id, ipAddress: getClientIp(req) });
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "CLAIM_INTELLIGENCE_DASHBOARD_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json({ healthScore, riskSignals, alerts, executiveSummary: summary, carrierSignal, documentCount: docs.length, escalationCount: escs.length });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2445,13 +2455,14 @@ export async function registerRoutes(
       if (claimId) {
         claim = await storage.getClaim(claimId, orgId);
         if (claim) {
-          if (!canViewUnmasked(role, orgId, orgId)) claim = applyPiiMasking(claim);
+          if (!canViewUnmasked(role)) claim = applyPiiMasking(claim, role);
           docs = await storage.getEvidenceFiles(orgId, claimId);
         }
       }
-      const answer = await runCopilotQuery({ claim, docs, question, role });
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "COPILOT_QUESTION_SUBMITTED", entityType: "copilot", entityId: claimId || "general", ipAddress: getClientIp(req), metadata: { question: question.substring(0, 100) } });
-      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "COPILOT_RESPONSE_GENERATED", entityType: "copilot", entityId: claimId || "general", ipAddress: getClientIp(req) });
+      const answer = await runCopilotQuery(question, claim, [], [], docs, role);
+      const copilotEntityId = claimId ?? "general";
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "COPILOT_QUESTION_SUBMITTED", entityType: "copilot", entityId: copilotEntityId, ipAddress: getClientIp(req), afterJson: { question: question.substring(0, 100) } });
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "COPILOT_RESPONSE_GENERATED", entityType: "copilot", entityId: copilotEntityId, ipAddress: getClientIp(req) });
       res.json({ ...answer, disclosure: AI_DISCLOSURE });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2487,15 +2498,8 @@ export async function registerRoutes(
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
       const allClaims = await storage.getAllClaimsAcrossTenants();
-      const carrierMap = new Map<string, { name: string; claims: any[] }>();
-      allClaims.forEach(c => {
-        if (!c.carrierId) return;
-        if (!carrierMap.has(c.carrierId)) carrierMap.set(c.carrierId, { name: c.carrierName || c.carrierId, claims: [] });
-        carrierMap.get(c.carrierId)!.claims.push(c);
-      });
-      const leaderboard = Array.from(carrierMap.entries())
-        .map(([carrierId, { name, claims }]) => ({ carrierId, carrierName: name, ...computeCarrierIntelligence(carrierId, claims, []) }))
-        .sort((a, b) => b.totalClaims - a.totalClaims).slice(0, 50);
+      const leaderboard = computeCarrierIntelligence(allClaims as any)
+        .sort((a, b) => b.claimsCount - a.claimsCount).slice(0, 50);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MASTER_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "carriers", ipAddress: getClientIp(req) });
       res.json(leaderboard);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -2518,7 +2522,7 @@ export async function registerRoutes(
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
       const all = await storage.getPlaybookEntries();
-      const byOutcome = all.reduce((acc: Record<string, number>, p) => { acc[p.outcome] = (acc[p.outcome] || 0) + 1; return acc; }, {});
+      const byOutcome = all.reduce((acc: Record<string, number>, p) => { const k = p.outcome ?? "unknown"; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MASTER_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "playbooks", ipAddress: getClientIp(req) });
       res.json({ total: all.length, byOutcome: Object.entries(byOutcome) });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -2580,7 +2584,7 @@ export async function registerRoutes(
   app.get("/api/executive/revenue", requireAuth, requirePlatformOwner, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const PLAN_PRICES: Record<string, number> = { founder: 99, individual: 49, pro: 199, team: 399, enterprise: 0 };
+      const PLAN_PRICES: Record<string, number> = { founder: 79, individual: 49, pro: 199, team: 399, enterprise: 0 };
       const allBilling = await storage.getAllBillingAccounts();
       const active = allBilling.filter(b => ["active", "trialing"].includes(b.subscriptionStatus || ""));
       const mrr = active.reduce((sum, b) => sum + (PLAN_PRICES[b.planType] || 0), 0);
@@ -2880,6 +2884,8 @@ async function seedDemoData() {
     supplementProbabilityScore: 0.73,
     ircComplianceRiskScore: 3.2,
   });
+
+  await storage.linkAdjusterToClaim({ claimId: claim.id, adjusterId: adjuster.id, organizationId: orgId, roleOnClaim: "primary_adjuster" });
 
   await storage.createSupplement({
     claimId: claim.id,
