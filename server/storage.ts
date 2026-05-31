@@ -41,6 +41,7 @@ import {
   adjusterAggregatedMetrics,
   supplementIntelligence, adjusterIrcBehavior, communicationSignals, playbookInsights,
   scoringWeights, intelligenceEvents, stormEvents,
+  type Escalation, type InsertEscalation, escalations,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, count, desc, gt, isNull, sql } from "drizzle-orm";
@@ -281,6 +282,17 @@ export interface IStorage {
   getArchivedEmails(orgId?: string): Promise<Email[]>;
 
   permanentDeleteTimelineEvent(id: string, orgId: string): Promise<boolean>;
+
+  // Section 19 — Escalations
+  getEscalations(claimId: string, orgId: string): Promise<Escalation[]>;
+  getAllOrgEscalations(orgId: string): Promise<Escalation[]>;
+  getEscalation(id: string, orgId: string): Promise<Escalation | undefined>;
+  createEscalation(data: InsertEscalation): Promise<Escalation>;
+  updateEscalation(id: string, orgId: string, data: Partial<InsertEscalation>): Promise<Escalation | undefined>;
+  deleteEscalation(id: string, orgId: string): Promise<boolean>;
+
+  // Section 18 — Evidence intelligence
+  updateEvidenceFileIntelligence(id: string, orgId: string, intelligenceJson: unknown, reviewStatus: string): Promise<void>;
 
   getGovernanceOverview(): Promise<{
     claims: { active: number; archived: number };
@@ -1281,6 +1293,52 @@ export class DatabaseStorage implements IStorage {
       audioRecordings: { active: activeAudio[0]?.count ?? 0, archived: archivedAudio[0]?.count ?? 0 },
       emails: { active: activeEmails[0]?.count ?? 0, archived: archivedEmails[0]?.count ?? 0 },
     };
+  }
+
+  // ── Section 19 — Escalations ──────────────────────────────────────────
+  async getEscalations(claimId: string, orgId: string): Promise<Escalation[]> {
+    return db.select().from(escalations).where(
+      and(eq(escalations.claimId, claimId), eq(escalations.organizationId, orgId))
+    ).orderBy(desc(escalations.createdAt));
+  }
+
+  async getAllOrgEscalations(orgId: string): Promise<Escalation[]> {
+    return db.select().from(escalations).where(eq(escalations.organizationId, orgId))
+      .orderBy(desc(escalations.createdAt));
+  }
+
+  async getEscalation(id: string, orgId: string): Promise<Escalation | undefined> {
+    const [row] = await db.select().from(escalations).where(
+      and(eq(escalations.id, id), eq(escalations.organizationId, orgId))
+    );
+    return row;
+  }
+
+  async createEscalation(data: InsertEscalation): Promise<Escalation> {
+    const [row] = await db.insert(escalations).values(data).returning();
+    return row;
+  }
+
+  async updateEscalation(id: string, orgId: string, data: Partial<InsertEscalation>): Promise<Escalation | undefined> {
+    const [row] = await db.update(escalations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(escalations.id, id), eq(escalations.organizationId, orgId)))
+      .returning();
+    return row;
+  }
+
+  async deleteEscalation(id: string, orgId: string): Promise<boolean> {
+    const result = await db.delete(escalations).where(
+      and(eq(escalations.id, id), eq(escalations.organizationId, orgId))
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // ── Section 18 — Evidence Intelligence ───────────────────────────────
+  async updateEvidenceFileIntelligence(id: string, orgId: string, intelligenceJson: unknown, reviewStatus: string): Promise<void> {
+    await db.update(evidenceFiles)
+      .set({ intelligenceJson: intelligenceJson as any, reviewStatus: reviewStatus as any } as any)
+      .where(and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId)));
   }
 }
 

@@ -754,6 +754,54 @@ export const insertStormEventSchema = createInsertSchema(stormEvents).omit({ id:
 export type StormEvent = typeof stormEvents.$inferSelect;
 export type InsertStormEvent = z.infer<typeof insertStormEventSchema>;
 
+// ── Section 18 — Document Intelligence: analysis columns on evidence_files ─
+// (additive columns applied via migration script)
+// intelligenceJson: stores full DocumentIntelligenceResult
+// reviewStatus: "pending_review" | "accepted" | "rejected" | "partial"
+
+// ── Section 19 — Escalation Intelligence ───────────────────────────────────
+export const escalationTypeEnum = pgEnum("escalation_type", [
+  "reinspection_request", "supervisor_review", "team_lead_review", "desk_adjuster_review",
+  "carrier_internal_escalation", "supplement_submission", "code_documentation",
+  "manufacturer_documentation", "repairability_documentation", "brittle_test",
+  "matching_dispute", "photo_evidence_packet", "estimate_comparison",
+  "engineer_report_dispute", "doi_complaint", "appraisal_demand",
+  "attorney_involvement", "public_adjuster_involvement",
+]);
+
+export const escalationResultEnum = pgEnum("escalation_result", [
+  "no_response", "pending", "denial_upheld", "reinspection_scheduled",
+  "partial_approval", "full_approval", "supplement_approved", "payment_increased",
+  "claim_reopened", "claim_closed", "moved_to_appraisal",
+  "referred_to_supervisor", "referred_to_legal",
+]);
+
+export const escalations = pgTable("escalations", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: text("organization_id").notNull(),
+  claimId: text("claim_id").notNull(),
+  carrierName: text("carrier_name"),
+  adjusterId: text("adjuster_id"),
+  escalationType: escalationTypeEnum("escalation_type").notNull(),
+  dateInitiated: date("date_initiated"),
+  reasonForEscalation: text("reason_for_escalation"),
+  documentsSubmitted: text("documents_submitted").array(),
+  personContacted: text("person_contacted"),
+  responseReceived: text("response_received"),
+  timelineImpactDays: integer("timeline_impact_days"),
+  outcomeBeforeEscalation: text("outcome_before_escalation"),
+  outcomeAfterEscalation: text("outcome_after_escalation"),
+  escalationResult: escalationResultEnum("escalation_result").default("pending"),
+  savedToPlaybook: boolean("saved_to_playbook").default(false),
+  createdByUserId: text("created_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEscalationSchema = createInsertSchema(escalations).omit({ id: true, createdAt: true, updatedAt: true });
+export type Escalation = typeof escalations.$inferSelect;
+export type InsertEscalation = z.infer<typeof insertEscalationSchema>;
+
 export const signupSchema = z.object({
   email: z.string().trim().toLowerCase().email("Valid email required"),
   password: z.string().min(8, "Password must be at least 8 characters"),

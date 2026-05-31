@@ -1,0 +1,223 @@
+SECTION 22
+
+CLAIMSIGNAL AI COPILOT
+
+PURPOSE
+
+Provide an intelligent claim assistant that can analyze claim data, answer questions, summarize claim activity, identify risks, recommend actions, and surface historical intelligence.
+
+The AI Copilot should operate as a claim intelligence assistant, not as a legal advisor, public adjuster, attorney, or claim decision-maker.
+
+⸻
+
+CORE OBJECTIVE
+
+Allow users to ask natural language questions about claims.
+
+Examples:
+
+* Why is this claim at risk?
+* What should I do next?
+* What documents are missing?
+* Show similar successful claims.
+* Summarize this denial letter.
+* What escalation worked before?
+* What is the carrier pattern?
+* What is the adjuster history?
+* Why was this claim denied?
+* What evidence is missing?
+
+⸻
+
+CLAIM SUMMARY MODE
+
+Generate a claim summary from available data.
+
+Include:
+
+* Carrier
+* Adjuster
+* Date of Loss
+* Current Status
+* Initial Outcome
+* Current Outcome
+* Timeline Summary
+* Escalation History
+* Financial Summary
+* Open Risks
+* Missing Information
+
+Display:
+
+Claim Intelligence Summary
+
+Only use verified data.
+
+Do not fabricate facts.
+
+⸻
+
+DOCUMENT ANALYSIS MODE
+
+Allow users to upload:
+
+* Denial letters
+* Coverage letters
+* Estimates
+* Engineer reports
+* Emails
+* Inspection reports
+* Invoices
+* Claim packets
+
+AI should identify:
+
+* Denial reasons
+* Missing documentation
+* Missing line items
+* Timeline events
+* Escalation opportunities
+* Related playbooks
+
+Display confidence levels.
+
+⸻
+
+PLAYBOOK ADVISOR
+
+When analyzing a claim:
+
+Search historical outcomes.
+
+Display:
+
+Similar Claims Found
+
+For each match:
+
+* Carrier
+* Adjuster
+* Initial Outcome
+* Final Outcome
+* Escalation Used
+* Strategy Used
+
+Only use actual historical claim data.
+
+⸻
+
+NEXT ACTION ADVISOR
+
+Provide suggested operational actions.
+
+Examples:
+
+* Request reinspection
+* Upload additional evidence
+* Submit estimate comparison
+* Escalate to supervisor
+* Add repairability documentation
+* Add brittle test evidence
+
+Display:
+
+Suggested Based on Historical Claim Patterns
+
+Do not present recommendations as legal advice.
+
+⸻
+
+ADJUSTER INTELLIGENCE MODE
+
+Allow users to ask:
+
+* What patterns exist for this adjuster?
+* How often are denials overturned?
+* What escalation paths have worked?
+
+Display:
+
+* Linked claims
+* Denial trends
+* Approval trends
+* Escalation trends
+* Data confidence
+
+⸻
+
+CARRIER INTELLIGENCE MODE
+
+Allow users to ask:
+
+* What patterns exist for this carrier?
+* What denial reasons are most common?
+* Which escalation paths work most often?
+
+Display only actual historical data.
+
+⸻
+
+MISSING DATA DETECTION
+
+Identify:
+
+* Missing denial letters
+* Missing estimates
+* Missing adjusters
+* Missing timeline events
+* Missing financial data
+* Missing weather verification
+
+Display:
+
+Recommended Data Collection Items
+
+⸻
+
+SECURITY
+
+Master Admin:
+Full visibility.
+
+Team Admin:
+Team visibility only.
+
+Team Member:
+Permitted claim visibility only.
+
+Individual:
+Own claims only.
+
+Executive:
+Aggregate intelligence only.
+
+Respect all existing masking rules.
+
+⸻
+
+AUDIT LOGGING
+
+Log:
+
+* Copilot question submitted
+* Copilot response generated
+* Claim summary viewed
+* Playbook recommendation viewed
+* Document analyzed
+* Intelligence report generated
+
+⸻
+
+AI DISCLOSURE
+
+Display:
+
+Responses are generated from available claim data, historical claim intelligence, and configured platform rules.
+
+Recommendations are operational guidance only and are not legal advice, engineering opinions, or claim determinations.
+
+⸻
+
+SUCCESS CONDITION
+
+Users can interact with ClaimSignal through natural language and receive claim-specific intelligence, historical pattern analysis, document insights, and operational recommendations grounded in actual claim data.
