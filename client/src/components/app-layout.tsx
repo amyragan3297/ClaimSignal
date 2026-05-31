@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 
 const ROLE_LABEL: Record<string, string> = {
-  super_admin: "Master",
+  super_admin: "Master Admin",
   admin: "Admin",
   team_owner: "Team Admin",
   founder: "Founder",
@@ -235,9 +235,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   {daysLeft} days left in trial
                 </Badge>
               )}
-              <Badge variant="outline" className="text-xs" data-testid="badge-header-plan">
-                Plan: {planLabel} · Role: {roleLabel}
-              </Badge>
+              {isMaster ? (
+                <Badge variant="outline" className="text-xs font-semibold" data-testid="badge-header-plan">
+                  Role: {roleLabel}
+                </Badge>
+              ) : (
+                <>
+                  <Badge variant="outline" className="text-xs" data-testid="badge-header-plan">
+                    Plan: {planLabel}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs" data-testid="badge-header-role">
+                    Role: {roleLabel}
+                  </Badge>
+                </>
+              )}
             </div>
           </header>
           <main className="flex-1 p-6 overflow-auto">

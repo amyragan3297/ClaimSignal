@@ -1,0 +1,105 @@
+CLAIMSIGNAL AI EXTRACTION CLARIFICATION
+
+The issue is not whether the UI mentions AI.
+
+The issue is that ClaimSignal must have a real extraction pipeline after upload.
+
+Do not treat AI extraction as a label, placeholder, button, or future marketing term.
+
+AI extraction means the app must take uploaded claim content and convert it into structured claim intelligence.
+
+Required flow:
+
+1. User uploads a file, audio transcript, document, estimate, denial letter, approval letter, communication, or claim note.
+2. The system stores the file.
+3. The system parses readable text from the file when possible.
+4. The system sends the parsed text/content into an extraction engine.
+5. The extraction engine returns structured fields.
+6. The app creates an Extraction Review screen.
+7. The user can accept, edit, or reject extracted fields.
+8. Accepted fields update the claim.
+9. Extracted dates create timeline candidates.
+10. Extracted adjusters link to the claim.
+11. Extracted carrier data updates Carrier Intelligence.
+12. Extracted vendor data is preserved.
+13. Extracted outcome data updates initial outcome, final outcome, denial overturned, and outcome path.
+14. Signal Engine updates from the extracted data.
+15. Playbook can recommend matches based on extracted facts.
+16. Audit logs record upload, extraction attempt, field acceptance, field edits, and claim updates.
+
+If true AI/LLM extraction is already available in the codebase, wire it to this upload workflow.
+
+If only rule-based extraction exists, label it clearly as MVP rule-based extraction, but still make it perform the workflow above.
+
+Do not leave uploads as manual file storage only.
+
+Do not make Master manually guess which claim a file belongs to before extraction happens.
+
+The correct order is:
+
+Upload first.
+Extract second.
+Suggest match third.
+User reviews fourth.
+Claim updates fifth.
+
+The Match to Claim screen should show extracted clues and match reasons, not just a dropdown.
+
+Required extraction fields:
+
+- claim number
+- homeowner name
+- property address
+- city
+- state
+- zip code
+- carrier
+- adjuster
+- IA firm
+- vendor
+- date of loss
+- inspection date
+- estimate date
+- denial date
+- approval date
+- payment date
+- RCV
+- ACV
+- deductible
+- recoverable depreciation
+- supplement requested
+- supplement approved
+- denial reason
+- initial outcome
+- final outcome
+- denial overturned
+- missing scope items
+- code items
+- reinspection references
+- escalation references
+- communication dates
+- timeline events
+
+Validation required:
+
+1. Uploading a file creates an extraction attempt.
+2. File Details shows extracted fields or clearly says extraction failed/pending.
+3. Match to Claim shows extracted match reasons.
+4. Claim Drafts show extracted data, not just “No claim number.”
+5. User can create a claim from extracted data.
+6. User can match extracted data to an existing claim.
+7. Timeline candidates use extracted event dates, not upload date.
+8. Adjusters found in uploaded content can be linked to the claim.
+9. Carrier, vendor, outcome, and financial fields update from accepted extraction.
+10. Audit logs record the extraction workflow.
+
+Final report required:
+- where extraction code exists
+- what upload routes call extraction
+- what parser/OCR exists
+- whether LLM extraction is connected
+- whether rule-based extraction is being used
+- what fields are extracted
+- where extracted fields are reviewed
+- what updates the claim after review
+- what still requires manual entry

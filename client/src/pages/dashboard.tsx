@@ -66,7 +66,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {!hasSignedAgreement && (
+      {billing?.planType === "founder" && !auth?.isPlatformOwner && !hasSignedAgreement && (
         <Card className="border-destructive/50">
           <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">

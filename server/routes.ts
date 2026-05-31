@@ -2686,6 +2686,7 @@ export async function registerRoutes(
   seedDefaultWeights().catch(console.error);
   if (isDemoSeedingAllowed()) {
     seedDemoData().catch(console.error);
+    seedDemoUsers().catch(console.error);
     seedSamplePlaybooks()
       .then((n) => n > 0 && console.log(`[seedSamplePlaybooks] created ${n} sample playbook(s)`))
       .catch(console.error);
@@ -2991,4 +2992,127 @@ async function seedDemoData() {
   });
 
   console.log("[seedDemoData] demo data seeded successfully");
+}
+
+// ─── Demo Role Accounts ───────────────────────────────────────────────────────
+// Creates one safe demo login for every required role. Fully idempotent —
+// checks email existence before acting. Passwords are temporary demo values.
+// Never exposes hashes or secrets; all values are logged only as labels.
+async function seedDemoUsers() {
+  const DEMO_PASSWORD = "Demo@ClaimSignal1";
+
+  async function ensureUser(opts: {
+    email: string;
+    fullName: string;
+    orgName?: string;          // omit to join an existing org by ID
+    orgId?: string;            // provide to join existing org
+    role: "carrier_analyst" | "team_owner" | "founder" | "standard" | "admin";
+    founderFlag?: boolean;
+    planType?: string;
+    subscriptionStatus?: "active" | "trialing";
+    trialDays?: number;
+  }): Promise<{ userId: string; orgId: string }> {
+    const existing = await storage.getUserByEmail(opts.email);
+    if (existing) return { userId: existing.id, orgId: existing.organizationId };
+
+    const orgId = opts.orgId ?? (await storage.createOrganization({ name: opts.orgName! })).id;
+    const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
+    const user = await storage.createUser({
+      email: opts.email,
+      passwordHash: hash,
+      fullName: opts.fullName,
+      organizationId: orgId,
+      role: opts.role,
+      founderFlag: opts.founderFlag ?? false,
+    });
+
+    // Billing (org-level — only create once per org)
+    const existingBilling = await storage.getBillingAccountByOrg(orgId);
+    if (!existingBilling && opts.planType) {
+      const billingData: any = { organizationId: orgId, planType: opts.planType };
+      if (opts.subscriptionStatus === "trialing" && opts.trialDays) {
+        billingData.subscriptionStatus = "trialing";
+        billingData.trialStartDate = new Date();
+        billingData.trialEndDate = new Date(Date.now() + opts.trialDays * 86400_000);
+      } else {
+        billingData.subscriptionStatus = opts.subscriptionStatus ?? "active";
+      }
+      await storage.createBillingAccount(billingData);
+    }
+
+    return { userId: user.id, orgId };
+  }
+
+  // ── Executive (carrier_analyst) ──────────────────────────────────────────
+  await ensureUser({
+    email: "exec@claimsignal.test",
+    fullName: "Executive Demo",
+    orgName: "Demo Carrier Analytics",
+    role: "carrier_analyst",
+    planType: "pro",
+    subscriptionStatus: "active",
+  });
+
+  // ── Founder ───────────────────────────────────────────────────────────────
+  await ensureUser({
+    email: "founder@claimsignal.test",
+    fullName: "Founder Demo",
+    orgName: "Demo Founder Org",
+    role: "founder",
+    founderFlag: true,
+    planType: "founder",
+    subscriptionStatus: "trialing",
+    trialDays: 14,
+  });
+
+  // ── Individual ────────────────────────────────────────────────────────────
+  await ensureUser({
+    email: "individual@claimsignal.test",
+    fullName: "Individual Demo",
+    orgName: "Demo Individual Org",
+    role: "standard",
+    planType: "pro",
+    subscriptionStatus: "active",
+  });
+
+  // ── Team Admin + Team Member (shared org) ─────────────────────────────────
+  const { orgId: teamOrgId } = await ensureUser({
+    email: "teamadmin@claimsignal.test",
+    fullName: "Team Admin Demo",
+    orgName: "Demo Team Organization",
+    role: "team_owner",
+    planType: "team",
+    subscriptionStatus: "active",
+  });
+
+  await ensureUser({
+    email: "member@claimsignal.test",
+    fullName: "Team Member Demo",
+    orgId: teamOrgId,          // same org as Team Admin — billing already created
+    role: "standard",
+    // no planType — billing already exists at org level
+  });
+
+  // ── Patch existing test accounts that have no billing account ─────────────
+  for (const { email, planType } of [
+    { email: "test@example.com", planType: "founder" },
+    { email: "indiv_perm_test@claimsignal.test", planType: "pro" },
+  ]) {
+    const u = await storage.getUserByEmail(email);
+    if (!u) continue;
+    const bill = await storage.getBillingAccountByOrg(u.organizationId);
+    if (!bill) {
+      const bd: any = { organizationId: u.organizationId, planType };
+      if (planType === "founder") {
+        bd.subscriptionStatus = "trialing";
+        bd.trialStartDate = new Date();
+        bd.trialEndDate = new Date(Date.now() + 14 * 86400_000);
+      } else {
+        bd.subscriptionStatus = "active";
+      }
+      await storage.createBillingAccount(bd);
+    }
+  }
+
+  console.log("[seedDemoUsers] all demo role accounts ready");
 }

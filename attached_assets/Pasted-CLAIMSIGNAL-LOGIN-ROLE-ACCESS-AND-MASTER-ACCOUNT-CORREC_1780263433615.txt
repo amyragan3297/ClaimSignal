@@ -1,0 +1,396 @@
+CLAIMSIGNAL LOGIN, ROLE ACCESS, AND MASTER ACCOUNT CORRECTION - PRIORITY FIX
+
+Stop current feature work and fix account access first.
+
+The current app is not operating correctly because there does not appear to be a real working login structure for each required role.
+
+The app is showing labels like “Plan: Pro - Role: Master,” but the behavior does not match true Master access.
+
+This is not acceptable.
+
+Do not rebuild the app from scratch.
+Do not erase existing data.
+Do not remove working features.
+Do not weaken masking, RBAC, audit logs, evidence upload, claims, adjuster intelligence, carrier intelligence, Playbook, or security.
+
+PRIMARY ISSUE
+
+ClaimSignal must have real working role-based logins.
+
+Required roles:
+
+1. Master
+2. Executive
+3. Founder
+4. Individual
+5. Team Admin
+6. Team Member
+
+Right now, the app does not appear to have working separate logins for these roles.
+
+Fix this before continuing with more feature polish.
+
+1. REQUIRED DEMO LOGINS
+
+Create or verify one safe demo login for each required role:
+
+* Master
+* Executive
+* Founder
+* Individual
+* Team Admin
+* Team Member
+
+For each login, provide:
+
+* email
+* role
+* plan
+* organization
+* access level
+* whether it can log in
+* where it lands after login
+* what it can access
+* what it cannot access
+
+Do not expose password hashes.
+Do not expose secrets.
+Do not expose JWT secrets.
+Do not expose database credentials.
+Do not expose API keys.
+
+If temporary demo passwords are created, clearly label them as temporary and recommend changing them later.
+
+2. MASTER LOGIN MUST BE REAL
+
+Master is the platform owner.
+
+Master must not be treated like a normal customer, Founder, Individual, or Team user.
+
+Master must be able to:
+
+* log in successfully
+* land on the Master dashboard
+* see all claims
+* see all uploaded evidence
+* see all claim drafts
+* see unmatched evidence
+* see all adjusters
+* see all carriers
+* see all Playbooks
+* see audit logs
+* see admin controls
+* create claims
+* edit claims
+* archive claims
+* restore claims
+* link files to claims
+* create new claims from uploaded files
+* override claim matches
+* review extraction results
+* view masked preview if intentionally selected
+* view unmasked full records by default
+* permanently delete only with explicit confirmation
+
+Master must not be blocked by:
+
+* Founder Access
+* Founding Partner Agreement
+* subscription gating
+* own-claims-only logic
+* team-only logic
+* masked-only library view
+
+3. REMOVE FOUNDER AGREEMENT BLOCK FROM MASTER DASHBOARD
+
+The first dashboard page after Master login currently shows:
+
+“Founding Partner Agreement Required”
+“Sign the Founding Partner agreement to unlock full unmasked data access.”
+
+This must not appear at the top of the Master dashboard.
+
+Master already owns the platform.
+
+Founder agreement gating may apply to Founder users only.
+
+It must not block Master.
+
+Correct behavior:
+
+* Master dashboard should open cleanly.
+* If a Founder agreement exists, it should appear only in Founder account flow.
+* Do not show Founder agreement warning to Master.
+* Do not place Founder agreement as the first major card after login.
+
+4. ROLE DISPLAY MUST BE CLEAR
+
+Do not show confusing combined labels.
+
+Replace:
+
+“Plan: Pro - Role: Master”
+
+With:
+
+Plan: Pro
+Role: Master Admin
+
+Or:
+
+Role: Master Admin
+Plan: Pro
+
+Make it obvious that:
+
+* Role controls permissions
+* Plan controls billing
+* Master is not a plan
+* Pro is not a role
+* Founder is not Master
+* Individual is not Master
+
+5. MASTER CLAIM VISIBILITY IS BROKEN
+
+Master currently cannot clearly see claims or is being shown masked / library behavior.
+
+Fix Master claim access.
+
+Master must have a clear view option:
+
+* Master Full Access View
+* Masked Library Preview
+
+Default for Master:
+
+Master Full Access View
+
+Master Full Access View must show:
+
+* all claims
+* unmasked homeowner names
+* unmasked claim numbers
+* unmasked property addresses
+* all claim details
+* all linked evidence
+* all adjusters
+* all carriers
+* all outcomes
+* all timeline records
+
+Masked Library Preview may show masked records only when intentionally selected.
+
+Do not show Master masked data by default unless it is clearly labeled as a masked preview.
+
+6. PLATFORM LIBRARY IS NOT MASTER FULL ACCESS
+
+The Platform Library should be the shared masked intelligence library.
+
+It is not the same as Master full access.
+
+Define:
+
+My Claims:
+Claims owned by the logged-in user or organization.
+
+Platform Library:
+Shared masked claim intelligence.
+
+Master Full Access:
+Administrative view across all records.
+
+Master needs a separate clear way to access Master Full Access records.
+
+7. INDIVIDUAL LOGIN MUST EXIST
+
+Create or verify a real Individual demo login.
+
+Individual must:
+
+* log in successfully
+* land on Individual dashboard
+* create own claims
+* view own claims unmasked
+* view shared masked Platform Library
+* view shared adjuster / carrier / Playbook intelligence
+* not view another user’s unmasked homeowner name
+* not view another user’s full claim number
+* not view another user’s full property address
+* not delete platform records
+* not access Master controls
+* not access raw private documents from other users
+
+8. FOUNDER LOGIN MUST EXIST
+
+Create or verify a real Founder demo login.
+
+Founder must:
+
+* log in successfully
+* land on Founder dashboard
+* view own claims unmasked
+* view shared masked Platform Library
+* view shared intelligence
+* not access Master controls
+* not see other users’ unmasked private claim records
+
+Founder Access / Founder Agreement gating may apply here, not to Master.
+
+9. TEAM ADMIN LOGIN MUST EXIST
+
+Create or verify a real Team Admin demo login.
+
+Team Admin must:
+
+* log in successfully
+* land on Team Admin dashboard
+* view team claims
+* create team claims
+* edit team claims if allowed
+* assign claims to Team Members if implemented
+* view team analytics
+* view shared masked Platform Library
+* not access other teams’ unmasked claims
+* not access Master controls
+* not permanently delete platform records
+
+10. TEAM MEMBER LOGIN MUST EXIST
+
+Create or verify a real Team Member demo login.
+
+Team Member must:
+
+* log in successfully
+* land on Team Member dashboard
+* view team claims based on permissions
+* view shared masked Platform Library
+* not manage users
+* not permanently delete records
+* not access Master controls
+* not access other teams’ claims
+
+11. EXECUTIVE LOGIN MUST EXIST
+
+Create or verify a real Executive demo login.
+
+Executive must:
+
+* log in successfully
+* land on Executive dashboard
+* see aggregate metrics only
+* be read-only
+* not access claim detail pages
+* not see homeowner names
+* not see claim numbers
+* not see property addresses
+* not see raw documents
+* not see audio
+* not see transcripts
+* not see raw timelines
+* not see raw audit logs
+
+12. REMOVE FAKE AI CLAIMS UNTIL AI IS REAL
+
+There are currently no true AI features operating as expected.
+
+Do not label screens as AI if they are manual, placeholder, or rule-based only.
+
+If the app is not using a model to read, extract, classify, summarize, or recommend from uploaded claim content, label it honestly:
+
+* Manual Entry
+* MVP Rule-Based
+* Pending AI Integration
+* Evidence Review Pending
+* Not Enough Data
+
+Do not call it:
+
+* AI Extraction
+* AI Detection
+* AI Analysis
+* AI Timeline
+* AI Playbook Recommendation
+
+unless it is actually connected to model-based extraction or analysis.
+
+13. LOGIN TEST MATRIX REQUIRED
+
+Test each role:
+
+* Master
+* Executive
+* Founder
+* Individual
+* Team Admin
+* Team Member
+
+For each role, test:
+
+* can log in
+* correct dashboard
+* correct role label
+* correct plan label
+* claim visibility
+* masked vs unmasked behavior
+* access to claims
+* access to Platform Library
+* access to evidence
+* access to adjusters
+* access to carrier intelligence
+* access to Playbook
+* access to audit logs
+* access to admin controls
+* denied routes return proper denial
+* no unauthorized unmasked data leaks
+
+14. MASTER MUST BE VERIFIED FIRST
+
+Before completing this task, prove Master access works.
+
+Master validation must confirm:
+
+1. Master can log in.
+2. Master lands on the correct dashboard.
+3. Master dashboard does not show Founder Agreement Required as the top blocking card.
+4. Master can see all claims.
+5. Master can see unmasked claim detail.
+6. Master can see all evidence.
+7. Master can see unmatched evidence.
+8. Master can see all adjusters.
+9. Master can access audit logs.
+10. Master can access admin controls.
+11. Master can switch to masked preview only intentionally.
+12. Master is not blocked by subscription or Founder gating.
+13. FINAL REPORT REQUIRED
+
+Report:
+
+* files changed
+* database changes made
+* whether changes were additive
+* demo accounts created or verified
+* Master login email
+* Founder login email
+* Individual login email
+* Team Admin login email
+* Team Member login email
+* Executive login email
+* what password handling was used
+* role/plan display status
+* Master access status
+* Individual access status
+* Founder access status
+* Team Admin access status
+* Team Member access status
+* Executive access status
+* Founder Agreement gating status
+* Master claim visibility status
+* masked vs unmasked view status
+* AI terminology correction status
+* commands run
+* tests passed
+* tests failed
+* remaining limitations
+* whether the app is safe to demo honestly
+
+Do not mark complete until real role-based demo logins exist and Master access behaves like actual full platform ownership.
