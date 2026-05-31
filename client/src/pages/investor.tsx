@@ -23,7 +23,7 @@ const metrics = [
 const highlights = [
   {
     title: "Market Opportunity",
-    description: "The property claims industry processes $80B+ annually with minimal technology adoption. ClaimSignal brings structured intelligence to an underserved market.",
+    description: "The property claims industry processes $80B+ annually with minimal technology adoption. ClaimSignal™ brings structured intelligence to an underserved market.",
   },
   {
     title: "Product Moat",
@@ -46,7 +46,7 @@ export default function InvestorPage() {
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4 flex-wrap px-6 py-4">
           <div className="flex items-center gap-2">
             <Shield className="w-6 h-6 text-primary" />
-            <span className="text-lg font-semibold tracking-tight">ClaimSignal</span>
+            <span className="text-lg font-semibold tracking-tight">ClaimSignal&#8482;</span>
           </div>
           <Link href="/">
             <Button variant="ghost" size="sm" data-testid="button-back-home">
@@ -67,7 +67,7 @@ export default function InvestorPage() {
               Building the Intelligence Layer for Property Claims
             </h1>
             <p className="text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              ClaimSignal is an operational intelligence platform that transforms how property claims are processed, analyzed, and resolved.
+              ClaimSignal™ is an operational intelligence platform that transforms how property claims are processed, analyzed, and resolved.
             </p>
           </div>
 
@@ -96,7 +96,7 @@ export default function InvestorPage() {
 
           <Card>
             <CardContent className="p-8 text-center">
-              <h2 className="text-xl font-semibold mb-2">Interested in ClaimSignal?</h2>
+              <h2 className="text-xl font-semibold mb-2">Interested in ClaimSignal&#8482;?</h2>
               <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
                 For investment inquiries, partnership opportunities, or enterprise discussions, reach out to our team.
               </p>

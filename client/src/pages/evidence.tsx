@@ -225,7 +225,7 @@ export default function EvidencePage() {
           Evidence Upload
         </h1>
         <p className="text-sm text-muted-foreground">
-          Upload documents to the ClaimSignal intelligence pipeline
+          Upload documents to the ClaimSignal™ intelligence pipeline
         </p>
       </div>
 

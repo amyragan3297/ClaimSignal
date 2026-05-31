@@ -61,7 +61,7 @@ export default function FounderLegalPage() {
             <CardContent className="space-y-4 text-sm text-muted-foreground leading-relaxed">
               <p>
                 By signing this Founding Partner Agreement, you acknowledge and agree to the following terms
-                as a Founding Partner of the ClaimSignal platform:
+                as a Founding Partner of the ClaimSignal™ platform:
               </p>
               <div className="space-y-3">
                 <div className="flex items-start gap-3">

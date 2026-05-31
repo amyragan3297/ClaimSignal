@@ -292,7 +292,7 @@ export default function AudioPage() {
             <div>
               <p className="text-sm font-medium">Transcription Engine</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                AI-powered transcription is live — upload an adjuster call or voicemail and ClaimSignal generates the transcript automatically. Manual transcript entry is also available.
+                AI-powered transcription is live — upload an adjuster call or voicemail and ClaimSignal™ generates the transcript automatically. Manual transcript entry is also available.
               </p>
             </div>
             <Badge variant="outline" className="text-xs shrink-0 text-green-500 border-green-500/30">AI Live</Badge>

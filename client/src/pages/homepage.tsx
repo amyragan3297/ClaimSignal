@@ -157,7 +157,7 @@ export default function Homepage() {
             className="text-base md:text-lg text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed"
             data-testid="text-hero-subtext"
           >
-            ClaimSignal organizes estimates, photos, denial letters, audio, inspection notes, storm data, and carrier communications into structured claim intelligence for contractors, claim professionals, and restoration teams.
+            ClaimSignal™ organizes estimates, photos, denial letters, audio, inspection notes, storm data, and carrier communications into structured claim intelligence for contractors, claim professionals, and restoration teams.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <Link href="/login?tab=register">
@@ -185,7 +185,7 @@ export default function Homepage() {
             Property claim work is fragmented, manual, and difficult to defend.
           </h2>
           <p className="text-muted-foreground leading-relaxed text-base">
-            Claim files often live across estimates, photos, emails, voicemails, inspection notes, and carrier correspondence. ClaimSignal is designed to convert that scattered evidence into structured operational intelligence.
+            Claim files often live across estimates, photos, emails, voicemails, inspection notes, and carrier correspondence. ClaimSignal™ is designed to convert that scattered evidence into structured operational intelligence.
           </p>
         </div>
       </section>
@@ -236,7 +236,7 @@ export default function Homepage() {
                 Built for sensitive claim data.
               </h2>
               <p className="text-muted-foreground leading-relaxed text-sm">
-                ClaimSignal enforces role-based access control with organization-level tenant isolation. PII masking is on by default and enforced server-side — only the Master role can view unmasked records, and every unmasking action is written to an immutable audit log. Restricted roles see masked claim numbers, carrier names, and property addresses across dashboards and exports.
+                ClaimSignal™ enforces role-based access control with organization-level tenant isolation. PII masking is on by default and enforced server-side — only the Master role can view unmasked records, and every unmasking action is written to an immutable audit log. Restricted roles see masked claim numbers, carrier names, and property addresses across dashboards and exports.
               </p>
               <p className="text-muted-foreground/80 leading-relaxed text-xs mt-3">
                 Authentication, role-based access, PII masking, and audit logging are implemented and active. Behavioral scoring is currently MVP rule-based analysis, clearly labeled in-product.

@@ -128,7 +128,7 @@ export default function BillingPage() {
           <CardContent className="p-6 text-center space-y-4">
             <h3 className="text-lg font-semibold">Subscription Required</h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Your trial has expired or no payment method is on file. Complete checkout to continue using ClaimSignal.
+              Your trial has expired or no payment method is on file. Complete checkout to continue using ClaimSignal™.
             </p>
             <Button onClick={handleCheckout} disabled={loading} data-testid="button-checkout">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
