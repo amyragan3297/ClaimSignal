@@ -1,0 +1,232 @@
+SECTION 23
+
+FOUNDER AND MASTER ADMIN INTELLIGENCE CENTER
+
+PURPOSE
+
+Provide a platform-wide intelligence command center available only to Master Admin users.
+
+The Founder Intelligence Center should provide visibility into the entire ClaimSignal intelligence network while preserving tenant isolation for all non-admin users.
+
+The purpose is to identify patterns, trends, opportunities, risks, carrier behavior, adjuster behavior, and platform growth signals.
+
+⸻
+
+MASTER ADMIN ONLY
+
+Access Restricted To:
+
+* Master Admin
+
+No other user role may access this section.
+
+⸻
+
+PLATFORM OVERVIEW
+
+Display:
+
+Platform Intelligence Summary
+
+* Total Claims
+* Total Carriers
+* Total Adjusters
+* Total Playbooks
+* Total Escalations
+* Total Users
+* Total Teams
+* Total Uploaded Documents
+* Total Timeline Events
+
+Display growth trends over time.
+
+⸻
+
+CARRIER INTELLIGENCE LEADERBOARD
+
+Display:
+
+Top Carriers By:
+
+* Claim Volume
+* Denial Rate
+* Approval Rate
+* Overturn Rate
+* Escalation Rate
+* Average Resolution Time
+
+Allow filtering by:
+
+* State
+* Date Range
+* Damage Type
+* Team
+* Carrier
+
+Never expose tenant-specific claim details in aggregate reports.
+
+⸻
+
+ADJUSTER INTELLIGENCE LEADERBOARD
+
+Display:
+
+Top Adjusters By:
+
+* Claim Volume
+* Denial Frequency
+* Approval Frequency
+* Overturn Frequency
+* Reinspection Frequency
+* Escalation Frequency
+
+Allow drill-down into:
+
+* Linked Claims
+* Historical Outcomes
+* Carrier Relationships
+* Timeline Trends
+
+⸻
+
+PLAYBOOK EFFECTIVENESS CENTER
+
+Track:
+
+* Most Frequently Used Playbooks
+* Highest Success Rate Playbooks
+* Most Common Escalation Paths
+* Most Effective Documentation Types
+* Most Effective Claim Strategies
+
+Display:
+
+Playbook Success Metrics
+
+Only calculate using actual historical outcomes.
+
+⸻
+
+PLATFORM SIGNALS
+
+Display:
+
+Emerging Trends
+
+Examples:
+
+* Increase in matching disputes
+* Increase in repairability denials
+* Increase in supplement resistance
+* Increase in claim cycle time
+* Increase in reinspection requests
+
+Only use real data.
+
+Never fabricate trends.
+
+⸻
+
+CLAIM HEALTH OVERVIEW
+
+Display:
+
+* Open Claims
+* High Risk Claims
+* Stalled Claims
+* Escalated Claims
+* Recently Approved Claims
+* Recently Overturned Claims
+
+Allow filtering by:
+
+* Carrier
+* Adjuster
+* State
+* Date Range
+* Team
+
+⸻
+
+DOCUMENT INTELLIGENCE OVERVIEW
+
+Display:
+
+* Total Documents Uploaded
+* Total Documents Analyzed
+* Missing Data Alerts
+* Missing Denial Letters
+* Missing Estimates
+* Missing Adjusters
+* Missing Weather Verification
+
+⸻
+
+AI COPILOT PERFORMANCE
+
+Track:
+
+* Copilot Usage
+* Most Common Questions
+* Most Viewed Playbooks
+* Most Used Recommendations
+* Most Common Claim Risks
+
+Use aggregated data only.
+
+⸻
+
+INVESTOR SAFE METRICS
+
+Create a separate investor-safe dashboard.
+
+Display:
+
+* Total Claims Processed
+* Total Adjusters Tracked
+* Total Carriers Tracked
+* Total Historical Outcomes
+* Total Playbooks Generated
+* Total Escalations Logged
+
+Do not expose:
+
+* Claim Numbers
+* Homeowner Information
+* Addresses
+* Policy Information
+* Internal Notes
+
+⸻
+
+AUDIT LOGGING
+
+Track:
+
+* Dashboard Viewed
+* Intelligence Report Generated
+* Trend Analysis Viewed
+* Playbook Metrics Viewed
+* Carrier Metrics Viewed
+* Adjuster Metrics Viewed
+
+⸻
+
+FINAL VALIDATION
+
+Verify:
+
+1. Only Master Admin can access the Intelligence Center.
+2. Tenant isolation remains intact.
+3. Investor metrics contain no protected information.
+4. Aggregated reporting is accurate.
+5. Playbook effectiveness calculations use real outcomes.
+6. Trend analysis uses actual historical data.
+7. Audit logs record all activity.
+8. Existing permissions remain unchanged.
+9. Masking rules remain active.
+10. No fabricated metrics are displayed.
+
+SUCCESS CONDITION
+
+ClaimSignal provides a Founder-level command center that reveals platform-wide intelligence, historical outcomes, trend analysis, and growth metrics while preserving privacy, security, and tenant isolation.
