@@ -1060,6 +1060,219 @@ export async function registerRoutes(
     }
   });
 
+  // ── Section 17A — Playbook Recommendation Engine ───────────────────────────
+  // Finds REAL historical claims similar to this claim. Separate from Action
+  // Engine and from the curated /playbook-recommendations library.
+  app.get("/api/claims/:id/playbook-matches", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const role = req.auth!.role;
+      const claimId = req.params.id as string;
+
+      let target = await storage.getClaim(claimId, orgId);
+      if (!target && isMaster(role)) {
+        const all = await storage.getAllClaimsAcrossTenants();
+        target = all.find((c) => c.id === claimId);
+      }
+      if (!target) return res.status(404).json({ message: "Claim not found" });
+
+      const allClaims = isMaster(role)
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
+
+      // Bulk load adjusters for name resolution.
+      const allAdj = isMaster(role)
+        ? await storage.getAllAdjustersAcrossTenants()
+        : await storage.getAdjusters(orgId);
+      const adjById = new Map(allAdj.map((a: any) => [a.id, a.adjusterName as string]));
+
+      // Get target adjuster IDs and resolve which candidate claims share them.
+      const targetLinks = await storage.getClaimAdjusters(claimId, isMaster(role) ? undefined : orgId);
+      const targetAdjIds = new Set(targetLinks.map((l) => l.adjusterId));
+
+      // For each target adjuster, fetch the other claims they're linked to.
+      const sharedAdjClaimIds = new Set<string>();
+      for (const adjId of Array.from(targetAdjIds)) {
+        const adjLinks = isMaster(role)
+          ? await storage.getAdjusterClaims(adjId)
+          : await storage.getAdjusterClaims(adjId, orgId);
+        adjLinks.forEach((l) => sharedAdjClaimIds.add(l.claimId));
+      }
+
+      // Candidates: usable outcomes, not the target claim itself.
+      const candidates = allClaims.filter((c) => c.id !== claimId && isUsableOutcome(c));
+
+      // Score all candidates.
+      const scored = candidates.map((c) => {
+        const candidateAdjIds = sharedAdjClaimIds.has(c.id)
+          ? targetAdjIds // approximation: shared = overlapping
+          : new Set<string>();
+        const { score, factors } = similarityScore(target!, c, targetAdjIds, candidateAdjIds);
+        return { c, score, factors };
+      }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score).slice(0, 5);
+
+      if (scored.length === 0) {
+        await storage.createAuditLog({
+          organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
+          isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+          actionType: "PLAYBOOK_RECOMMENDATION_VIEWED", entityType: "claim", entityId: claimId,
+          afterJson: { matchCount: 0 }, ipAddress: getClientIp(req),
+        });
+        return res.json({ method: "MVP rule-based", matches: [], message: "No similar playbook history found yet." });
+      }
+
+      // Build result cards.
+      const matches = await Promise.all(scored.map(async ({ c, score, factors }) => {
+        const links = await storage.getClaimAdjusters(c.id, isMaster(role) ? undefined : orgId);
+        const adjNames = links.map((l) => adjById.get(l.adjusterId)).filter(Boolean) as string[];
+        const masked = applyPiiMasking(c, role);
+        const strategy = buildStrategySummary(c);
+        return {
+          claimId: c.id,
+          claimIdentifier: masked.claimNumber ?? "Claim (masked)",
+          carrier: c.carrier,
+          lossType: c.lossType,
+          adjusters: adjNames,
+          initialOutcome: (c as any).initialOutcome ?? null,
+          finalOutcome: (c as any).finalOutcome ?? null,
+          escalationUsed: (c as any).escalationUsed ?? false,
+          reinspectionRequested: (c as any).reinspectionRequested ?? false,
+          similarityScore: score,
+          keyFactors: factors,
+          strategySummary: strategy,
+        };
+      }));
+
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "PLAYBOOK_RECOMMENDATION_VIEWED", entityType: "claim", entityId: claimId,
+        afterJson: { matchCount: matches.length, topScore: scored[0]?.score }, ipAddress: getClientIp(req),
+      });
+
+      res.json({ method: "MVP rule-based", similarClaimsFound: matches.length, matches });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Section 17 — Playbook Search Engine ────────────────────────────────────
+  // NL query → deterministic filters → role-scoped, PII-masked historical claim
+  // result cards + reusable strategy summaries. Executive role gets aggregate only.
+  // Separate from Action Engine (/api/playbooks*) and 17A similarity above.
+  app.post("/api/playbook/search", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const role = req.auth!.role;
+      const { query = "", filters: explicitFilters = {}, page = 1 } = req.body as {
+        query?: string;
+        filters?: PlaybookFilters;
+        page?: number;
+      };
+      const PAGE_SIZE = 20;
+
+      const allClaims = isMaster(role)
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
+
+      // Build carrier name list for NL parser context.
+      const knownCarriers = Array.from(new Set(allClaims.map((c) => c.carrier).filter(Boolean))) as string[];
+
+      // Parse NL query → filters; merge with explicit filters.
+      const parsedFilters = parseQueryToFilters(query, knownCarriers);
+      const merged: PlaybookFilters = { ...parsedFilters, ...explicitFilters };
+
+      // Bulk load adjusters for name resolution.
+      const allAdj = isMaster(role)
+        ? await storage.getAllAdjustersAcrossTenants()
+        : await storage.getAdjusters(orgId);
+      const adjById = new Map(allAdj.map((a: any) => [a.id, a.adjusterName as string]));
+
+      // Build adjusterNames-by-claim for adjuster-name filtering when needed.
+      // We lazily resolve only if adjusterName filter is set.
+      let adjNamesByClaim: Map<string, string[]> | undefined;
+      if (merged.adjusterName) {
+        adjNamesByClaim = new Map();
+        const usableCandidates = allClaims.filter(isUsableOutcome);
+        for (const c of usableCandidates) {
+          const links = await storage.getClaimAdjusters(c.id, isMaster(role) ? undefined : orgId);
+          adjNamesByClaim.set(c.id, links.map((l) => adjById.get(l.adjusterId)).filter(Boolean) as string[]);
+        }
+      }
+
+      // Filter claims to usable outcomes, then apply search filters.
+      const usable = allClaims.filter(isUsableOutcome);
+      const filtered = filterClaims(usable, merged, adjNamesByClaim);
+
+      // Audit the search.
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "PLAYBOOK_SEARCH_PERFORMED", entityType: "playbook_search", entityId: "search",
+        afterJson: { query, matchCount: filtered.length, filtersApplied: Object.keys(merged).length },
+        ipAddress: getClientIp(req),
+      });
+
+      // Executive role: aggregate intelligence only — no individual claim cards.
+      if (role === "carrier_analyst") {
+        if (filtered.length === 0) {
+          return res.json({ executiveAggregateOnly: true, totalResults: 0, message: "No matching playbook history found yet." });
+        }
+        const overturned = filtered.filter((c) => (c as any).denialOverturned === true).length;
+        const denied = filtered.filter((c: any) => c.initialOutcome?.toLowerCase().includes("deni")).length;
+        const topCarriers = Array.from(
+          filtered.reduce((m, c) => { m.set(c.carrier || "Unknown", (m.get(c.carrier || "Unknown") || 0) + 1); return m; }, new Map<string, number>())
+        ).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
+        return res.json({
+          executiveAggregateOnly: true, totalResults: filtered.length,
+          overturnRate: denied > 0 ? Math.round((overturned / denied) * 100) : null,
+          topCarriers,
+          message: filtered.length < 3 ? "Limited historical evidence available." : null,
+        });
+      }
+
+      if (filtered.length === 0) {
+        return res.json({ totalResults: 0, results: [], message: "No matching playbook history found yet.", method: "MVP rule-based natural-language parsing" });
+      }
+
+      const confidenceNote = filtered.length <= 2 ? "Limited historical evidence available." : null;
+
+      // Paginate and build masked result cards.
+      const pageStart = (page - 1) * PAGE_SIZE;
+      const pageItems = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+
+      const results = await Promise.all(pageItems.map(async (c) => {
+        const links = await storage.getClaimAdjusters(c.id, isMaster(role) ? undefined : orgId);
+        const adjNames = links.map((l) => adjById.get(l.adjusterId)).filter(Boolean) as string[];
+        const masked = applyPiiMasking(c, role);
+        const strategy = buildStrategySummary(c);
+        return {
+          claimId: c.id,
+          claimIdentifier: masked.claimNumber ?? "Claim (masked)",
+          carrier: c.carrier,
+          lossType: c.lossType,
+          adjusters: adjNames,
+          initialOutcome: (c as any).initialOutcome ?? null,
+          finalOutcome: (c as any).finalOutcome ?? null,
+          escalationUsed: (c as any).escalationUsed ?? false,
+          reinspectionRequested: (c as any).reinspectionRequested ?? false,
+          strategySummary: strategy,
+        };
+      }));
+
+      res.json({
+        method: "MVP rule-based natural-language parsing",
+        totalResults: filtered.length,
+        page, pageSize: PAGE_SIZE,
+        parsedFilters: merged,
+        results,
+        confidenceNote,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // AI-generated claim analysis (OpenAI). Persists narrative + structured intelligence.
   app.post("/api/claims/:id/ai-analysis", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {

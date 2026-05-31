@@ -1,0 +1,216 @@
+SECTION 21
+
+CLAIM INTELLIGENCE DASHBOARD
+
+PURPOSE
+
+Provide a single-screen intelligence view showing claim health, risk factors, historical patterns, and recommended next actions.
+
+The dashboard should answer:
+
+What is happening?
+
+What is at risk?
+
+What should I focus on next?
+
+What worked before in similar claims?
+
+⸻
+
+CLAIM HEALTH SCORE
+
+Generate a Claim Health Score using available claim data.
+
+Factors may include:
+
+* Claim status
+* Time since date of loss
+* Denial history
+* Escalation history
+* Missing documents
+* Adjuster history
+* Carrier history
+* Supplement status
+* Timeline completeness
+
+Display:
+
+Claim Health Score
+
+Excellent
+Good
+Moderate Risk
+High Risk
+
+Do not display a score if insufficient data exists.
+
+Display:
+
+Insufficient data for claim health scoring.
+
+⸻
+
+CLAIM RISK SIGNALS
+
+Track:
+
+* Prior denial
+* Repeated denial
+* Claim closure threat
+* Delayed response
+* Missing documentation
+* Carrier dispute
+* Repairability dispute
+* Matching dispute
+* Brittle test issue
+* Coverage dispute
+* Supplement resistance
+
+Display:
+
+Risk Signals Detected
+
+With severity:
+
+* Low
+* Medium
+* High
+
+Never fabricate risk signals.
+
+⸻
+
+ADJUSTER SIGNAL SUMMARY
+
+Display:
+
+* Adjuster Name
+* Linked Claims
+* Denial Rate
+* Overturn Rate
+* Escalation Frequency
+* Reinspection Frequency
+* Data Confidence
+
+If insufficient evidence:
+
+Display:
+
+Limited adjuster history available.
+
+⸻
+
+CARRIER SIGNAL SUMMARY
+
+Display:
+
+* Carrier
+* Denial Rate
+* Overturn Rate
+* Escalation Frequency
+* Common Denial Reasons
+* Average Resolution Time
+* Data Confidence
+
+If insufficient evidence:
+
+Display:
+
+Limited carrier history available.
+
+⸻
+
+PLAYBOOK MATCHES
+
+Automatically display:
+
+Top Historical Matches
+
+For each match show:
+
+* Similarity Score
+* Carrier
+* Adjuster
+* Initial Outcome
+* Final Outcome
+* Strategy Used
+
+Only use actual historical data.
+
+⸻
+
+RECOMMENDED NEXT ACTIONS
+
+Generate suggested actions based on:
+
+* Current claim status
+* Available documentation
+* Historical outcomes
+* Escalation history
+
+Examples:
+
+Suggested Next Actions
+
+* Request reinspection
+* Upload additional photos
+* Submit repairability documentation
+* Escalate to supervisor review
+* Submit estimate comparison
+
+Display:
+
+Recommended based on historical claim patterns.
+
+Do not present recommendations as legal advice.
+
+⸻
+
+DASHBOARD ALERTS
+
+Display:
+
+Critical Alerts
+
+Examples:
+
+* Missing denial letter
+* Missing estimate
+* Missing date of loss
+* Missing carrier assignment
+* Missing adjuster assignment
+* Incomplete timeline
+* Unresolved escalation
+
+⸻
+
+EXECUTIVE SUMMARY
+
+Generate:
+
+Claim Intelligence Summary
+
+Example:
+
+Claim currently shows elevated risk due to prior denial, repairability dispute, and delayed carrier response. Historical claims with similar characteristics achieved approval following reinspection and supplemental documentation.
+
+This summary must be generated only from available data.
+
+⸻
+
+AUDIT LOGGING
+
+Log:
+
+* Dashboard viewed
+* Risk score generated
+* Playbook recommendation viewed
+* Recommended action viewed
+* Intelligence summary generated
+
+⸻
+
+SUCCESS CONDITION
+
+ClaimSignal provides a single intelligence dashboard that transforms claim data, adjuster history, carrier history, playbooks, escalations, and timeline activity into actionable operational insight without fabricating information or exposing protected data.
