@@ -670,7 +670,9 @@ router.post("/files/:id/match", async (req: AuthRequest, res: Response) => {
 });
 
 // Create a brand-new claim from an uploaded file's extracted fields, then link
-// the file to it. Honest MVP: only fields actually extracted are pre-filled.
+// the file to it and wire adjuster/timeline/scoring intelligence.
+// Accepts `fields` in body (accepted/edited extraction values from the UI) OR
+// falls back to storedEntities + LLM extraction so older callers still work.
 router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
@@ -682,28 +684,91 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
     if (!file) return res.status(404).json({ message: "File not found" });
 
     const storedEntities = await storage.getExtractedEntities(req.params.id as string);
-    const get = (t: string) => storedEntities.find(e => e.entityType === t)?.rawValue;
-    const overrides = req.body || {};
+    const getEntity = (t: string) => storedEntities.find(e => e.entityType === t)?.rawValue;
+    const llmExtraction = (file.extractedJson as any)?.extraction as ExtractionResult | null;
+    const llm = (k: string): string | undefined => {
+      if (!llmExtraction) return undefined;
+      const v = (llmExtraction as any)[k];
+      return v != null && typeof v !== "object" ? String(v) : undefined;
+    };
 
-    const claimNumber = overrides.claimNumber || get("claim_number") || `DRAFT-${Date.now().toString().slice(-6)}`;
-    const dolRaw = overrides.dateOfLoss || get("date_of_loss");
-    const dol = dolRaw ? new Date(dolRaw) : null;
+    // Accept field-by-field accepted values from the UI, or fall back to
+    // LLM extraction and rule-based entities (in that priority order).
+    const accepted: Record<string, string> = req.body?.fields || {};
+    const f = (fieldKey: string, entityType: string, llmKey: string): string | undefined =>
+      accepted[fieldKey]?.trim() || llm(llmKey) || getEntity(entityType) || undefined;
 
-    // The claim lives in the file's organization (uploader's tenant).
+    const NUMERIC_KEYS = ["rcv","acv","deductible","supplementRequested","supplementApproved","recoverableDepreciation"];
+    const numericVal = (v?: string) => {
+      if (!v) return undefined;
+      const n = parseFloat(v.replace(/[$,\s]/g, ""));
+      return isNaN(n) ? undefined : String(n);
+    };
+    const dateVal = (v?: string) => {
+      if (!v) return undefined;
+      const d = new Date(v);
+      return d && !isNaN(d.getTime()) ? d : undefined;
+    };
+
+    const claimNumber = f("claimNumber", "claim_number", "claimNumber") || `DRAFT-${Date.now().toString().slice(-6)}`;
+
     const claim = await storage.createClaim({
       organizationId: file.organizationId,
       claimNumber,
-      policyNumber: overrides.policyNumber || get("policy_number") || undefined,
-      homeownerName: overrides.homeownerName || get("insured_name") || undefined,
-      insuredName: overrides.insuredName || get("insured_name") || undefined,
-      propertyAddress: overrides.propertyAddress || get("property_address") || undefined,
-      carrier: overrides.carrier || undefined,
-      dateOfLoss: dol && !isNaN(dol.getTime()) ? dol : undefined,
+      policyNumber: f("policyNumber", "policy_number", "policyNumber"),
+      homeownerName: f("homeownerName", "insured_name", "homeownerName") || llm("insuredName"),
+      insuredName: f("insuredName", "insured_name", "insuredName") || llm("homeownerName"),
+      carrier: f("carrier", "carrier_name", "carrier"),
+      propertyAddress: f("propertyAddress", "property_address", "propertyAddress"),
+      city: accepted["city"]?.trim() || llm("city"),
+      state: accepted["state"]?.trim() || llm("state"),
+      zipCode: accepted["zipCode"]?.trim() || llm("zipCode"),
+      dateOfLoss: dateVal(f("dateOfLoss", "date_of_loss", "dateOfLoss")),
+      inspectionDate: dateVal(accepted["inspectionDate"]?.trim() || llm("inspectionDate")),
+      rcvAmount: numericVal(f("rcv", "rcv", "rcv")),
+      acvAmount: numericVal(f("acv", "acv", "acv")),
+      deductible: numericVal(f("deductible", "deductible", "deductible")),
+      supplementRequested: numericVal(accepted["supplementRequested"]?.trim() || llm("supplementRequested")),
+      supplementApproved: numericVal(accepted["supplementApproved"]?.trim() || llm("supplementApproved")),
+      recoverableDepreciation: numericVal(accepted["recoverableDepreciation"]?.trim() || llm("recoverableDepreciation")),
+      iaFirm: accepted["iaFirm"]?.trim() || llm("iaFirm"),
+      vendorName: accepted["vendorName"]?.trim() || llm("vendor"),
+      denialReason: accepted["denialReason"]?.trim() || llm("denialReason"),
+      initialOutcome: accepted["initialOutcome"]?.trim() || llm("initialOutcome"),
+      finalOutcome: accepted["finalOutcome"]?.trim() || llm("finalOutcome"),
       status: "open",
     } as any);
 
     await storage.updateEvidenceFile(req.params.id as string, file.organizationId, { claimId: claim.id });
 
+    // ── Adjuster intelligence linkage ────────────────────────────────────────
+    const adjName = accepted["adjusterName"]?.trim() || llm("adjusterName");
+    if (adjName) {
+      try {
+        const existingAdjs = await storage.getAdjusters(claim.organizationId);
+        let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjName.toLowerCase());
+        if (!adj) {
+          const carrierName = accepted["carrier"]?.trim() || llm("carrier") || "Unknown";
+          adj = await storage.createAdjuster({
+            organizationId: claim.organizationId,
+            adjusterName: adjName,
+            adjusterEmail: accepted["adjusterEmail"]?.trim() || llm("adjusterEmail") || undefined,
+            adjusterPhone: accepted["adjusterPhone"]?.trim() || llm("adjusterPhone") || undefined,
+            carrierName,
+          } as any);
+        }
+        await storage.linkAdjusterToClaim({
+          claimId: claim.id,
+          adjusterId: adj.id,
+          organizationId: claim.organizationId,
+          roleOnClaim: "primary_adjuster",
+        });
+      } catch (adjErr: any) {
+        console.error("[create-claim] adjuster linking non-fatal:", adjErr?.message);
+      }
+    }
+
+    // ── Timeline events from extracted dates ─────────────────────────────────
     await generateTimelineEvents(
       claim.id,
       claim.organizationId,
@@ -712,8 +777,53 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
       storedEntities.map(e => ({ entityType: e.entityType, rawValue: e.rawValue, confidence: e.confidence || 0 })),
       userId
     );
+    // Additional timeline events from LLM dates not covered by rule-based entities
+    if (llmExtraction) {
+      const extraDates: Array<{ key: string; eventType: string; title: string }> = [
+        { key: "inspectionDate", eventType: "inspection", title: "Inspection" },
+        { key: "denialDate", eventType: "denial", title: "Denial Received" },
+        { key: "approvalDate", eventType: "approval", title: "Approval Received" },
+        { key: "paymentDate", eventType: "payment_issued", title: "Payment Issued" },
+      ];
+      for (const { key, eventType, title } of extraDates) {
+        const raw = (llmExtraction as any)[key];
+        if (!raw) continue;
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) continue;
+        try {
+          await storage.createTimelineEvent({
+            claimId: claim.id,
+            organizationId: claim.organizationId,
+            eventType: eventType as any,
+            eventDate: d,
+            title,
+            description: `${title} date from AI extraction`,
+            evidenceFileId: file.id,
+            createdByUserId: userId,
+          });
+        } catch (_) { /* non-fatal */ }
+      }
+      if (llmExtraction.timelineEvents?.length) {
+        for (const ev of llmExtraction.timelineEvents.slice(0, 5)) {
+          const d = ev.date ? new Date(ev.date) : null;
+          if (!d || isNaN(d.getTime())) continue;
+          try {
+            await storage.createTimelineEvent({
+              claimId: claim.id,
+              organizationId: claim.organizationId,
+              eventType: "note",
+              eventDate: d,
+              title: ev.description || "Event",
+              description: `AI extracted timeline: ${ev.description}`,
+              evidenceFileId: file.id,
+              createdByUserId: userId,
+            });
+          } catch (_) { /* non-fatal */ }
+        }
+      }
+    }
 
-    // If a draft existed for this file, mark it merged.
+    // Mark any draft for this file as merged
     const drafts = await storage.getClaimDrafts(file.organizationId);
     const draft = drafts.find(d => d.createdFromEvidenceFileId === file.id && d.status === "needs_review");
     if (draft) await storage.updateClaimDraft(draft.id, file.organizationId, { status: "merged" } as any);
@@ -725,7 +835,15 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
       actionType: "CLAIM_CREATED_FROM_FILE",
       entityType: "claim",
       entityId: claim.id,
-      afterJson: { claimNumber: claim.claimNumber, evidenceFileId: file.id, actorOrganizationId: organizationId, crossTenant: file.organizationId !== organizationId },
+      afterJson: {
+        claimNumber: claim.claimNumber,
+        evidenceFileId: file.id,
+        adjusterLinked: !!adjName,
+        fieldsAccepted: Object.keys(accepted),
+        llmConfidence: llmExtraction?.confidence ?? null,
+        actorOrganizationId: organizationId,
+        crossTenant: file.organizationId !== organizationId,
+      },
     });
 
     res.json({ created: true, claim });
