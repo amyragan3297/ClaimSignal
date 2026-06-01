@@ -16,7 +16,6 @@ import {
   Eye,
   BookOpen,
   ArrowRight,
-  Check,
 } from "lucide-react";
 
 const solutionCards = [
@@ -30,87 +29,6 @@ const solutionCards = [
   { icon: FileText, title: "Audit Logs", description: "Immutable event stream capturing all platform actions for compliance and review purposes." },
 ];
 
-const pricingPlans = [
-  {
-    name: "Founder Access",
-    price: "$79",
-    period: "/month",
-    description: "Available by approval only for a limited early group.",
-    note: "Card required before platform access. Founder pricing remains active while the subscription remains active.",
-    features: [
-      "Full platform access",
-      "All intelligence engines",
-      "Unmasked data access",
-      "Roadmap collaboration eligibility",
-      "Priority support",
-    ],
-    cta: "Apply for Founder Access",
-    ctaHref: "/login?tab=register&plan=founder",
-    highlighted: true,
-    testId: "card-pricing-founder",
-    btnTestId: "button-pricing-founder",
-    variant: "default" as const,
-  },
-  {
-    name: "Individual",
-    price: "$99",
-    period: "/month",
-    description: "For independent contractors, consultants, and solo claim professionals.",
-    note: "",
-    features: [
-      "Full platform access",
-      "All intelligence engines",
-      "Claims lifecycle tracking",
-      "Adjuster metrics",
-    ],
-    cta: "Request Access",
-    ctaHref: "/login?tab=register&plan=pro",
-    highlighted: false,
-    testId: "card-pricing-individual",
-    btnTestId: "button-pricing-individual",
-    variant: "outline" as const,
-  },
-  {
-    name: "Team",
-    price: "$149",
-    period: "/month",
-    description: "Includes 2 seats. Additional seats are $30.00 per user per month.",
-    note: "",
-    features: [
-      "Everything in Individual",
-      "2 included seats",
-      "Role-based access control",
-      "Priority support",
-    ],
-    cta: "Request Team Access",
-    ctaHref: "/login?tab=register&plan=team",
-    highlighted: false,
-    testId: "card-pricing-team",
-    btnTestId: "button-pricing-team",
-    variant: "outline" as const,
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    period: "",
-    description: "For larger organizations needing custom onboarding, expanded data controls, dedicated support, and advanced permissions.",
-    note: "",
-    features: [
-      "Everything in Team",
-      "Custom onboarding",
-      "Expanded data controls",
-      "Dedicated support",
-      "Advanced permissions",
-    ],
-    cta: "Contact Sales",
-    ctaHref: "mailto:enterprise@claimsignal.com",
-    highlighted: false,
-    testId: "card-pricing-enterprise",
-    btnTestId: "button-pricing-enterprise",
-    variant: "outline" as const,
-    external: true,
-  },
-];
 
 export default function Homepage() {
   return (
@@ -284,75 +202,6 @@ export default function Homepage() {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section className="py-24 px-6 bg-card/40 border-y border-border/30" id="pricing">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-14">
-            <Badge variant="outline" className="mb-5 text-xs tracking-wide uppercase px-3 py-1">
-              Pricing
-            </Badge>
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
-              View Pricing
-            </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-              Access options for independent professionals, teams, and enterprise organizations.
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {pricingPlans.map((plan) => (
-              <Card
-                key={plan.name}
-                className={`flex flex-col ${plan.highlighted ? "border-primary ring-1 ring-primary/30" : "border-border/50"}`}
-                data-testid={plan.testId}
-              >
-                <CardContent className="p-6 flex flex-col flex-1">
-                  <div className="mb-5">
-                    {plan.highlighted && (
-                      <Badge className="mb-3 text-xs" data-testid="badge-founder-access">
-                        By Approval Only
-                      </Badge>
-                    )}
-                    <h3 className="text-base font-bold mb-1">{plan.name}</h3>
-                    <p className="text-xs text-muted-foreground mb-4 leading-relaxed">{plan.description}</p>
-                    <div className="flex items-baseline gap-0.5">
-                      <span className="text-3xl font-bold">{plan.price}</span>
-                      {plan.period && (
-                        <span className="text-sm text-muted-foreground">{plan.period}</span>
-                      )}
-                    </div>
-                    {plan.note && (
-                      <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{plan.note}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2.5 mb-7 flex-1">
-                    {plan.features.map((feature) => (
-                      <div key={feature} className="flex items-start gap-2 text-xs">
-                        <Check className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                        <span className="leading-relaxed">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {plan.external ? (
-                    <a href={plan.ctaHref}>
-                      <Button variant={plan.variant} className="w-full text-sm" data-testid={plan.btnTestId}>
-                        {plan.cta}
-                      </Button>
-                    </a>
-                  ) : (
-                    <Link href={plan.ctaHref}>
-                      <Button variant={plan.variant} className="w-full text-sm" data-testid={plan.btnTestId}>
-                        {plan.cta}
-                        <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                      </Button>
-                    </Link>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="border-t border-border/40 py-10 px-6">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -363,7 +212,6 @@ export default function Homepage() {
           <nav className="flex items-center gap-6 text-xs text-muted-foreground">
             <a href="#platform" className="hover:text-foreground transition-colors">Platform</a>
             <a href="#security" className="hover:text-foreground transition-colors">Security</a>
-            <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
             <Link href="/login" className="hover:text-foreground transition-colors">Log In</Link>
           </nav>
         </div>
