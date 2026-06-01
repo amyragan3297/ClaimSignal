@@ -3,8 +3,9 @@
  *
  * Security goals:
  *  - In production, NEVER fall back to a hardcoded JWT/session secret.
- *  - In production, NEVER seed default Master/platform-owner credentials.
- *  - Demo/dev seeding is allowed only in development, test, or explicit DEMO_MODE.
+ *  - In ALL environments, NEVER embed admin credentials in source code.
+ *  - Demo/dev seeding is allowed only in development, test, or explicit DEMO_MODE,
+ *    but still requires explicit ADMIN_EMAIL + ADMIN_PASSWORD env/secret values.
  *
  * Nothing in this file logs secret values.
  */
@@ -15,29 +16,32 @@ export const isDevelopment = NODE_ENV === "development";
 export const isTest = NODE_ENV === "test";
 export const isDemoMode = process.env.DEMO_MODE === "true";
 
-// Used only outside production. Clearly labeled so it can never be mistaken
-// for a real secret.
-const DEV_FALLBACK_JWT_SECRET = "claimsignal-dev-only-insecure-secret-DO-NOT-USE-IN-PRODUCTION";
-
 /**
  * Resolve the JWT/session signing secret.
- * - Returns SESSION_SECRET when set (the only acceptable value in production).
- * - In production with no SESSION_SECRET: throws (fail fast, no fallback).
- * - In development/test with no SESSION_SECRET: returns a labeled dev fallback.
+ *
+ * Accepts JWT_SECRET (user-facing name) or SESSION_SECRET (legacy name).
+ * Prefers JWT_SECRET when both are present.
+ *
+ *  - In production with neither set: throws (fail fast, no fallback).
+ *  - In development/test with neither set: returns a labeled insecure fallback
+ *    so the server can start without configuration, but it is clearly marked.
  */
 export function resolveJwtSecret(): string {
-  const secret = process.env.SESSION_SECRET;
+  // Support JWT_SECRET (required secrets list) as primary name.
+  // SESSION_SECRET is accepted as a backward-compatible alias.
+  const secret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
   if (secret && secret.length > 0) return secret;
 
   if (isProduction) {
     throw new Error(
-      "FATAL: SESSION_SECRET is required in production but is not set. " +
-        "Refusing to start with an insecure fallback secret. " +
-        "Set the SESSION_SECRET environment variable and restart.",
+      "FATAL: JWT_SECRET (or SESSION_SECRET) is required in production but is not set. " +
+        "Refusing to start with an insecure fallback. " +
+        "Set the JWT_SECRET environment variable/secret and restart.",
     );
   }
 
-  return DEV_FALLBACK_JWT_SECRET;
+  // Development / test only — clearly labeled, never used in production.
+  return "claimsignal-dev-only-insecure-DO-NOT-USE-IN-PRODUCTION";
 }
 
 /**
@@ -49,48 +53,50 @@ export function isDemoSeedingAllowed(): boolean {
 }
 
 /**
- * Explicit, secure Master credentials for production seeding.
- * Returns null when not fully provided — callers MUST then skip Master creation
- * rather than fall back to defaults.
- */
-export function getProductionMasterCredentials(): { email: string; password: string } | null {
-  const email = process.env.MASTER_EMAIL;
-  const password = process.env.MASTER_INITIAL_PASSWORD;
-  if (email && email.length > 0 && password && password.length > 0) {
-    return { email, password };
-  }
-  return null;
-}
-
-/**
- * Decide which Master credentials (if any) may be used for startup seeding.
+ * Read explicit admin/master credentials from environment secrets.
+ * Returns null when either value is absent — callers must skip seeding.
+ * No hardcoded credential fallbacks are ever used in any environment.
  *
- * Policy:
- *  - Production (including DEMO_MODE=true): ONLY explicit MASTER_EMAIL +
- *    MASTER_INITIAL_PASSWORD. Hardcoded/default credentials are never used in
- *    production. Returns null when those are not provided (caller must skip).
- *  - Development / test: ADMIN_EMAIL/ADMIN_PASSWORD if provided, otherwise a
- *    clearly-labeled demo default. Marked `isDemo: true`.
- *
- * Returns null when no Master should be auto-seeded.
+ * Accepts:
+ *   ADMIN_EMAIL  / MASTER_EMAIL            (primary / legacy alias)
+ *   ADMIN_PASSWORD / MASTER_INITIAL_PASSWORD (primary / legacy alias)
  */
-export function resolveSeedMasterCredentials(): { email: string; password: string; isDemo: boolean } | null {
-  if (isProduction) {
-    const creds = getProductionMasterCredentials();
-    if (!creds) return null;
-    return { email: creds.email, password: creds.password, isDemo: false };
-  }
+export function resolveSeedMasterCredentials(): {
+  email: string;
+  password: string;
+  isDemo: boolean;
+} | null {
+  if (!isDemoSeedingAllowed() && !isProduction) return null;
 
-  if (!isDemoSeedingAllowed()) return null;
+  const email =
+    process.env.ADMIN_EMAIL ||
+    process.env.MASTER_EMAIL;
+
+  const password =
+    process.env.ADMIN_PASSWORD ||
+    process.env.MASTER_INITIAL_PASSWORD;
+
+  if (!email || !email.trim() || !password || !password.trim()) {
+    if (isDevelopment || isTest) {
+      console.warn(
+        "[config] ADMIN_EMAIL / ADMIN_PASSWORD not set — skipping Master seeding. " +
+          "Set both as environment secrets to create the master account on startup.",
+      );
+    }
+    return null;
+  }
 
   return {
-    email: process.env.ADMIN_EMAIL || "admin@claimsignal.com",
-    password: process.env.ADMIN_PASSWORD || "ClaimSignal2026!",
-    isDemo: true,
+    email: email.trim(),
+    password: password.trim(),
+    isDemo: !isProduction,
   };
 }
 
-// Keys whose values must never appear in logs.
+/**
+ * Keys whose values must never appear in logs.
+ * Covers all common naming conventions for sensitive fields.
+ */
 const SENSITIVE_LOG_KEYS = new Set([
   "accessToken",
   "refreshToken",
@@ -99,7 +105,18 @@ const SENSITIVE_LOG_KEYS = new Set([
   "passwordHash",
   "secret",
   "sessionSecret",
+  "jwtSecret",
   "apiKey",
+  "api_key",
+  "adminPassword",
+  "adminToken",
+  "backupEncryptionKey",
+  "gmailAppPassword",
+  "smtpPass",
+  "stripeSecretKey",
+  "stripeWebhookSecret",
+  "openaiApiKey",
+  "stormApiKey",
 ]);
 
 /**
@@ -124,14 +141,14 @@ export function redactSensitive(value: any): any {
  * required production configuration. Logs status without revealing secrets.
  */
 export function assertStartupConfig(): void {
-  // Throws in production if SESSION_SECRET is missing.
+  // Throws in production if neither JWT_SECRET nor SESSION_SECRET is set.
   resolveJwtSecret();
 
   if (isProduction) {
     if (isDemoMode) {
       console.warn("[config] Production running with DEMO_MODE=true — demo accounts/data may be seeded.");
     }
-    console.log("[config] Production startup checks passed: SESSION_SECRET present.");
+    console.log("[config] Production startup checks passed: JWT secret present.");
   } else {
     console.log(`[config] Startup in ${NODE_ENV} mode (demo seeding ${isDemoSeedingAllowed() ? "enabled" : "disabled"}).`);
   }

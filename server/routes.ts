@@ -2764,8 +2764,10 @@ async function seedPlatformOwner() {
   }
 
   // Demo/test login used for the local environment & demos.
+  // Password is configurable via DEMO_USER_PASSWORD env var; the fallback is
+  // intentionally obvious and only ever used in dev/test — never in production.
   const testEmail = "user@claimsignal.test";
-  const testPassword = "password123";
+  const testPassword = process.env.DEMO_USER_PASSWORD || "password123";
   const testExisting = await storage.getUserByEmail(testEmail);
   if (!testExisting) {
     const testPasswordHash = await bcrypt.hash(testPassword, 12);
