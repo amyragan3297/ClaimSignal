@@ -44,3 +44,9 @@ timeoutMs = 20000
 
 [agent]
 integrations = ["javascript_openai_ai_integrations:2.0.0"]
+
+[userenv]
+
+[userenv.shared]
+ADMIN_EMAIL = "claimsingle1@gmail.com"
+ADMIN_PASSWORD = "RANDI3297"
