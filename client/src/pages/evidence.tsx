@@ -34,7 +34,6 @@ import { apiRequest, queryClient, getAccessToken } from "@/lib/queryClient";
 import type {
   EvidenceFile,
   ExtractedEntity,
-  ClaimDraft,
   Claim,
 } from "@shared/schema";
 import {
@@ -149,7 +148,7 @@ interface UploadResult {
   matchConfidence?: number;
   matchConfidenceLabel?: string;
   matchReasons?: string[];
-  draft: ClaimDraft | null;
+  createdClaim?: { id: string; claimNumber: string } | null;
   autoAppliedFields?: string[];
 }
 
@@ -541,10 +540,6 @@ export default function EvidencePage() {
 
   const { data: claims } = useQuery<Claim[]>({ queryKey: ["/api/claims"] });
 
-  const { data: drafts, isLoading: draftsLoading } = useQuery<ClaimDraft[]>({
-    queryKey: ["/api/evidence/drafts"],
-  });
-
   const { data: unmatchedFiles, isLoading: unmatchedLoading } = useQuery<EvidenceFile[]>({
     queryKey: ["/api/evidence/files-unmatched"],
   });
@@ -574,7 +569,7 @@ export default function EvidencePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
       toast({ title: "File matched to claim successfully" });
       setMatchDialogOpen(false);
       setSelectedClaimId("");
@@ -591,7 +586,6 @@ export default function EvidencePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
       toast({ title: "New claim created from extracted data" });
       setMatchDialogOpen(false);
@@ -606,23 +600,12 @@ export default function EvidencePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
       toast({ title: "Saved as unmatched evidence" });
       setMatchDialogOpen(false);
     },
     onError: (err: Error) => {
       toast({ title: "Action failed", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const archiveDraftMutation = useMutation({
-    mutationFn: async (draftId: string) => apiRequest("POST", `/api/evidence/drafts/${draftId}/archive`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
-      toast({ title: "Draft archived" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Archive failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -663,8 +646,8 @@ export default function EvidencePage() {
       const result: UploadResult = await res.json();
       setUploadResult(result);
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
       toast({ title: "File uploaded successfully" });
     } catch (err: unknown) {
       toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
@@ -732,7 +715,7 @@ export default function EvidencePage() {
           Evidence Files
         </h1>
         <p className="text-sm text-muted-foreground">
-          Upload and manage source documents, claim drafts, and unmatched evidence.
+          Upload and manage source documents and unmatched evidence.
         </p>
       </div>
 
@@ -865,12 +848,14 @@ export default function EvidencePage() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">
-                  {uploadResult.draft ? "Claim Draft Created" : "Draft Status"}
+                  {uploadResult.createdClaim ? "Claim Created" : "Claim Status"}
                 </p>
-                {uploadResult.draft ? (
-                  <Badge variant="secondary" className="text-xs" data-testid="badge-draft-created">
-                    Draft #{uploadResult.draft.id.slice(0, 8)}
-                  </Badge>
+                {uploadResult.createdClaim ? (
+                  <Link href={`/claims/${uploadResult.createdClaim.id}`}>
+                    <Badge variant="default" className="text-xs cursor-pointer" data-testid="badge-claim-created">
+                      {uploadResult.createdClaim.claimNumber}
+                    </Badge>
+                  </Link>
                 ) : (
                   <span className="text-xs text-muted-foreground">No claim indicators found — file saved as evidence</span>
                 )}
@@ -944,14 +929,6 @@ export default function EvidencePage() {
             Evidence Files
             {!!evidenceFiles?.length && (
               <Badge variant="secondary" className="ml-2 text-xs">{evidenceFiles.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="drafts" data-testid="tab-claim-drafts">
-            Claim Drafts
-            {!!drafts?.filter(d => d.status === "needs_review").length && (
-              <Badge variant="outline" className="ml-2 text-xs">
-                {drafts.filter(d => d.status === "needs_review").length}
-              </Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="unmatched" data-testid="tab-unmatched">
@@ -1159,160 +1136,6 @@ export default function EvidencePage() {
           )}
         </TabsContent>
 
-        {/* ── Claim Drafts Tab ────────────────────────────────────────────── */}
-        <TabsContent value="drafts" className="space-y-4 mt-4">
-          <p className="text-sm text-muted-foreground">
-            Potential claims created from extracted document data. Review, create, or archive each draft.
-          </p>
-
-          {draftsLoading ? (
-            <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>
-          ) : !drafts?.filter(d => d.status === "needs_review").length ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                <p className="text-muted-foreground font-medium">No claim drafts pending review</p>
-                <p className="text-sm text-muted-foreground/70 mt-1">
-                  Drafts are created automatically when uploaded documents contain claim indicators.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {drafts!.filter(d => d.status === "needs_review").map(draft => {
-                const sourceFile = evidenceFiles?.find(f => f.id === draft.createdFromEvidenceFileId);
-                const conf: number | null = draft.extractionConfidence ?? null;
-                const confLabel = conf == null ? null : conf >= 0.8 ? "High" : conf >= 0.5 ? "Medium" : "Low";
-                const confVariant: BadgeVariant = conf == null ? "outline" : conf >= 0.8 ? "default" : conf >= 0.5 ? "secondary" : "destructive";
-
-                return (
-                  <Card key={draft.id} data-testid={`card-draft-${draft.id}`}>
-                    <CardContent className="p-4 space-y-3">
-                      {/* Draft header */}
-                      <div className="flex items-start justify-between gap-2 flex-wrap">
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-0.5">Draft ID</p>
-                          <p className="text-sm font-mono text-muted-foreground">{draft.id.slice(0, 8)}</p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {confLabel && (
-                            <Badge variant={confVariant} className="text-xs" data-testid={`badge-draft-conf-${draft.id}`}>
-                              {(conf! * 100).toFixed(0)}% — {confLabel} Confidence
-                            </Badge>
-                          )}
-                          <Badge variant="outline" className="text-xs capitalize" data-testid={`badge-draft-status-${draft.id}`}>
-                            {draft.status?.replace("_", " ") || "Needs Review"}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Source file */}
-                      {(draft.sourceFileName || sourceFile) && (
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-0.5">Source File</p>
-                          <p className="text-sm truncate" data-testid={`text-draft-source-${draft.id}`}>
-                            {draft.sourceFileName || sourceFile?.fileName}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Extracted fields grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                        {draft.extractedClaimNumber && (
-                          <div className="rounded bg-muted/40 px-2 py-1.5">
-                            <p className="text-muted-foreground/70 mb-0.5">Claim #</p>
-                            <p className="font-medium" data-testid={`text-draft-claim-number-${draft.id}`}>{draft.extractedClaimNumber}</p>
-                          </div>
-                        )}
-                        {draft.extractedInsured && (
-                          <div className="rounded bg-muted/40 px-2 py-1.5">
-                            <p className="text-muted-foreground/70 mb-0.5">Homeowner</p>
-                            <p className="font-medium" data-testid={`text-draft-insured-${draft.id}`}>{draft.extractedInsured}</p>
-                          </div>
-                        )}
-                        {draft.extractedCarrier && (
-                          <div className="rounded bg-muted/40 px-2 py-1.5">
-                            <p className="text-muted-foreground/70 mb-0.5">Carrier</p>
-                            <p className="font-medium" data-testid={`text-draft-carrier-${draft.id}`}>{draft.extractedCarrier}</p>
-                          </div>
-                        )}
-                        {draft.extractedAdjuster && (
-                          <div className="rounded bg-muted/40 px-2 py-1.5">
-                            <p className="text-muted-foreground/70 mb-0.5">Adjuster</p>
-                            <p className="font-medium" data-testid={`text-draft-adjuster-${draft.id}`}>{draft.extractedAdjuster}</p>
-                          </div>
-                        )}
-                        {draft.extractedAddress && (
-                          <div className="rounded bg-muted/40 px-2 py-1.5">
-                            <p className="text-muted-foreground/70 mb-0.5">Address</p>
-                            <p className="font-medium" data-testid={`text-draft-address-${draft.id}`}>{draft.extractedAddress}</p>
-                          </div>
-                        )}
-                        {draft.extractedDateOfLoss && (
-                          <div className="rounded bg-muted/40 px-2 py-1.5">
-                            <p className="text-muted-foreground/70 mb-0.5">Date of Loss</p>
-                            <p className="font-medium" data-testid={`text-draft-dol-${draft.id}`}>{fmtDate(draft.extractedDateOfLoss)}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex flex-wrap gap-2 pt-1 border-t border-border">
-                        {draft.createdFromEvidenceFileId && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              disabled={createClaimMutation.isPending}
-                              onClick={() => createClaimMutation.mutate(draft.createdFromEvidenceFileId!)}
-                              data-testid={`button-draft-create-claim-${draft.id}`}
-                            >
-                              {createClaimMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <PlusCircle className="w-3 h-3" />}
-                              Create New Claim
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                const ext = sourceFile ? getExtraction(sourceFile) : null;
-                                openMatchDialog(draft.createdFromEvidenceFileId!, ext);
-                              }}
-                              data-testid={`button-draft-match-${draft.id}`}
-                            >
-                              <LinkIcon className="w-3 h-3" />
-                              Match to Existing Claim
-                            </Button>
-                            {sourceFile && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openExtractionReview(draft.createdFromEvidenceFileId!, sourceFile.claimId)}
-                                data-testid={`button-draft-review-${draft.id}`}
-                              >
-                                <Brain className="w-3 h-3" />
-                                Review Extraction
-                              </Button>
-                            )}
-                          </>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={archiveDraftMutation.isPending}
-                          onClick={() => archiveDraftMutation.mutate(draft.id)}
-                          data-testid={`button-draft-archive-${draft.id}`}
-                        >
-                          {archiveDraftMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Archive className="w-3 h-3" />}
-                          Archive Draft
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
 
         {/* ── Unmatched Evidence Tab ──────────────────────────────────────── */}
         <TabsContent value="unmatched" className="space-y-4 mt-4">
@@ -1388,7 +1211,7 @@ export default function EvidencePage() {
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Match to Claim</DialogTitle>
-            <DialogDescription>Link this file or draft to an existing claim.</DialogDescription>
+            <DialogDescription>Link this file to an existing claim.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">

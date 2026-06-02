@@ -90,7 +90,40 @@ export default function PlaybooksPage() {
 
   const [form, setForm] = useState({
     title: "", scenarioType: "", claimType: "", carrier: "", denialReason: "",
-    actionTaken: "", whatWorked: "", outcome: "", recommendedNextStep: "",
+    actionTaken: "", whatWorked: "", whatDidNotWork: "", timelineSummary: "",
+    outcome: "", recommendedNextStep: "",
+  });
+  const [aiGenerated, setAiGenerated] = useState(false);
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/playbooks/generate", {
+        scenarioType: form.scenarioType || undefined,
+        carrier: form.carrier || undefined,
+        claimType: form.claimType || undefined,
+        denialReason: form.denialReason || undefined,
+      });
+      return res.json() as Promise<{
+        title: string; actionTaken: string; whatWorked: string; whatDidNotWork: string;
+        timelineSummary: string; recommendedNextStep: string; outcome: string;
+        missingScopeItems: string[]; documentationUsed: string[]; confidenceScore: number;
+      }>;
+    },
+    onSuccess: (data) => {
+      setForm((f) => ({
+        ...f,
+        title: data.title || f.title,
+        actionTaken: data.actionTaken || f.actionTaken,
+        whatWorked: data.whatWorked || f.whatWorked,
+        whatDidNotWork: data.whatDidNotWork || f.whatDidNotWork,
+        timelineSummary: data.timelineSummary || f.timelineSummary,
+        recommendedNextStep: data.recommendedNextStep || f.recommendedNextStep,
+        outcome: data.outcome || f.outcome,
+      }));
+      setAiGenerated(true);
+      toast({ title: "AI generation complete", description: "Fields populated — review and save." });
+    },
+    onError: (e: Error) => toast({ title: "AI generation failed", description: e.message, variant: "destructive" }),
   });
 
   const createMutation = useMutation({
@@ -99,7 +132,8 @@ export default function PlaybooksPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/playbooks"] });
       toast({ title: "Playbook created" });
       setCreateOpen(false);
-      setForm({ title: "", scenarioType: "", claimType: "", carrier: "", denialReason: "", actionTaken: "", whatWorked: "", outcome: "", recommendedNextStep: "" });
+      setAiGenerated(false);
+      setForm({ title: "", scenarioType: "", claimType: "", carrier: "", denialReason: "", actionTaken: "", whatWorked: "", whatDidNotWork: "", timelineSummary: "", outcome: "", recommendedNextStep: "" });
     },
     onError: (e: Error) => toast({ title: "Create failed", description: e.message, variant: "destructive" }),
   });
@@ -128,29 +162,57 @@ export default function PlaybooksPage() {
           </p>
         </div>
         {isMaster && (
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <Dialog open={createOpen} onOpenChange={(o) => {
+            setCreateOpen(o);
+            if (!o) { setAiGenerated(false); setForm({ title: "", scenarioType: "", claimType: "", carrier: "", denialReason: "", actionTaken: "", whatWorked: "", whatDidNotWork: "", timelineSummary: "", outcome: "", recommendedNextStep: "" }); }
+          }}>
             <DialogTrigger asChild>
               <Button data-testid="button-new-playbook"><Plus className="w-4 h-4" /> New Playbook</Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Create Playbook Entry</DialogTitle></DialogHeader>
               <div className="space-y-3">
-                <Field label="Title"><Input data-testid="input-playbook-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Scenario Type"><Input data-testid="input-playbook-scenario" placeholder="denial_overturned" value={form.scenarioType} onChange={(e) => setForm({ ...form, scenarioType: e.target.value })} /></Field>
-                  <Field label="Claim Type"><Input data-testid="input-playbook-claimtype" value={form.claimType} onChange={(e) => setForm({ ...form, claimType: e.target.value })} /></Field>
-                  <Field label="Carrier"><Input data-testid="input-playbook-carrier" value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value })} /></Field>
-                  <Field label="Outcome"><Input data-testid="input-playbook-outcome" value={form.outcome} onChange={(e) => setForm({ ...form, outcome: e.target.value })} /></Field>
+                {/* Seed fields — used as AI context */}
+                <div className="rounded-md border border-border bg-muted/30 p-3 space-y-3">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Seed inputs — provide any you know, then generate</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Scenario Type"><Input data-testid="input-playbook-scenario" placeholder="denial_overturned" value={form.scenarioType} onChange={(e) => setForm({ ...form, scenarioType: e.target.value })} /></Field>
+                    <Field label="Claim Type"><Input data-testid="input-playbook-claimtype" placeholder="hail, wind, fire…" value={form.claimType} onChange={(e) => setForm({ ...form, claimType: e.target.value })} /></Field>
+                    <Field label="Carrier"><Input data-testid="input-playbook-carrier" placeholder="e.g. Allstate" value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value })} /></Field>
+                    <Field label="Denial Reason"><Input data-testid="input-playbook-denial" placeholder="e.g. pre-existing damage" value={form.denialReason} onChange={(e) => setForm({ ...form, denialReason: e.target.value })} /></Field>
+                  </div>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    variant="secondary"
+                    disabled={generateMutation.isPending}
+                    onClick={() => generateMutation.mutate()}
+                    data-testid="button-generate-playbook"
+                  >
+                    {generateMutation.isPending
+                      ? <><Loader2 className="w-4 h-4 animate-spin mr-1.5" />Generating…</>
+                      : <><Sparkles className="w-4 h-4 mr-1.5" />Generate with AI</>}
+                  </Button>
                 </div>
-                <Field label="Denial Reason"><Input data-testid="input-playbook-denial" value={form.denialReason} onChange={(e) => setForm({ ...form, denialReason: e.target.value })} /></Field>
-                <Field label="Action Taken"><Textarea data-testid="input-playbook-action" className="resize-none" value={form.actionTaken} onChange={(e) => setForm({ ...form, actionTaken: e.target.value })} /></Field>
-                <Field label="What Worked"><Textarea data-testid="input-playbook-worked" className="resize-none" value={form.whatWorked} onChange={(e) => setForm({ ...form, whatWorked: e.target.value })} /></Field>
-                <Field label="Recommended Next Step"><Textarea data-testid="input-playbook-nextstep" className="resize-none" value={form.recommendedNextStep} onChange={(e) => setForm({ ...form, recommendedNextStep: e.target.value })} /></Field>
+
+                {/* AI-generated / editable fields */}
+                {aiGenerated && (
+                  <div className="flex items-center gap-1.5 text-xs text-primary">
+                    <Sparkles className="w-3 h-3" />
+                    <span>AI-generated — review and edit before saving</span>
+                  </div>
+                )}
+                <Field label="Title"><Input data-testid="input-playbook-title" placeholder="Concise scenario + outcome" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+                <Field label="Outcome"><Input data-testid="input-playbook-outcome" placeholder="e.g. denial_overturned" value={form.outcome} onChange={(e) => setForm({ ...form, outcome: e.target.value })} /></Field>
+                <Field label="Action Taken"><Textarea data-testid="input-playbook-action" className="resize-none min-h-[80px]" placeholder="What actions were taken on this type of claim?" value={form.actionTaken} onChange={(e) => setForm({ ...form, actionTaken: e.target.value })} /></Field>
+                <Field label="What Worked"><Textarea data-testid="input-playbook-worked" className="resize-none min-h-[72px]" placeholder="Tactics or documentation that produced results" value={form.whatWorked} onChange={(e) => setForm({ ...form, whatWorked: e.target.value })} /></Field>
+                <Field label="What Didn't Work"><Textarea data-testid="input-playbook-notworked" className="resize-none" placeholder="Approaches that failed or stalled" value={form.whatDidNotWork} onChange={(e) => setForm({ ...form, whatDidNotWork: e.target.value })} /></Field>
+                <Field label="Recommended Next Step"><Textarea data-testid="input-playbook-nextstep" className="resize-none" placeholder="Most important action right now" value={form.recommendedNextStep} onChange={(e) => setForm({ ...form, recommendedNextStep: e.target.value })} /></Field>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setCreateOpen(false)} data-testid="button-cancel-playbook">Cancel</Button>
+                <Button variant="outline" onClick={() => { setCreateOpen(false); setAiGenerated(false); }} data-testid="button-cancel-playbook">Cancel</Button>
                 <Button disabled={!form.title || createMutation.isPending} onClick={() => createMutation.mutate()} data-testid="button-submit-playbook">
-                  {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />} Create
+                  {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1" />} Save Playbook
                 </Button>
               </DialogFooter>
             </DialogContent>

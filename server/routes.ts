@@ -25,7 +25,7 @@ import evidenceRouter from "./evidence";
 import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
-import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus } from "./ai-services";
+import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus, generatePlaybookEntry } from "./ai-services";
 import { getClaimWeather } from "./weather";
 import express from "express";
 import { createHash } from "crypto";
@@ -1007,6 +1007,20 @@ export async function registerRoutes(
       res.json(sanitizePlaybookRecord(entry, role));
     } catch (err) {
       res.status(400).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/playbooks/generate", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      if (!isOpenAIConfigured()) {
+        return res.status(503).json({ message: "OpenAI integration is not configured. Cannot generate playbook entry." });
+      }
+      const { scenarioType, carrier, claimType, denialReason } = req.body as Record<string, string | undefined>;
+      const generated = await generatePlaybookEntry({ scenarioType, carrier, claimType, denialReason });
+      return res.json(generated);
+    } catch (err) {
+      recordAiError("generatePlaybookEntry", err);
+      return res.status(500).json({ message: (err as Error).message });
     }
   });
 

@@ -60,7 +60,8 @@ async function run() {
       "claim number entity extracted from PDF text",
       (r1.json?.entities || []).some((e: any) => e.entityType === "claim_number"),
     );
-    check("a claim draft was created from extracted indicators", !!r1.json?.draft);
+    check("a real claim was created from extracted indicators", !!r1.json?.createdClaim?.id);
+    check("created claim carries the extracted claim number", r1.json?.createdClaim?.claimNumber === "ABC-12345");
     check(
       "extractionStatus is 'complete' when AI configured",
       r1.json?.file?.extractionStatus === "complete",

@@ -153,7 +153,7 @@ interface UploadResult {
   file: { id: string; fileName: string; docCategory?: string; extractionStatus?: string; confidence?: number };
   extraction: ExtractionRecord | null;
   matchedClaimId: string | null;
-  draft: { id: string } | null;
+  createdClaim?: { id: string; claimNumber: string } | null;
 }
 
 interface CreateFromExtractionResult {
@@ -270,7 +270,7 @@ function CreateClaimDialog({
           const exFile = body.existingFile;
           const ext = (exFile.extractedJson as { extraction?: ExtractionRecord } | null)?.extraction ?? null;
           toast({ title: "Document already in library", description: "Loading extraction from existing file." });
-          setUploadResult({ file: exFile, extraction: ext, matchedClaimId: exFile.claimId, draft: null });
+          setUploadResult({ file: exFile, extraction: ext, matchedClaimId: exFile.claimId, createdClaim: null });
           populateFields(ext);
           queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
           setMode("review");
@@ -287,7 +287,7 @@ function CreateClaimDialog({
       setUploadResult(result);
       populateFields(result.extraction);
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
       setMode("review");
     } catch (err: unknown) {
       toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });

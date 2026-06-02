@@ -458,6 +458,90 @@ ${playbookContext}`;
   };
 }
 
+// ── Playbook: AI entry generation from seed inputs ────────────────────────────
+
+export interface GeneratedPlaybookEntry {
+  title: string;
+  actionTaken: string;
+  whatWorked: string;
+  whatDidNotWork: string;
+  timelineSummary: string;
+  recommendedNextStep: string;
+  missingScopeItems: string[];
+  documentationUsed: string[];
+  outcome: string;
+  confidenceScore: number;
+}
+
+export async function generatePlaybookEntry(seed: {
+  scenarioType?: string;
+  carrier?: string;
+  claimType?: string;
+  denialReason?: string;
+}): Promise<GeneratedPlaybookEntry> {
+  const client = getOpenAIClient();
+
+  const seedLines = [
+    seed.scenarioType ? `Scenario type: ${seed.scenarioType}` : null,
+    seed.carrier ? `Carrier: ${seed.carrier}` : null,
+    seed.claimType ? `Claim type: ${seed.claimType}` : null,
+    seed.denialReason ? `Denial reason: ${seed.denialReason}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const userPrompt = `You are generating a playbook entry for a property insurance claims intelligence platform. Based on the seed inputs below, produce a realistic, actionable playbook entry that describes what action was taken, what worked, what didn't, the recommended next step, and supporting context. Do not invent PII (no homeowner names, addresses, policy numbers). Use professional insurance/restoration industry language. Return JSON matching this exact shape:
+
+{
+  "title": "concise playbook title (10 words max) summarizing the scenario and outcome",
+  "actionTaken": "2-4 sentences describing the specific actions taken on this type of claim",
+  "whatWorked": "2-3 sentences on the tactics or documentation that produced a positive result",
+  "whatDidNotWork": "1-2 sentences on approaches that failed or stalled the claim",
+  "timelineSummary": "1-2 sentences describing the typical timeline arc for this scenario",
+  "recommendedNextStep": "1-2 sentences — the most important action for a claim in this situation right now",
+  "missingScopeItems": ["scope line item commonly missed", "..."],
+  "documentationUsed": ["document type that supported the case", "..."],
+  "outcome": "brief outcome label (e.g. denial_overturned, supplement_approved, partial_settlement)",
+  "confidenceScore": 0.0-1.0 float based on how specific/actionable the entry is
+}
+
+Keep missingScopeItems and documentationUsed to 3-5 items each. Base everything on common property insurance claim patterns for the given inputs.
+
+SEED INPUTS:
+${seedLines || "(no seed inputs — generate a general best-practice playbook entry)"}`;
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+  return {
+    title: typeof parsed.title === "string" ? parsed.title : "AI-Generated Playbook Entry",
+    actionTaken: typeof parsed.actionTaken === "string" ? parsed.actionTaken : "",
+    whatWorked: typeof parsed.whatWorked === "string" ? parsed.whatWorked : "",
+    whatDidNotWork: typeof parsed.whatDidNotWork === "string" ? parsed.whatDidNotWork : "",
+    timelineSummary: typeof parsed.timelineSummary === "string" ? parsed.timelineSummary : "",
+    recommendedNextStep: typeof parsed.recommendedNextStep === "string" ? parsed.recommendedNextStep : "",
+    missingScopeItems: Array.isArray(parsed.missingScopeItems)
+      ? (parsed.missingScopeItems as unknown[]).map(String)
+      : [],
+    documentationUsed: Array.isArray(parsed.documentationUsed)
+      ? (parsed.documentationUsed as unknown[]).map(String)
+      : [],
+    outcome: typeof parsed.outcome === "string" ? parsed.outcome : "",
+    confidenceScore: typeof parsed.confidenceScore === "number"
+      ? Math.min(1, Math.max(0, parsed.confidenceScore))
+      : 0.75,
+  };
+}
+
 // ── Playbook: AI-enhanced natural language query parsing ──────────────────────
 // Parses a free-text search query into structured PlaybookFilters.
 // Caller is responsible for importing PlaybookFilters from playbook-engine.
