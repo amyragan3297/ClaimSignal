@@ -2714,11 +2714,25 @@ function sanitizeUser(user: any) {
 }
 
 // Create or promote a Master (super_admin) platform-owner user. Idempotent.
+// Also syncs the password hash whenever ADMIN_PASSWORD secret changes.
 async function ensureMasterUser(email: string, password: string, fullName: string) {
   const existing = await storage.getUserByEmail(email);
   if (existing) {
+    const updates: Record<string, any> = {};
     if (!existing.isPlatformOwner || existing.role !== "super_admin") {
-      await storage.updateUser(existing.id, { isPlatformOwner: true, role: "super_admin" });
+      updates.isPlatformOwner = true;
+      updates.role = "super_admin";
+    }
+    // Sync password: if the secret changed since last seed, update the hash.
+    const passwordMatch = existing.passwordHash
+      ? await bcrypt.compare(password, existing.passwordHash)
+      : false;
+    if (!passwordMatch) {
+      updates.passwordHash = await bcrypt.hash(password, 12);
+      console.log("[ensureMasterUser] Password synced from ADMIN_PASSWORD secret.");
+    }
+    if (Object.keys(updates).length > 0) {
+      await storage.updateUser(existing.id, updates);
     }
     return;
   }

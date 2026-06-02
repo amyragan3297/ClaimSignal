@@ -87,7 +87,7 @@ export function resolveSeedMasterCredentials(): {
   }
 
   return {
-    email: email.trim(),
+    email: email.trim().toLowerCase(),
     password: password.trim(),
     isDemo: !isProduction,
   };
