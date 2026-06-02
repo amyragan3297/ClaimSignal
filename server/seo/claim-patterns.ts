@@ -1,5 +1,5 @@
 import { ssrShell } from "./shell";
-import { CARRIERS, type CarrierProfile } from "./carriers";
+import { CARRIERS } from "./carriers";
 
 export interface LossTypeProfile {
   slug: string;

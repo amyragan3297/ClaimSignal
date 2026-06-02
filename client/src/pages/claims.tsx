@@ -1204,6 +1204,25 @@ export default function ClaimsPage() {
                               {claim.rcvAmount && <span>RCV ${Number(claim.rcvAmount).toLocaleString()}</span>}
                             </div>
                           </div>
+                          {isMaster ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="shrink-0 text-xs"
+                              onClick={() => setLocation(`/claims/${claim.id}`)}
+                              data-testid={`button-open-shared-${claim.id || idx}`}
+                            >
+                              Open
+                            </Button>
+                          ) : (
+                            <span
+                              className="shrink-0 text-xs text-muted-foreground/50 border border-border/40 rounded px-2 py-1 cursor-not-allowed select-none"
+                              title="Masked record — full access requires Master role"
+                              data-testid={`button-open-shared-masked-${claim.id || idx}`}
+                            >
+                              Masked
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}

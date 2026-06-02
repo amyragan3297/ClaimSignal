@@ -321,8 +321,23 @@ export async function registerRoutes(
     try {
       const role = req.auth!.role;
       const orgId = req.auth!.organizationId;
+      const includeDemoRecords = req.query.includeDemoRecords === "true" && role === "super_admin";
 
-      const allClaims = await storage.getAllClaimsAcrossTenants();
+      let allClaims = await storage.getAllClaimsAcrossTenants();
+
+      // Filter out demo/seed organization records unless explicitly requested by Master.
+      // Demo records are owned by known test accounts seeded during development.
+      if (!includeDemoRecords) {
+        const DEMO_SEED_EMAILS = ["user@claimsignal.test", "test@example.com"];
+        const demoOrgIds = new Set<string>();
+        for (const email of DEMO_SEED_EMAILS) {
+          const u = await storage.getUserByEmail(email);
+          if (u) demoOrgIds.add(u.organizationId);
+        }
+        if (demoOrgIds.size > 0) {
+          allClaims = allClaims.filter(c => !demoOrgIds.has(c.organizationId));
+        }
+      }
 
       await storage.createAuditLog({
         organizationId: orgId,

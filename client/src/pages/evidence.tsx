@@ -143,12 +143,14 @@ interface UploadResult {
   file: EvidenceFile;
   entities: ExtractedEntity[];
   extraction?: ExtractionData | null;
+  extractionError?: string | null;
   matchedClaimId: string | null;
   autoMatched?: boolean;
   matchConfidence?: number;
   matchConfidenceLabel?: string;
   matchReasons?: string[];
   draft: ClaimDraft | null;
+  autoAppliedFields?: string[];
 }
 
 interface DuplicateResult {
@@ -875,7 +877,32 @@ export default function EvidencePage() {
               </div>
             </div>
 
-            {uploadResult.extraction && (
+            {uploadResult.autoAppliedFields && uploadResult.autoAppliedFields.length > 0 && (
+              <div className="flex items-center gap-3 rounded-md border border-green-500/30 bg-green-500/5 p-3" data-testid="banner-auto-applied">
+                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-green-400">
+                    {uploadResult.autoAppliedFields.length} field{uploadResult.autoAppliedFields.length !== 1 ? "s" : ""} auto-populated on the claim
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {uploadResult.autoAppliedFields.slice(0, 5).join(", ")}{uploadResult.autoAppliedFields.length > 5 ? ` + ${uploadResult.autoAppliedFields.length - 5} more` : ""}
+                  </p>
+                </div>
+                {uploadResult.extraction && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openExtractionReview(uploadResult.file.id, uploadResult.matchedClaimId)}
+                    data-testid="button-review-extraction-upload"
+                  >
+                    <Brain className="w-4 h-4" />
+                    Review
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {!uploadResult.autoAppliedFields?.length && uploadResult.extraction && (
               <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 p-3">
                 <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -897,6 +924,13 @@ export default function EvidencePage() {
                   <Brain className="w-4 h-4" />
                   Review & Apply
                 </Button>
+              </div>
+            )}
+
+            {uploadResult.extractionError && !uploadResult.extraction && (
+              <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3" data-testid="banner-extraction-error">
+                <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                <p className="text-sm text-amber-400">{uploadResult.extractionError}</p>
               </div>
             )}
           </CardContent>

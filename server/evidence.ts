@@ -342,18 +342,40 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     const classification = classifyDocument(textContent);
     const entities = extractEntities(textContent);
 
+    // ── Debug logging (all PDFs + any file matching DEBUG_EXTRACTION env) ──
+    const debugExtraction = fileType === "pdf" || process.env.DEBUG_EXTRACTION === "true";
+    if (debugExtraction) {
+      console.log(`[extraction-debug] file="${req.file.originalname}" fileType=${fileType} sha256=${sha256.slice(0, 12)}`);
+      console.log(`[extraction-debug] text_length=${textContent.length}`);
+      if (textContent.length > 0) {
+        console.log(`[extraction-debug] text_preview=\n${textContent.slice(0, 2000)}`);
+      } else {
+        console.log(`[extraction-debug] text_preview=(empty — pdf-parse extracted nothing)`);
+      }
+    }
+
     // ── LLM field extraction (runs after rule-based, non-blocking on failure) ──
     let llmExtraction: ExtractionResult | null = null;
+    let llmExtractionError: string | null = null;
     if (isOpenAIConfigured() && textContent && textContent.trim().length > 80) {
       try {
         llmExtraction = await extractClaimFieldsFromText(textContent, classification.category);
         console.log(`[ai-extraction] success for ${req.file.originalname}, confidence=${llmExtraction.confidence}`);
+        if (debugExtraction) {
+          console.log(`[extraction-debug] llm_result=${JSON.stringify(llmExtraction)}`);
+        }
       } catch (aiErr) {
+        llmExtractionError = (aiErr as Error)?.message ?? "unknown error";
         recordAiError("extractClaimFieldsFromText/upload", aiErr);
-        console.error("[ai-extraction] non-fatal:", (aiErr as Error)?.message);
+        console.error("[ai-extraction] non-fatal:", llmExtractionError);
       }
-    } else if (isOpenAIConfigured() && (!textContent || textContent.trim().length <= 80)) {
-      console.log(`[ai-extraction] skipped for ${req.file.originalname} — no readable text content (fileType=${fileType})`);
+    } else if (!textContent || textContent.trim().length <= 80) {
+      llmExtractionError = "Document uploaded but text extraction failed.";
+      if (isOpenAIConfigured()) {
+        console.log(`[ai-extraction] skipped for ${req.file.originalname} — no readable text content (fileType=${fileType})`);
+      }
+    } else {
+      llmExtractionError = "Document uploaded but AI structured extraction failed.";
     }
 
     // Pre-selected claim wins; otherwise attempt high-confidence auto-match.
@@ -421,7 +443,84 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         }
       }
     }
-    
+
+    // ── Auto-apply LLM extraction to matched claim ──────────────────────────
+    // When extraction succeeds and the file is linked to a claim (pre-selected
+    // or auto-matched), write extracted fields directly to the claim record so
+    // the claim detail page reflects all document data without requiring a
+    // separate manual "Apply" step in the Evidence UI.
+    let autoAppliedFields: string[] = [];
+    if (claimId && matchedClaim && llmExtraction) {
+      const APPLY_FIELD_MAP: Record<string, string> = {
+        claimNumber:              "claimNumber",
+        policyNumber:             "policyNumber",
+        homeownerName:            "homeownerName",
+        insuredName:              "insuredName",
+        carrier:                  "carrier",
+        propertyAddress:          "propertyAddress",
+        city:                     "city",
+        state:                    "state",
+        zipCode:                  "zipCode",
+        dateOfLoss:               "dateOfLoss",
+        inspectionDate:           "inspectionDate",
+        rcv:                      "rcvAmount",
+        acv:                      "acvAmount",
+        deductible:               "deductible",
+        supplementRequested:      "supplementRequested",
+        supplementApproved:       "supplementApproved",
+        recoverableDepreciation:  "recoverableDepreciation",
+        denialReason:             "denialReason",
+        initialOutcome:           "initialOutcome",
+        finalOutcome:             "finalOutcome",
+        iaFirm:                   "iaFirm",
+        adjusterName:             "adjusterName",
+        adjusterPhone:            "adjusterPhone",
+        adjusterEmail:            "adjusterEmail",
+      };
+      const DATE_APPLY_KEYS = new Set(["dateOfLoss", "inspectionDate"]);
+      const NUMERIC_APPLY_KEYS = new Set([
+        "rcv", "acv", "deductible", "supplementRequested",
+        "supplementApproved", "recoverableDepreciation",
+      ]);
+
+      const claimUpdate: Record<string, any> = {};
+      const ex = llmExtraction as any;
+      for (const [exKey, claimKey] of Object.entries(APPLY_FIELD_MAP)) {
+        const raw = ex[exKey];
+        if (!raw || String(raw).trim() === "") continue;
+        const val = String(raw).trim();
+        if (DATE_APPLY_KEYS.has(exKey)) {
+          const d = new Date(val);
+          if (!isNaN(d.getTime())) claimUpdate[claimKey] = d;
+        } else if (NUMERIC_APPLY_KEYS.has(exKey)) {
+          const n = parseFloat(val.replace(/[$,\s]/g, ""));
+          if (!isNaN(n)) claimUpdate[claimKey] = String(n);
+        } else {
+          // Only apply if claim field is currently blank/null — never overwrite
+          // a field the user has already filled in manually.
+          const existingVal = (matchedClaim as any)[claimKey];
+          if (existingVal == null || existingVal === "") {
+            claimUpdate[claimKey] = val;
+          }
+        }
+      }
+
+      if (Object.keys(claimUpdate).length > 0) {
+        try {
+          await storage.updateClaim(claimId, matchedClaim.organizationId, claimUpdate as any);
+          autoAppliedFields = Object.keys(claimUpdate);
+          console.log(`[ai-auto-apply] applied ${autoAppliedFields.length} fields to claim ${claimId} from "${req.file!.originalname}": ${autoAppliedFields.join(", ")}`);
+          if (debugExtraction) {
+            console.log(`[extraction-debug] auto_apply_payload=${JSON.stringify(claimUpdate)}`);
+          }
+        } catch (applyErr: any) {
+          console.error(`[ai-auto-apply] non-fatal — failed to apply extraction to claim ${claimId}:`, applyErr?.message);
+        }
+      } else {
+        console.log(`[ai-auto-apply] no new fields to apply for claim ${claimId} from "${req.file!.originalname}" (all fields already populated)`);
+      }
+    }
+
     // Only create a Claim Draft when extraction finds at least one meaningful
     // claim indicator. Do NOT create a draft just because a file was uploaded.
     let draft = null;
@@ -495,6 +594,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       file: evidenceFile,
       entities,
       extraction: llmExtraction,
+      extractionError: llmExtractionError,
       classification,
       matchedClaimId: claimId,
       autoMatched: !!autoMatch,
@@ -502,6 +602,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       matchConfidenceLabel: matchConfidenceLabel(bestScore),
       matchReasons: ranked[0]?.reasons || [],
       draft,
+      autoAppliedFields,
     });
   } catch (err) {
     console.error("Evidence upload error:", err);
