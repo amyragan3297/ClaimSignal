@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, getAccessToken } from "@/lib/queryClient";
 import type {
@@ -972,9 +973,14 @@ export default function EvidencePage() {
                           </TableCell>
                           <TableCell className="text-sm" data-testid={`text-claim-match-${file.id}`}>
                             {file.claimId ? (
-                              <span className="font-mono text-xs">
+                              <Link
+                                href={`/claims/${file.claimId}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="font-mono text-xs text-primary hover:underline"
+                                data-testid={`link-claim-${file.id}`}
+                              >
                                 {claimsById.get(file.claimId)?.claimNumber || file.claimId.slice(0, 8) + "…"}
-                              </span>
+                              </Link>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
@@ -1036,9 +1042,17 @@ export default function EvidencePage() {
                   <div>
                     <p className="text-xs text-muted-foreground">Matched Claim</p>
                     <p className="text-sm mt-1" data-testid="text-detail-claim">
-                      {selectedFile.claimId
-                        ? claimsById.get(selectedFile.claimId)?.claimNumber || selectedFile.claimId.slice(0, 8) + "…"
-                        : <span className="text-muted-foreground">—</span>}
+                      {selectedFile.claimId ? (
+                        <Link
+                          href={`/claims/${selectedFile.claimId}`}
+                          className="text-primary hover:underline font-medium"
+                          data-testid="link-detail-claim"
+                        >
+                          {claimsById.get(selectedFile.claimId)?.claimNumber || selectedFile.claimId.slice(0, 8) + "…"}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </p>
                   </div>
                 </div>
