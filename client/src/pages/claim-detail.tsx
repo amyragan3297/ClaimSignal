@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
@@ -185,9 +184,15 @@ export default function ClaimDetailPage() {
     enabled: !!claimId,
   });
 
+  interface PlaybookRecommendation {
+    playbook: { id: string; title: string; recommendedNextStep?: string | null };
+    matchScore: number;
+    matchReasons?: string[];
+  }
+
   const { data: playbookRecs } = useQuery<{
     method: string;
-    recommendations: any[];
+    recommendations: PlaybookRecommendation[];
     aiStrategy?: {
       summary: string;
       prioritizedSteps: Array<{ step: string; rationale: string; priority: "critical" | "high" | "medium" }>;
@@ -242,7 +247,18 @@ export default function ClaimDetailPage() {
   });
 
   // ── Weather ──
-  const { data: weatherData, isLoading: weatherLoading } = useQuery<{ available: boolean; weather?: any; reason?: string }>({
+  interface WeatherSnapshot {
+    summary: string;
+    location: string;
+    date: string;
+    tempMinC: number | null;
+    tempMaxC: number | null;
+    windGustMaxKmh: number | null;
+    precipitationMm: number | null;
+    snowfallCm: number | null;
+  }
+
+  const { data: weatherData, isLoading: weatherLoading } = useQuery<{ available: boolean; weather?: WeatherSnapshot; reason?: string }>({
     queryKey: ["/api/claims", claimId, "weather"],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/claims/${claimId}/weather`);
@@ -283,8 +299,10 @@ export default function ClaimDetailPage() {
   const playbookForm = useForm<{ title: string; actionTaken: string; whatWorked: string; outcome: string; recommendedNextStep: string }>({
     defaultValues: { title: "", actionTaken: "", whatWorked: "", outcome: "", recommendedNextStep: "" },
   });
+  type PlaybookFormData = { title: string; actionTaken: string; whatWorked: string; outcome: string; recommendedNextStep: string };
+
   const playbookMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: PlaybookFormData) => {
       await apiRequest("POST", `/api/playbooks`, {
         ...data,
         sourceClaimId: claimId,
@@ -314,8 +332,8 @@ export default function ClaimDetailPage() {
       a.click();
       URL.revokeObjectURL(url);
       toast({ title: "Export downloaded" });
-    } catch (err: any) {
-      toast({ title: "Export failed", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Export failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
     }
   };
 
@@ -344,7 +362,7 @@ export default function ClaimDetailPage() {
     );
   }
 
-  const statusColor: Record<string, string> = {
+  const statusColor: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     open: "default",
     in_progress: "secondary",
     approved: "default",
@@ -380,7 +398,7 @@ export default function ClaimDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <Badge
-            variant={(statusColor[claim.status] as any) || "outline"}
+            variant={statusColor[claim.status] ?? "outline"}
             className="capitalize"
             data-testid="badge-claim-status"
           >
@@ -708,7 +726,7 @@ export default function ClaimDetailPage() {
               <p className="text-sm text-muted-foreground py-2" data-testid="weather-unavailable">
                 {weatherData?.reason || "Weather data not available for this claim."}
               </p>
-            ) : (
+            ) : weatherData.weather ? (
               <div className="space-y-3" data-testid="weather-content">
                 <p className="text-sm" data-testid="weather-summary">{weatherData.weather.summary}</p>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -719,7 +737,7 @@ export default function ClaimDetailPage() {
                   {weatherData.weather.tempMaxC != null && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-temp">
                       <Thermometer className="w-4 h-4 text-orange-400" />
-                      <span className="text-sm">{Math.round(weatherData.weather.tempMinC)}° / {Math.round(weatherData.weather.tempMaxC)}°C</span>
+                      <span className="text-sm">{Math.round(weatherData.weather.tempMinC ?? 0)}° / {Math.round(weatherData.weather.tempMaxC)}°C</span>
                     </div>
                   )}
                   {weatherData.weather.windGustMaxKmh != null && (
@@ -743,7 +761,7 @@ export default function ClaimDetailPage() {
                 </div>
                 <p className="text-[10px] text-muted-foreground/70">Historical data via Open-Meteo</p>
               </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
 
@@ -1214,7 +1232,7 @@ export default function ClaimDetailPage() {
                 )}
               </div>
             )}
-            {playbookRecs.recommendations.map((rec: any) => (
+            {playbookRecs.recommendations.map((rec) => (
               <div key={rec.playbook.id} className="rounded-md border border-border p-3" data-testid={`playbook-rec-${rec.playbook.id}`}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-medium">{rec.playbook.title}</p>
@@ -1223,9 +1241,9 @@ export default function ClaimDetailPage() {
                 {rec.playbook.recommendedNextStep && (
                   <p className="text-xs text-muted-foreground mt-1">{rec.playbook.recommendedNextStep}</p>
                 )}
-                {rec.matchReasons?.length > 0 && (
+                {(rec.matchReasons?.length ?? 0) > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
-                    {rec.matchReasons.map((r: string, i: number) => (
+                    {rec.matchReasons?.map((r: string, i: number) => (
                       <Badge key={i} variant="outline" className="text-[10px]">{r}</Badge>
                     ))}
                   </div>

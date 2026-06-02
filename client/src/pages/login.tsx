@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -44,8 +43,8 @@ export default function LoginPage() {
       setLoginLoading(true);
       await login(data.email, data.password);
       setLocation("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Login failed", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Login failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
     } finally {
       setLoginLoading(false);
     }
@@ -61,8 +60,8 @@ export default function LoginPage() {
       setRegisterLoading(true);
       await registerUser(data);
       setLocation("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Registration failed", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Registration failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
     } finally {
       setRegisterLoading(false);
     }

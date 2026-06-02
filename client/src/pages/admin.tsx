@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -52,7 +51,13 @@ interface GovernanceOverview {
 
 interface ArchivedRecord {
   id: string;
-  [key: string]: any;
+  archivedAt?: string | null;
+  claimNumber?: string;
+  adjusterName?: string;
+  firstName?: string;
+  lastName?: string;
+  fileName?: string;
+  subject?: string;
 }
 
 const ENTITY_LABELS: Record<string, string> = {

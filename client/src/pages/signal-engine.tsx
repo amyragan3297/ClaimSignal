@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +9,7 @@ import {
 } from "lucide-react";
 import type { Claim, Adjuster } from "@shared/schema";
 
-function riskLevel(score: number | null | undefined): { label: string; color: string; badge: string } {
+function riskLevel(score: number | null | undefined): { label: string; color: string; badge: "destructive" | "secondary" | "outline" } {
   const s = score ?? 0;
   if (s >= 7) return { label: "High", color: "text-red-500", badge: "destructive" };
   if (s >= 4) return { label: "Medium", color: "text-yellow-500", badge: "secondary" };
@@ -149,7 +148,7 @@ export default function SignalEnginePage() {
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="font-semibold text-sm" data-testid={`signal-claim-number-${claim.id}`}>{claim.claimNumber}</span>
-                          <Badge variant={risk.badge as any} className="text-xs" data-testid={`signal-risk-${claim.id}`}>{risk.label} Risk</Badge>
+                          <Badge variant={risk.badge} className="text-xs" data-testid={`signal-risk-${claim.id}`}>{risk.label} Risk</Badge>
                           {(claim.escalationLevel ?? 0) >= 3 && (
                             <Badge variant="destructive" className="text-xs">Escalation Active</Badge>
                           )}

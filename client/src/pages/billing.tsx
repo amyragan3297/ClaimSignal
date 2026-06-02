@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,8 +32,8 @@ export default function BillingPage() {
         toast({ title: "Development Mode", description: data.message });
         await refetch();
       }
-    } catch (err: any) {
-      toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Checkout failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,8 +20,8 @@ export default function FounderLegalPage() {
       await apiRequest("POST", "/api/legal/founder/sign", { version: "1.0" });
       toast({ title: "Founder agreement signed", description: "You now have full unmasked data access." });
       await refetch();
-    } catch (err: any) {
-      toast({ title: "Failed to sign agreement", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Failed to sign agreement", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
     } finally {
       setLoading(false);
     }

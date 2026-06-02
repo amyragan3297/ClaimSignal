@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { type ReactNode } from "react";
 import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { useAuth } from "@/lib/auth";
 import { useLocation, Link, Redirect } from "wouter";
+import type { LucideIcon } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -105,7 +105,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const isActive2 = (href: string) => location === href || location.startsWith(href + "/");
 
-  const navItem = (title: string, href: string, Icon: any, testId?: string) => (
+  const navItem = (title: string, href: string, Icon: LucideIcon, testId?: string) => (
     <SidebarMenuItem key={title}>
       <SidebarMenuButton asChild isActive={isActive2(href)} data-testid={testId ?? `nav-${title.toLowerCase().replace(/\s+/g, "-")}`}>
         <Link href={href}>
