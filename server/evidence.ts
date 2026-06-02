@@ -482,8 +482,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         "supplementApproved", "recoverableDepreciation",
       ]);
 
-      const claimUpdate: Record<string, any> = {};
-      const ex = llmExtraction as any;
+      const claimUpdate: Record<string, string | Date> = {};
+      const ex = llmExtraction as Record<string, string>;
       for (const [exKey, claimKey] of Object.entries(APPLY_FIELD_MAP)) {
         const raw = ex[exKey];
         if (!raw || String(raw).trim() === "") continue;
@@ -497,7 +497,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         } else {
           // Only apply if claim field is currently blank/null — never overwrite
           // a field the user has already filled in manually.
-          const existingVal = (matchedClaim as any)[claimKey];
+          const existingVal = (matchedClaim as Record<string, unknown>)[claimKey];
           if (existingVal == null || existingVal === "") {
             claimUpdate[claimKey] = val;
           }
@@ -506,14 +506,14 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
 
       if (Object.keys(claimUpdate).length > 0) {
         try {
-          await storage.updateClaim(claimId, matchedClaim.organizationId, claimUpdate as any);
+          await storage.updateClaim(claimId, matchedClaim.organizationId, claimUpdate as Partial<import("@shared/schema").InsertClaim>);
           autoAppliedFields = Object.keys(claimUpdate);
           console.log(`[ai-auto-apply] applied ${autoAppliedFields.length} fields to claim ${claimId} from "${req.file!.originalname}": ${autoAppliedFields.join(", ")}`);
           if (debugExtraction) {
             console.log(`[extraction-debug] auto_apply_payload=${JSON.stringify(claimUpdate)}`);
           }
-        } catch (applyErr: any) {
-          console.error(`[ai-auto-apply] non-fatal — failed to apply extraction to claim ${claimId}:`, applyErr?.message);
+        } catch (applyErr: unknown) {
+          console.error(`[ai-auto-apply] non-fatal — failed to apply extraction to claim ${claimId}:`, (applyErr as Error)?.message);
         }
       } else {
         console.log(`[ai-auto-apply] no new fields to apply for claim ${claimId} from "${req.file!.originalname}" (all fields already populated)`);
