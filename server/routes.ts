@@ -325,13 +325,17 @@ export async function registerRoutes(
       let allClaims = await storage.getAllClaimsAcrossTenants();
 
       // Filter out demo/seed organization records unless explicitly requested by Master.
-      // Demo records are owned by known test accounts seeded during development.
+      // Demo records are owned by any account with a @claimsignal.test domain email
+      // or the legacy test@example.com address — this covers all seeded role accounts
+      // (exec@, founder@, individual@, teamadmin@, member@, etc.) which each live in
+      // their own separate org.
       if (!includeDemoRecords) {
-        const DEMO_SEED_EMAILS = ["user@claimsignal.test", "test@example.com"];
+        const allUsers = await storage.getAllUsers();
         const demoOrgIds = new Set<string>();
-        for (const email of DEMO_SEED_EMAILS) {
-          const u = await storage.getUserByEmail(email);
-          if (u) demoOrgIds.add(u.organizationId);
+        for (const u of allUsers) {
+          if (u.email.endsWith("@claimsignal.test") || u.email === "test@example.com") {
+            demoOrgIds.add(u.organizationId);
+          }
         }
         if (demoOrgIds.size > 0) {
           allClaims = allClaims.filter(c => !demoOrgIds.has(c.organizationId));
@@ -363,12 +367,11 @@ export async function registerRoutes(
       const role = req.auth!.role;
       const orgId = req.auth!.organizationId;
 
-      // Try own org first; Master falls back to cross-tenant lookup
+      // Try own org first; Master uses direct cross-tenant lookup as fallback
       let claim = await storage.getClaim(req.params.id as string, orgId);
 
       if (!claim && role === "super_admin") {
-        const allClaims = await storage.getAllClaimsAcrossTenants();
-        claim = allClaims.find((c) => c.id === req.params.id) || undefined;
+        claim = await storage.getClaimAnyTenant(req.params.id as string);
       }
 
       if (!claim) return res.status(404).json({ message: "Claim not found" });

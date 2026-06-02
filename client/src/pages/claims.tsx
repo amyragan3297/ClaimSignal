@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -885,6 +886,7 @@ export default function ClaimsPage() {
   const isMaster = userRole === "super_admin";
   const canArchive = !["carrier_analyst"].includes(userRole);
   const [sharedSearch, setSharedSearch] = useState("");
+  const [showDemoRecords, setShowDemoRecords] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     type: "archive" | "delete";
     claim: Claim;
@@ -900,9 +902,12 @@ export default function ClaimsPage() {
   });
 
   const { data: sharedClaims, isLoading: sharedLoading } = useQuery<Claim[]>({
-    queryKey: ["/api/claims/shared"],
+    queryKey: ["/api/claims/shared", showDemoRecords],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/claims/shared");
+      const url = showDemoRecords
+        ? "/api/claims/shared?includeDemoRecords=true"
+        : "/api/claims/shared";
+      const res = await apiRequest("GET", url);
       return res.json();
     },
   });
@@ -1147,6 +1152,19 @@ export default function ClaimsPage() {
               <Globe className="w-3 h-3" />
               {isMaster ? "Full Platform Access" : "Masked Intelligence View"}
             </Badge>
+            {isMaster && (
+              <div className="flex items-center gap-2 shrink-0 ml-auto">
+                <Switch
+                  id="demo-records-toggle"
+                  checked={showDemoRecords}
+                  onCheckedChange={setShowDemoRecords}
+                  data-testid="toggle-demo-records"
+                />
+                <Label htmlFor="demo-records-toggle" className="text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                  Show demo records
+                </Label>
+              </div>
+            )}
           </div>
 
           <Card>
