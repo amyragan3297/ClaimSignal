@@ -1,43 +1,68 @@
 import { db } from "../../db";
-import { conversations, messages } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+
+export interface Conversation {
+  id: number;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Message {
+  id: number;
+  conversationId: number;
+  role: string;
+  content: string;
+  createdAt: Date;
+}
 
 export interface IChatStorage {
-  getConversation(id: number): Promise<typeof conversations.$inferSelect | undefined>;
-  getAllConversations(): Promise<(typeof conversations.$inferSelect)[]>;
-  createConversation(title: string): Promise<typeof conversations.$inferSelect>;
+  getConversation(id: number): Promise<Conversation | undefined>;
+  getAllConversations(): Promise<Conversation[]>;
+  createConversation(title: string): Promise<Conversation>;
   deleteConversation(id: number): Promise<void>;
-  getMessagesByConversation(conversationId: number): Promise<(typeof messages.$inferSelect)[]>;
-  createMessage(conversationId: number, role: string, content: string): Promise<typeof messages.$inferSelect>;
+  getMessagesByConversation(conversationId: number): Promise<Message[]>;
+  createMessage(conversationId: number, role: string, content: string): Promise<Message>;
 }
 
 export const chatStorage: IChatStorage = {
   async getConversation(id: number) {
-    const [conversation] = await db.select().from(conversations).where(eq(conversations.id, id));
-    return conversation;
+    const rows = await db.execute(
+      sql`SELECT id, title, created_at as "createdAt", updated_at as "updatedAt" FROM conversations WHERE id = ${id}`
+    );
+    return rows.rows[0] as unknown as Conversation | undefined;
   },
 
   async getAllConversations() {
-    return db.select().from(conversations).orderBy(desc(conversations.createdAt));
+    const rows = await db.execute(
+      sql`SELECT id, title, created_at as "createdAt", updated_at as "updatedAt" FROM conversations ORDER BY created_at DESC`
+    );
+    return rows.rows as unknown as Conversation[];
   },
 
   async createConversation(title: string) {
-    const [conversation] = await db.insert(conversations).values({ title }).returning();
-    return conversation;
+    const rows = await db.execute(
+      sql`INSERT INTO conversations (title) VALUES (${title}) RETURNING id, title, created_at as "createdAt", updated_at as "updatedAt"`
+    );
+    return rows.rows[0] as unknown as Conversation;
   },
 
   async deleteConversation(id: number) {
-    await db.delete(messages).where(eq(messages.conversationId, id));
-    await db.delete(conversations).where(eq(conversations.id, id));
+    await db.execute(sql`DELETE FROM messages WHERE conversation_id = ${id}`);
+    await db.execute(sql`DELETE FROM conversations WHERE id = ${id}`);
   },
 
   async getMessagesByConversation(conversationId: number) {
-    return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt);
+    const rows = await db.execute(
+      sql`SELECT id, conversation_id as "conversationId", role, content, created_at as "createdAt" FROM messages WHERE conversation_id = ${conversationId} ORDER BY created_at`
+    );
+    return rows.rows as unknown as Message[];
   },
 
   async createMessage(conversationId: number, role: string, content: string) {
-    const [message] = await db.insert(messages).values({ conversationId, role, content }).returning();
-    return message;
+    const rows = await db.execute(
+      sql`INSERT INTO messages (conversation_id, role, content) VALUES (${conversationId}, ${role}, ${content}) RETURNING id, conversation_id as "conversationId", role, content, created_at as "createdAt"`
+    );
+    return rows.rows[0] as unknown as Message;
   },
 };
-

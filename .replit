@@ -33,6 +33,10 @@ args = "Start application"
 task = "workflow.run"
 args = "server-tests"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -53,9 +57,20 @@ args = "bash server/run-tests.sh"
 [workflows.workflow.metadata]
 isValidation = true
 
+[[workflows.workflow]]
+name = "typecheck"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx tsc --noEmit"
+
+[workflows.workflow.metadata]
+isValidation = true
+
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 120000
+timeoutMs = 180000
 
 [agent]
 integrations = ["javascript_openai_ai_integrations:2.0.0"]
