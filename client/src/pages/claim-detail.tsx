@@ -184,7 +184,16 @@ export default function ClaimDetailPage() {
     enabled: !!claimId,
   });
 
-  const { data: playbookRecs } = useQuery<{ method: string; recommendations: any[] }>({
+  const { data: playbookRecs } = useQuery<{
+    method: string;
+    recommendations: any[];
+    aiStrategy?: {
+      summary: string;
+      prioritizedSteps: Array<{ step: string; rationale: string; priority: "critical" | "high" | "medium" }>;
+      keyLeveragePoints: string[];
+      warningFlags: string[];
+    } | null;
+  }>({
     queryKey: ["/api/claims", claimId, "playbook-recommendations"],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/claims/${claimId}/playbook-recommendations`);
@@ -1139,6 +1148,54 @@ export default function ClaimDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {playbookRecs.aiStrategy && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-3" data-testid="card-ai-strategy">
+                <div className="flex items-center gap-2 text-xs font-semibold text-primary uppercase tracking-wide">
+                  <Brain className="w-3.5 h-3.5" /> AI Strategy
+                </div>
+                {playbookRecs.aiStrategy.summary && (
+                  <p className="text-sm" data-testid="text-ai-strategy-summary">{playbookRecs.aiStrategy.summary}</p>
+                )}
+                {playbookRecs.aiStrategy.prioritizedSteps.length > 0 && (
+                  <div className="space-y-1.5">
+                    {playbookRecs.aiStrategy.prioritizedSteps.map((s, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs" data-testid={`text-ai-step-${i}`}>
+                        <Badge
+                          variant={s.priority === "critical" ? "destructive" : s.priority === "high" ? "default" : "secondary"}
+                          className="shrink-0 text-[10px] mt-0.5"
+                        >
+                          {s.priority}
+                        </Badge>
+                        <div>
+                          <span className="font-medium">{s.step}</span>
+                          {s.rationale && <span className="text-muted-foreground"> — {s.rationale}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {playbookRecs.aiStrategy.keyLeveragePoints.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Key Leverage</p>
+                    <div className="flex flex-wrap gap-1">
+                      {playbookRecs.aiStrategy.keyLeveragePoints.map((p, i) => (
+                        <Badge key={i} variant="outline" className="text-[10px]">{p}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {playbookRecs.aiStrategy.warningFlags.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Watch For</p>
+                    <div className="flex flex-wrap gap-1">
+                      {playbookRecs.aiStrategy.warningFlags.map((w, i) => (
+                        <Badge key={i} variant="outline" className="text-[10px] border-yellow-500/50 text-yellow-400">{w}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {playbookRecs.recommendations.map((rec: any) => (
               <div key={rec.playbook.id} className="rounded-md border border-border p-3" data-testid={`playbook-rec-${rec.playbook.id}`}>
                 <div className="flex items-start justify-between gap-2">

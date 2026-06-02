@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import { BookOpen, Plus, Loader2, Trash2, CheckCircle2, TrendingUp, Building2, FileText } from "lucide-react";
+import { BookOpen, Plus, Loader2, Trash2, CheckCircle2, TrendingUp, Building2, FileText, Search, Sparkles } from "lucide-react";
 
 interface PlaybookEntry {
   id: string;
@@ -41,6 +41,32 @@ interface PlaybookEntry {
 
 const money = (v?: number | null) => (v == null ? "—" : `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`);
 
+interface SearchResult {
+  claimId: string;
+  claimIdentifier: string;
+  carrier: string | null;
+  lossType: string | null;
+  adjusters: string[];
+  initialOutcome: string | null;
+  finalOutcome: string | null;
+  escalationUsed: boolean;
+  reinspectionRequested: boolean;
+  strategySummary: {
+    path: string[];
+    reusableStrategy: string[];
+    confidence: "high" | "medium" | "low";
+  };
+}
+
+interface SearchResponse {
+  method: string;
+  totalResults: number;
+  results: SearchResult[];
+  confidenceNote?: string | null;
+  message?: string | null;
+  executiveAggregateOnly?: boolean;
+}
+
 export default function PlaybooksPage() {
   const { data: auth } = useAuth();
   const isMaster = auth?.user.role === "super_admin" || !!auth?.isPlatformOwner;
@@ -48,8 +74,19 @@ export default function PlaybooksPage() {
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<PlaybookEntry | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResponse | null>(null);
 
   const { data, isLoading } = useQuery<PlaybookEntry[]>({ queryKey: ["/api/playbooks"] });
+
+  const searchMutation = useMutation({
+    mutationFn: async (q: string) => {
+      const res = await apiRequest("POST", "/api/playbook/search", { query: q });
+      return res.json() as Promise<SearchResponse>;
+    },
+    onSuccess: (data) => setSearchResults(data),
+    onError: (e: Error) => toast({ title: "Search failed", description: e.message, variant: "destructive" }),
+  });
 
   const [form, setForm] = useState({
     title: "", scenarioType: "", claimType: "", carrier: "", denialReason: "",
@@ -120,6 +157,89 @@ export default function PlaybooksPage() {
           </Dialog>
         )}
       </div>
+
+      {/* AI-powered historical search */}
+      <div className="flex gap-2" data-testid="section-playbook-search">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            data-testid="input-playbook-search"
+            className="pl-8"
+            placeholder="Search historical patterns — e.g. Allstate hail denials that were overturned"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && searchQuery.trim() && searchMutation.mutate(searchQuery)}
+          />
+        </div>
+        <Button
+          data-testid="button-playbook-search"
+          disabled={!searchQuery.trim() || searchMutation.isPending}
+          onClick={() => searchMutation.mutate(searchQuery)}
+          variant="secondary"
+        >
+          {searchMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          <span className="ml-1.5 hidden sm:inline">Search</span>
+        </Button>
+        {searchResults && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearchResults(null); setSearchQuery(""); }} data-testid="button-clear-search">
+            Clear
+          </Button>
+        )}
+      </div>
+
+      {/* Search results */}
+      {searchResults && (
+        <div className="space-y-3" data-testid="section-search-results">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {searchResults.totalResults === 0
+                ? (searchResults.message || "No matching historical patterns found.")
+                : `${searchResults.totalResults} matching pattern${searchResults.totalResults === 1 ? "" : "s"}`}
+              {searchResults.totalResults > 0 && (
+                <span className="ml-2 text-xs opacity-60">via {searchResults.method}</span>
+              )}
+            </p>
+            {searchResults.confidenceNote && (
+              <Badge variant="outline" className="text-[10px]">{searchResults.confidenceNote}</Badge>
+            )}
+          </div>
+          {searchResults.executiveAggregateOnly ? (
+            <Card>
+              <CardContent className="py-4 text-sm text-muted-foreground">
+                {searchResults.message || "Aggregate data only available for Executive role."}
+              </CardContent>
+            </Card>
+          ) : (
+            searchResults.results?.map((r) => (
+              <Card key={r.claimId} className="border-primary/20" data-testid={`card-search-result-${r.claimId}`}>
+                <CardContent className="pt-4 pb-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="flex flex-wrap gap-1.5">
+                      {r.carrier && <Badge variant="secondary"><Building2 className="w-3 h-3 mr-1" />{r.carrier}</Badge>}
+                      {r.lossType && <Badge variant="outline">{r.lossType}</Badge>}
+                      {r.initialOutcome && <Badge variant="outline">Initial: {r.initialOutcome}</Badge>}
+                      {r.finalOutcome && <Badge variant="default"><CheckCircle2 className="w-3 h-3 mr-1" />{r.finalOutcome}</Badge>}
+                      {r.escalationUsed && <Badge variant="outline" className="text-yellow-400 border-yellow-500/50">Escalated</Badge>}
+                      {r.reinspectionRequested && <Badge variant="outline">Reinspected</Badge>}
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] shrink-0">{r.claimIdentifier}</Badge>
+                  </div>
+                  {r.strategySummary?.path?.length > 0 && (
+                    <p className="text-xs text-muted-foreground">{r.strategySummary.path.join(" → ")}</p>
+                  )}
+                  {r.strategySummary?.reusableStrategy?.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {r.strategySummary.reusableStrategy.map((s, i) => (
+                        <Badge key={i} variant="outline" className="text-[10px]">{s}</Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
 
       {isExecutive && (
         <p className="text-xs text-muted-foreground border border-border rounded-md p-3">

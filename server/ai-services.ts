@@ -352,3 +352,166 @@ ${truncated}`;
 
   return result;
 }
+
+// ── Playbook: AI strategy synthesis ───────────────────────────────────────────
+
+export interface PlaybookStrategy {
+  summary: string;
+  prioritizedSteps: Array<{
+    step: string;
+    rationale: string;
+    priority: "critical" | "high" | "medium";
+  }>;
+  keyLeveragePoints: string[];
+  warningFlags: string[];
+}
+
+export async function generatePlaybookStrategy(
+  claim: Claim,
+  playbooks: Array<{
+    title: string;
+    whatWorked?: string | null;
+    outcome?: string | null;
+    scenarioType?: string | null;
+    carrier?: string | null;
+    claimType?: string | null;
+    recommendedNextStep?: string | null;
+    confidenceScore?: number | null;
+  }>,
+): Promise<PlaybookStrategy> {
+  const client = getOpenAIClient();
+  const context = buildClaimContext(claim);
+
+  const playbookContext = playbooks
+    .map(
+      (p, i) =>
+        `[Pattern ${i + 1}: ${p.title}]` +
+        (p.whatWorked ? `\nWhat worked: ${p.whatWorked}` : "") +
+        (p.outcome ? `\nOutcome: ${p.outcome}` : "") +
+        (p.recommendedNextStep ? `\nNext step: ${p.recommendedNextStep}` : ""),
+    )
+    .join("\n\n");
+
+  const userPrompt = `Given this active claim and historical patterns that resolved similarly, generate a tailored action strategy. Do not reference homeowner names, policy numbers, or any PII. Return JSON with this exact shape:
+{
+  "summary": "1-2 sentence strategic overview of what this claim needs most urgently",
+  "prioritizedSteps": [{"step": "concise action phrase", "rationale": "why — grounded in the patterns", "priority": "critical|high|medium"}],
+  "keyLeveragePoints": ["specific leverage to use with this carrier or adjuster type"],
+  "warningFlags": ["risk or resistance pattern to watch for"]
+}
+Keep prioritizedSteps to 3-5 items. Base everything only on the data provided — never invent facts.
+
+ACTIVE CLAIM:
+${context}
+
+HISTORICAL PATTERNS THAT RESOLVED SIMILARLY:
+${playbookContext}`;
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  const parsed = JSON.parse(raw);
+
+  return {
+    summary: typeof parsed.summary === "string" ? parsed.summary : "",
+    prioritizedSteps: Array.isArray(parsed.prioritizedSteps)
+      ? parsed.prioritizedSteps
+          .filter((s: any) => s?.step)
+          .map((s: any) => ({
+            step: String(s.step),
+            rationale: typeof s.rationale === "string" ? s.rationale : "",
+            priority: (["critical", "high", "medium"] as const).includes(s.priority)
+              ? (s.priority as "critical" | "high" | "medium")
+              : "medium",
+          }))
+      : [],
+    keyLeveragePoints: Array.isArray(parsed.keyLeveragePoints)
+      ? parsed.keyLeveragePoints.map(String)
+      : [],
+    warningFlags: Array.isArray(parsed.warningFlags)
+      ? parsed.warningFlags.map(String)
+      : [],
+  };
+}
+
+// ── Playbook: AI-enhanced natural language query parsing ──────────────────────
+// Parses a free-text search query into structured PlaybookFilters.
+// Caller is responsible for importing PlaybookFilters from playbook-engine.
+
+export async function parsePlaybookQueryWithAI(
+  query: string,
+  knownCarriers: string[],
+): Promise<{
+  carrier?: string;
+  damageType?: string;
+  initialOutcome?: string;
+  finalOutcome?: string;
+  escalationUsed?: boolean;
+  reinspectionRequested?: boolean;
+  deniedThenApproved?: boolean;
+  partialToFull?: boolean;
+  supplementOutcome?: string;
+  repairabilityIssue?: boolean;
+  matchingIssue?: boolean;
+  brittleTest?: boolean;
+  codeDispute?: boolean;
+  missingLineItems?: boolean;
+  doiInvolved?: boolean;
+}> {
+  const client = getOpenAIClient();
+
+  const userPrompt = `Parse this insurance claim search query into structured filters. Return JSON — include only fields that the query explicitly or strongly implies; omit everything else.
+
+Known carriers (use exact name from this list if matched): ${knownCarriers.slice(0, 20).join(", ") || "none"}
+
+Schema (all fields optional):
+{
+  "carrier": "exact carrier name or null",
+  "damageType": "hail|wind|fire|flood|null",
+  "initialOutcome": "denied|partial|approved|null",
+  "finalOutcome": "denied|partial|approved|null",
+  "escalationUsed": true|false|null,
+  "reinspectionRequested": true|false|null,
+  "deniedThenApproved": true|false|null,
+  "partialToFull": true|false|null,
+  "supplementOutcome": "any|approved|denied|null",
+  "repairabilityIssue": true|false|null,
+  "matchingIssue": true|false|null,
+  "brittleTest": true|false|null,
+  "codeDispute": true|false|null,
+  "missingLineItems": true|false|null,
+  "doiInvolved": true|false|null
+}
+
+QUERY: "${query.slice(0, 300)}"`;
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a search query parser for an insurance claims system. Extract structured filters from natural language. Return only valid JSON.",
+      },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  const parsed = JSON.parse(raw);
+
+  // Sanitize — only keep truthy non-null values so they cleanly overlay keyword filters.
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(parsed)) {
+    if (v !== null && v !== undefined && v !== "" && v !== false) out[k] = v;
+  }
+  return out;
+}

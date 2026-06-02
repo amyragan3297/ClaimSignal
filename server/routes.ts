@@ -12,6 +12,7 @@ import { analyzeDocumentText } from "./document-intelligence";
 import { computeEscalationEffectiveness, buildRecommendedEscalationPath } from "./escalation-intelligence";
 import { computeClaimHealthScore, computeRiskSignals, computeAlerts, buildExecutiveSummary } from "./claim-intelligence";
 import { runCopilotQuery, AI_DISCLOSURE } from "./copilot-engine";
+import { generatePlaybookStrategy, parsePlaybookQueryWithAI } from "./ai-services";
 import { computePatterns, computeOutcomeCorrelations, computeTrends, computeEmergingSignals } from "./network-intelligence";
 import { insertEscalationSchema } from "@shared/schema";
 import { createCandidatesFromText, sampleClaimDocumentText } from "./timeline-extraction";
@@ -1054,24 +1055,50 @@ export async function registerRoutes(
       const claim = await storage.getClaim(req.params.id as string, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       const all = await storage.getPlaybookEntries();
-      // Simple rule-based scoring (NOT AI): match carrier / claimType / denial reason / scenario signals.
+      // Rule-based scoring: match carrier / claimType / denial reason / scenario signals.
+      // Carrier matching is bidirectional includes() to handle variants like
+      // "State Farm" vs "State Farm Insurance Company".
+      const carrierMatch = (a: string, b: string): boolean => {
+        const al = a.toLowerCase(), bl = b.toLowerCase();
+        return al === bl || al.includes(bl) || bl.includes(al);
+      };
       const scored = all.map((pb) => {
         let score = 0;
         const reasons: string[] = [];
-        if (pb.carrier && claim.carrier && pb.carrier.toLowerCase() === claim.carrier.toLowerCase()) { score += 3; reasons.push("same carrier"); }
-        if (pb.claimType && (claim.claimType || claim.lossType) && pb.claimType.toLowerCase() === String(claim.claimType || claim.lossType).toLowerCase()) { score += 2; reasons.push("same claim type"); }
+        if (pb.carrier && claim.carrier && carrierMatch(pb.carrier, claim.carrier)) { score += 3; reasons.push("same carrier"); }
+        const claimLossType = String(claim.claimType || claim.lossType || "").toLowerCase();
+        if (pb.claimType && claimLossType) {
+          const pbType = pb.claimType.toLowerCase();
+          if (pbType === claimLossType || pbType.split(/[\s\/]/).some((t) => claimLossType.includes(t)) || claimLossType.split(/[\s\/]/).some((t) => pbType.includes(t))) {
+            score += 2; reasons.push("same claim type");
+          }
+        }
         if (pb.denialReason && claim.denialReason && pb.denialReason.toLowerCase().includes(claim.denialReason.toLowerCase().slice(0, 6))) { score += 3; reasons.push("similar denial reason"); }
         if (pb.escalationUsed && claim.escalationUsed) { score += 1; reasons.push("escalation context"); }
         if (pb.region && claim.state && pb.region.toLowerCase() === claim.state.toLowerCase()) { score += 1; reasons.push("same region"); }
         return { playbook: sanitizePlaybookRecord(pb, role), matchScore: score, matchReasons: reasons };
       }).filter((x) => x.matchScore > 0).sort((a, b) => b.matchScore - a.matchScore).slice(0, 5);
+
+      // AI strategy synthesis — runs after rule-based matching when OpenAI is available.
+      let aiStrategy = null;
+      let method = "rule-based";
+      if (scored.length > 0 && isOpenAIConfigured()) {
+        try {
+          aiStrategy = await generatePlaybookStrategy(claim, scored.map((s) => s.playbook));
+          method = "AI-enhanced";
+        } catch (aiErr: any) {
+          recordAiError("generatePlaybookStrategy", aiErr);
+          console.error("[playbook-ai] strategy generation failed (non-fatal):", aiErr?.message);
+        }
+      }
+
       await storage.createAuditLog({
         organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
         isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
         actionType: "PLAYBOOK_RECOMMENDATION_GENERATED", entityType: "claim", entityId: claim.id,
-        afterJson: { count: scored.length }, ipAddress: getClientIp(req),
+        afterJson: { count: scored.length, aiStrategy: !!aiStrategy }, ipAddress: getClientIp(req),
       });
-      res.json({ method: "MVP rule-based recommendation", recommendations: scored });
+      res.json({ method, recommendations: scored, aiStrategy });
     } catch (err: any) {
       res.status(400).json({ message: err.message });
     }
@@ -1195,8 +1222,22 @@ export async function registerRoutes(
       // Build carrier name list for NL parser context.
       const knownCarriers = Array.from(new Set(allClaims.map((c) => c.carrier).filter(Boolean))) as string[];
 
-      // Parse NL query → filters; merge with explicit filters.
-      const parsedFilters = parseQueryToFilters(query, knownCarriers);
+      // Parse NL query → filters: AI-first, keyword fallback.
+      let parsedFilters: PlaybookFilters;
+      let searchMethod = "rule-based natural-language parsing";
+      if (query.trim() && isOpenAIConfigured()) {
+        try {
+          const aiFilters = await parsePlaybookQueryWithAI(query, knownCarriers);
+          // Merge AI filters with keyword-parsed fallback (AI wins on overlapping keys).
+          parsedFilters = { ...parseQueryToFilters(query, knownCarriers), ...aiFilters };
+          searchMethod = "AI-enhanced natural-language parsing";
+        } catch (aiErr: any) {
+          recordAiError("parsePlaybookQueryWithAI", aiErr);
+          parsedFilters = parseQueryToFilters(query, knownCarriers);
+        }
+      } else {
+        parsedFilters = parseQueryToFilters(query, knownCarriers);
+      }
       const merged: PlaybookFilters = { ...parsedFilters, ...explicitFilters };
 
       // Bulk load adjusters for name resolution.
@@ -1249,7 +1290,7 @@ export async function registerRoutes(
       }
 
       if (filtered.length === 0) {
-        return res.json({ totalResults: 0, results: [], message: "No matching playbook history found yet.", method: "MVP rule-based natural-language parsing" });
+        return res.json({ totalResults: 0, results: [], message: "No matching playbook history found yet.", method: searchMethod });
       }
 
       const confidenceNote = filtered.length <= 2 ? "Limited historical evidence available." : null;
@@ -1278,7 +1319,7 @@ export async function registerRoutes(
       }));
 
       res.json({
-        method: "MVP rule-based natural-language parsing",
+        method: searchMethod,
         totalResults: filtered.length,
         page, pageSize: PAGE_SIZE,
         parsedFilters: merged,
