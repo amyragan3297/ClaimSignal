@@ -23,7 +23,7 @@ import evidenceRouter from "./evidence";
 import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
-import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText } from "./ai-services";
+import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus } from "./ai-services";
 import { getClaimWeather } from "./weather";
 import express from "express";
 import { createHash } from "crypto";
@@ -86,7 +86,18 @@ export async function registerRoutes(
   app.use(cookieParser());
 
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true });
+    const ai = getAiStatus();
+    res.json({
+      ok: true,
+      ai: {
+        apiKeyPresent: ai.apiKeyPresent,
+        baseUrlPresent: ai.baseUrlPresent,
+        configured: ai.apiKeyPresent && ai.baseUrlPresent,
+        analysisModel: ai.analysisModel,
+        transcribeModel: ai.transcribeModel,
+        lastError: ai.lastError ?? null,
+      },
+    });
   });
 
   app.post("/api/auth/register", async (req: AuthRequest, res) => {
@@ -1316,6 +1327,7 @@ export async function registerRoutes(
 
       res.json({ analysis, generatedAt: generatedAt.toISOString(), claim: updated });
     } catch (err: any) {
+      recordAiError("generateClaimAnalysis", err);
       res.status(500).json({ message: err.message });
     }
   });
@@ -1437,6 +1449,7 @@ export async function registerRoutes(
           try {
             transcriptExtraction = await extractClaimFieldsFromText(transcriptText, "transcript");
           } catch (extErr: any) {
+            recordAiError("extractClaimFieldsFromText/transcript", extErr);
             console.error("[audio/transcribe] extraction non-fatal:", extErr?.message);
           }
         }

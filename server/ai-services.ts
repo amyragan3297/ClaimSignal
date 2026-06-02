@@ -12,6 +12,41 @@ export { isOpenAIConfigured };
 const ANALYSIS_MODEL = "gpt-5.4";
 const TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 
+// ---------------------------------------------------------------------------
+// Last-error tracking — never stored to DB, lives only in process memory.
+// Cleared on restart. Used by the /api/health endpoint.
+// ---------------------------------------------------------------------------
+interface AiErrorRecord {
+  message: string;
+  operation: string;
+  at: string; // ISO timestamp
+}
+
+let _lastAiError: AiErrorRecord | null = null;
+
+export function recordAiError(operation: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  // Strip any potential token/key fragments from the log message.
+  const safe = message.replace(/sk-[A-Za-z0-9\-_]{8,}/g, "[REDACTED]");
+  _lastAiError = { operation, message: safe, at: new Date().toISOString() };
+}
+
+export function getAiStatus(): {
+  apiKeyPresent: boolean;
+  baseUrlPresent: boolean;
+  analysisModel: string;
+  transcribeModel: string;
+  lastError: AiErrorRecord | null;
+} {
+  return {
+    apiKeyPresent: Boolean(process.env.AI_INTEGRATIONS_OPENAI_API_KEY),
+    baseUrlPresent: Boolean(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL),
+    analysisModel: ANALYSIS_MODEL,
+    transcribeModel: TRANSCRIBE_MODEL,
+    lastError: _lastAiError,
+  };
+}
+
 export interface ClaimAnalysis {
   narrative: string;
   riskExplanation: string;
