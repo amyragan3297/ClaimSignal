@@ -1,4 +1,4 @@
-import type { Express, Response } from "express";
+import type { Express, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
@@ -2594,7 +2594,7 @@ export async function registerRoutes(
   });
 
   // ─── Section 24: Executive / Investor Reporting ───────────────────────────
-  const requireExecAccess = (req: AuthRequest, res: Response, next: Function) => {
+  const requireExecAccess = (req: AuthRequest, res: Response, next: NextFunction) => {
     const r = req.auth?.role;
     if (!r || !["super_admin", "carrier_analyst", "admin", "founder"].includes(r)) return res.status(403).json({ message: "Executive reporting access required" });
     next();

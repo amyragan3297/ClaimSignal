@@ -1,4 +1,4 @@
-import { Router, type Response } from "express";
+import { Router, type Response, type NextFunction } from "express";
 import { type AuthRequest, requireAuth, requireActiveSubscription, requirePlatformOwner } from "./auth";
 import { storage } from "./storage";
 import {
@@ -16,7 +16,7 @@ import { z } from "zod";
 
 const router = Router();
 
-function blockCarrierFromLayer1(req: AuthRequest, res: Response, next: Function) {
+function blockCarrierFromLayer1(req: AuthRequest, res: Response, next: NextFunction) {
   if (req.auth!.role === "carrier_analyst") {
     return res.status(403).json({ message: "Carrier analysts can only access aggregated intelligence data" });
   }
