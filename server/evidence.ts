@@ -483,7 +483,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       ]);
 
       const claimUpdate: Record<string, string | Date> = {};
-      const ex = llmExtraction as Record<string, string>;
+      const ex = llmExtraction as unknown as Record<string, string>;
       for (const [exKey, claimKey] of Object.entries(APPLY_FIELD_MAP)) {
         const raw = ex[exKey];
         if (!raw || String(raw).trim() === "") continue;
