@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // ClaimSignal AI Copilot Engine (Section 22)
 //
@@ -44,32 +43,31 @@ export function assembleCopilotContext(
 ): string {
   if (!claim) return "No specific claim selected. Answering from platform knowledge only.";
 
-  const a = claim as any;
   const lines: string[] = [
     `=== CLAIM CONTEXT (NO PII) ===`,
     `Carrier: ${fmt(claim.carrier)}`,
-    `Loss Type: ${fmt(a.lossType)}`,
-    `Claim Type: ${fmt(a.claimType)}`,
-    `Property Type: ${fmt(a.propertyType)}`,
+    `Loss Type: ${fmt(claim.lossType)}`,
+    `Claim Type: ${fmt(claim.claimType)}`,
+    `Property Type: ${fmt(claim.propertyType)}`,
     `Status: ${fmt(claim.status)}`,
-    `Current Phase: ${fmt(a.currentPhase)}`,
-    `Date of Loss: ${fmt(a.dateOfLoss)}`,
-    `Storm Event: ${fmt(a.stormEventDate)}`,
-    `Hail Event: ${fmt(a.hailEvent)}`,
-    `Wind Event: ${fmt(a.windEvent)}`,
-    `Initial Outcome: ${fmt(a.initialOutcome)}`,
-    `Final Outcome: ${fmt(a.finalOutcome)}`,
-    `Denial Reason: ${fmt(a.denialReason)}`,
-    `Denial Overturned: ${fmt(a.denialOverturned)}`,
-    `Reinspection Requested: ${fmt(a.reinspectionRequested)}`,
-    `Reinspection Outcome: ${fmt(a.reinspectionOutcome)}`,
-    `Supplement Requested: ${fmt(a.supplementRequested)}`,
-    `Supplement Approved: ${fmt(a.supplementApproved)}`,
-    `Escalation Used: ${fmt(a.escalationUsed)}`,
-    `Payment Received: ${fmt(a.paymentReceived)}`,
-    `Friction Score: ${fmt(a.frictionScore)}`,
-    `Escalation Level: ${fmt(a.escalationLevel)}`,
-    `Approval Probability: ${fmt(a.approvalProbability)}`,
+    `Current Phase: ${fmt(claim.currentPhase)}`,
+    `Date of Loss: ${fmt(claim.dateOfLoss)}`,
+    `Storm Event: ${fmt((claim as Record<string, unknown>).stormEventDate)}`,
+    `Hail Event: ${fmt((claim as Record<string, unknown>).hailEvent)}`,
+    `Wind Event: ${fmt((claim as Record<string, unknown>).windEvent)}`,
+    `Initial Outcome: ${fmt(claim.initialOutcome)}`,
+    `Final Outcome: ${fmt(claim.finalOutcome)}`,
+    `Denial Reason: ${fmt(claim.denialReason)}`,
+    `Denial Overturned: ${fmt(claim.denialOverturned)}`,
+    `Reinspection Requested: ${fmt(claim.reinspectionRequested)}`,
+    `Reinspection Outcome: ${fmt(claim.reinspectionOutcome)}`,
+    `Supplement Requested: ${fmt(claim.supplementRequested)}`,
+    `Supplement Approved: ${fmt(claim.supplementApproved)}`,
+    `Escalation Used: ${fmt(claim.escalationUsed)}`,
+    `Payment Received: ${fmt(claim.paymentReceived)}`,
+    `Friction Score: ${fmt(claim.frictionScore)}`,
+    `Escalation Level: ${fmt(claim.escalationLevel)}`,
+    `Approval Probability: ${fmt(claim.approvalProbability)}`,
     ``,
     `=== ESCALATION HISTORY (${escalations.length} records) ===`,
   ];
@@ -136,7 +134,6 @@ Always base responses on the provided claim context. Do not invent information n
 // ── Rule-based fallback ────────────────────────────────────────────────────
 function ruleBasedResponse(question: string, claim: Claim | null): CopilotResponse {
   const q = question.toLowerCase();
-  const a = claim as any;
 
   let answer = "I can analyze your claim data, but the AI service is currently unavailable. Here is what I can see from the available data:";
   const missingData: string[] = [];
@@ -144,21 +141,21 @@ function ruleBasedResponse(question: string, claim: Claim | null): CopilotRespon
 
   if (claim) {
     if (!claim.carrier) missingData.push("Carrier not assigned");
-    if (!a?.dateOfLoss) missingData.push("Date of loss not recorded");
-    if (!a?.initialOutcome && !a?.finalOutcome) missingData.push("No outcome recorded");
+    if (!claim.dateOfLoss) missingData.push("Date of loss not recorded");
+    if (!claim.initialOutcome && !claim.finalOutcome) missingData.push("No outcome recorded");
 
     if (q.includes("risk") || q.includes("at risk")) {
       const risks: string[] = [];
-      if (a?.initialOutcome?.toLowerCase().includes("deni")) risks.push("prior denial on record");
-      if (!a?.denialOverturned && a?.escalationUsed) risks.push("escalation used without overturn");
-      if (a?.supplementRequested && !a?.supplementApproved) risks.push("pending supplement");
+      if (claim.initialOutcome?.toLowerCase().includes("deni")) risks.push("prior denial on record");
+      if (!claim.denialOverturned && claim.escalationUsed) risks.push("escalation used without overturn");
+      if (claim.supplementRequested && !claim.supplementApproved) risks.push("pending supplement");
       answer = risks.length > 0
         ? `Risk signals detected: ${risks.join("; ")}.`
         : "No immediate risk signals detected from available data.";
     } else if (q.includes("missing") || q.includes("documents")) {
       answer = `Available documents and gaps are shown in the claim evidence tab. Upload missing items to improve intelligence coverage.`;
     } else if (q.includes("next") || q.includes("action") || q.includes("should")) {
-      if (a?.initialOutcome?.toLowerCase().includes("deni") && !a?.denialOverturned) {
+      if (claim.initialOutcome?.toLowerCase().includes("deni") && !claim.denialOverturned) {
         suggestedActions.push({ action: "Request reinspection", rationale: "Active denial without overturn on record" });
         suggestedActions.push({ action: "Upload repairability documentation", rationale: "Repairability disputes often benefit from additional evidence" });
       }
@@ -211,15 +208,17 @@ export async function runCopilotQuery(
     });
 
     const raw = completion.choices[0]?.message?.content ?? "{}";
-    let parsed: any = {};
-    try { parsed = JSON.parse(raw); } catch { parsed = { answer: raw }; }
+    let parsed: Record<string, unknown> = {};
+    try { parsed = JSON.parse(raw) as Record<string, unknown>; } catch { parsed = { answer: raw }; }
 
     return {
-      answer: parsed.answer ?? "No response generated.",
-      supportingData: parsed.supportingData ?? {},
-      suggestedActions: Array.isArray(parsed.suggestedActions) ? parsed.suggestedActions : [],
-      playbookHint: parsed.playbookHint ?? null,
-      missingData: Array.isArray(parsed.missingData) ? parsed.missingData : [],
+      answer: typeof parsed.answer === "string" ? parsed.answer : "No response generated.",
+      supportingData: (parsed.supportingData && typeof parsed.supportingData === "object" && !Array.isArray(parsed.supportingData))
+        ? parsed.supportingData as Record<string, unknown>
+        : {},
+      suggestedActions: Array.isArray(parsed.suggestedActions) ? parsed.suggestedActions as Array<{ action: string; rationale: string }> : [],
+      playbookHint: typeof parsed.playbookHint === "string" ? parsed.playbookHint : null,
+      missingData: Array.isArray(parsed.missingData) ? (parsed.missingData as unknown[]).map(String) : [],
       disclosure: AI_DISCLOSURE,
       model: "gpt-4o",
       claimContext: claim !== null,

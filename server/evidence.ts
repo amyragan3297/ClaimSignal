@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import crypto from "crypto";
@@ -334,8 +333,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         } finally {
           await parser.destroy().catch(() => {});
         }
-      } catch (pdfErr: any) {
-        console.error("[pdf-parse] failed to extract text:", pdfErr?.message);
+      } catch (pdfErr: unknown) {
+        console.error("[pdf-parse] failed to extract text:", (pdfErr as Error)?.message);
       }
     }
     
@@ -400,10 +399,10 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       claimId: claimId || undefined,
       sourceType: "upload",
       fileName: req.file.originalname,
-      fileType: fileType as any,
+      fileType: fileType as "pdf" | "image" | "docx" | "eml" | "msg" | "txt" | "other",
       sha256,
       fileSize: buffer.length,
-      docCategory: classification.category as any,
+      docCategory: classification.category as "denial_letter" | "estimate" | "scope" | "supplement" | "payment_letter" | "invoice" | "photo_report" | "policy" | "email_thread" | "unknown",
       confidence: classification.confidence,
       extractionStatus: llmExtraction ? "complete" : (textContent && textContent.trim().length > 80 ? "failed" : (fileType === "pdf" || fileType === "docx" || fileType === "image" ? "failed" : "pending")),
       extractedJson: (entities.length > 0 || llmExtraction)
@@ -416,7 +415,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       await storage.createExtractedEntity({
         evidenceFileId: evidenceFile.id,
         claimId: claimId || undefined,
-        entityType: entity.entityType as any,
+        entityType: entity.entityType as "claim_number" | "policy_number" | "adjuster_name" | "adjuster_email" | "adjuster_phone" | "insured_name" | "property_address" | "date_of_loss" | "inspection_date" | "determination_date" | "payment_date" | "rcv" | "acv" | "deductible" | "depreciation" | "supplement_amount" | "check_amount" | "coverage_type",
         rawValue: entity.rawValue,
         normalizedValue: entity.rawValue,
         confidence: entity.confidence,
@@ -438,8 +437,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
             sourceDocumentId: evidenceFile.id,
             sourceHint: classification.category === "denial_letter" ? "letter_date" : undefined,
           });
-        } catch (extractErr: any) {
-          console.error("[timeline-extraction] non-fatal:", extractErr?.message);
+        } catch (extractErr: unknown) {
+          console.error("[timeline-extraction] non-fatal:", (extractErr as Error)?.message);
         }
       }
     }
@@ -559,7 +558,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
           extractionConfidence: llmExtraction?.confidence ?? undefined,
           sourceFileName: req.file!.originalname,
           extractedDateOfLoss: dolDate && !isNaN(dolDate.getTime()) ? dolDate : undefined,
-        } as any);
+        });
       }
     }
     
@@ -638,7 +637,7 @@ router.get("/files-unmatched", async (req: AuthRequest, res: Response) => {
       actorRole: req.auth.role,
       actionType: "EVIDENCE_UNMATCHED_VIEWED",
       entityType: "evidence_file",
-      entityId: null as any,
+      entityId: undefined,
       afterJson: { count: files.length, crossTenant: master },
     });
     res.json(files);
@@ -671,7 +670,7 @@ router.get("/files/:id/match-suggestions", async (req: AuthRequest, res: Respons
     const unmask = canViewUnmasked(role);
     const candidates = ranked.slice(0, 10).map(r => {
       const claim = byId.get(r.claimId)!;
-      const view: any = unmask ? claim : applyPiiMasking(claim as any, role as any);
+      const view = unmask ? claim : applyPiiMasking(claim, role);
       return {
         claimId: claim.id,
         score: r.score,
@@ -795,24 +794,25 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
 
     const storedEntities = await storage.getExtractedEntities(req.params.id as string);
     const getEntity = (t: string) => storedEntities.find(e => e.entityType === t)?.rawValue;
-    const llmExtraction = (file.extractedJson as any)?.extraction as ExtractionResult | null;
-    const llm = (k: string): string | undefined => {
+    interface StoredExtractedJson { extraction?: ExtractionResult | null }
+    const llmExtraction = (file.extractedJson as StoredExtractedJson | null)?.extraction ?? null;
+    const llm = (k: keyof ExtractionResult): string | undefined => {
       if (!llmExtraction) return undefined;
-      const v = (llmExtraction as any)[k];
+      const v = llmExtraction[k];
       return v != null && typeof v !== "object" ? String(v) : undefined;
     };
 
     // Accept field-by-field accepted values from the UI, or fall back to
     // LLM extraction and rule-based entities (in that priority order).
     const accepted: Record<string, string> = req.body?.fields || {};
-    const f = (fieldKey: string, entityType: string, llmKey: string): string | undefined =>
+    const f = (fieldKey: string, entityType: string, llmKey: keyof ExtractionResult): string | undefined =>
       accepted[fieldKey]?.trim() || llm(llmKey) || getEntity(entityType) || undefined;
 
     const _NUMERIC_KEYS = ["rcv","acv","deductible","supplementRequested","supplementApproved","recoverableDepreciation"];
-    const numericVal = (v?: string) => {
+    const numericVal = (v?: string): number | undefined => {
       if (!v) return undefined;
       const n = parseFloat(v.replace(/[$,\s]/g, ""));
-      return isNaN(n) ? undefined : String(n);
+      return isNaN(n) ? undefined : n;
     };
     const dateVal = (v?: string) => {
       if (!v) return undefined;
@@ -847,7 +847,7 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
       initialOutcome: accepted["initialOutcome"]?.trim() || llm("initialOutcome"),
       finalOutcome: accepted["finalOutcome"]?.trim() || llm("finalOutcome"),
       status: "open",
-    } as any);
+    });
 
     await storage.updateEvidenceFile(req.params.id as string, file.organizationId, { claimId: claim.id });
 
@@ -865,7 +865,7 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
             adjusterEmail: accepted["adjusterEmail"]?.trim() || llm("adjusterEmail") || undefined,
             adjusterPhone: accepted["adjusterPhone"]?.trim() || llm("adjusterPhone") || undefined,
             carrierName,
-          } as any);
+          });
         }
         await storage.linkAdjusterToClaim({
           claimId: claim.id,
@@ -873,8 +873,8 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
           organizationId: claim.organizationId,
           roleOnClaim: "primary_adjuster",
         });
-      } catch (adjErr: any) {
-        console.error("[create-claim] adjuster linking non-fatal:", adjErr?.message);
+      } catch (adjErr: unknown) {
+        console.error("[create-claim] adjuster linking non-fatal:", (adjErr as Error)?.message);
       }
     }
 
@@ -896,15 +896,15 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
         { key: "paymentDate", eventType: "payment_issued", title: "Payment Issued" },
       ];
       for (const { key, eventType, title } of extraDates) {
-        const raw = (llmExtraction as any)[key];
-        if (!raw) continue;
+        const raw = llmExtraction[key as keyof ExtractionResult];
+        if (!raw || typeof raw !== "string") continue;
         const d = new Date(raw);
         if (isNaN(d.getTime())) continue;
         try {
           await storage.createTimelineEvent({
             claimId: claim.id,
             organizationId: claim.organizationId,
-            eventType: eventType as any,
+            eventType: eventType as "inspection" | "denial" | "approval" | "payment_issued",
             eventDate: d,
             title,
             description: `${title} date from AI extraction`,
@@ -936,7 +936,7 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
     // Mark any draft for this file as merged
     const drafts = await storage.getClaimDrafts(file.organizationId);
     const draft = drafts.find(d => d.createdFromEvidenceFileId === file.id && d.status === "needs_review");
-    if (draft) await storage.updateClaimDraft(draft.id, file.organizationId, { status: "merged" } as any);
+    if (draft) await storage.updateClaimDraft(draft.id, file.organizationId, { status: "merged" });
 
     await storage.createAuditLog({
       organizationId: claim.organizationId,
@@ -974,7 +974,7 @@ router.post("/files/:id/unmatch", async (req: AuthRequest, res: Response) => {
       : await storage.getEvidenceFile(req.params.id as string, organizationId);
     if (!file) return res.status(404).json({ message: "File not found" });
 
-    await storage.updateEvidenceFile(req.params.id as string, file.organizationId, { claimId: null as any });
+    await storage.updateEvidenceFile(req.params.id as string, file.organizationId, { claimId: null });
 
     const storedEntities = await storage.getExtractedEntities(req.params.id as string);
     const get = (t: string) => storedEntities.find(e => e.entityType === t)?.rawValue;
@@ -1067,7 +1067,7 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
     const DATE_KEYS = new Set(["dateOfLoss", "inspectionDate"]);
     const NUMERIC_KEYS = new Set(["rcv", "acv", "deductible", "supplementRequested", "supplementApproved", "recoverableDepreciation"]);
 
-    const claimUpdate: Record<string, any> = {};
+    const claimUpdate: Record<string, unknown> = {};
     for (const [exKey, claimKey] of Object.entries(FIELD_MAP)) {
       const raw = fields[exKey];
       if (!raw || String(raw).trim() === "") continue;
@@ -1087,7 +1087,7 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       return res.status(400).json({ message: "No valid fields to apply" });
     }
 
-    const updated = await storage.updateClaim(file.claimId, claim.organizationId, claimUpdate as any);
+    const updated = await storage.updateClaim(file.claimId, claim.organizationId, claimUpdate as Partial<import("@shared/schema").InsertClaim>);
 
     await storage.createAuditLog({
       organizationId: claim.organizationId,
@@ -1137,7 +1137,7 @@ router.post("/drafts/:id/archive", async (req: AuthRequest, res: Response) => {
       : await storage.getClaimDraft(req.params.id as string, organizationId);
     if (!draft) return res.status(404).json({ message: "Draft not found" });
 
-    const updated = await storage.updateClaimDraft(req.params.id as string, draft.organizationId, { status: "discarded" } as any);
+    const updated = await storage.updateClaimDraft(req.params.id as string, draft.organizationId, { status: "discarded" });
 
     await storage.createAuditLog({
       organizationId: draft.organizationId,

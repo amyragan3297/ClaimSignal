@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { spawn } from "child_process";
 import { writeFile, unlink, readFile } from "fs/promises";
 import { randomUUID } from "crypto";
@@ -102,6 +101,12 @@ function buildClaimContext(claim: Claim): string {
 
 const SYSTEM_PROMPT = `You are an expert property insurance claims analyst for restoration contractors and public adjusters. You analyze a single claim's structured data and produce defensible, practical intelligence. Be specific and grounded only in the data provided — never invent homeowner PII, dollar figures, or facts not present. When information is missing, say so and treat it as a documentation gap. Respond ONLY with valid JSON matching the requested schema.`;
 
+interface RawRecommendedAction {
+  title?: unknown;
+  detail?: unknown;
+  priority?: unknown;
+}
+
 export async function generateClaimAnalysis(claim: Claim): Promise<ClaimAnalysis> {
   const client = getOpenAIClient();
   const context = buildClaimContext(claim);
@@ -130,22 +135,24 @@ ${context}`;
   });
 
   const raw = completion.choices[0]?.message?.content || "{}";
-  const parsed = JSON.parse(raw);
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
 
   return {
     narrative: typeof parsed.narrative === "string" ? parsed.narrative : "",
     riskExplanation: typeof parsed.riskExplanation === "string" ? parsed.riskExplanation : "",
-    topMissingScope: Array.isArray(parsed.topMissingScope) ? parsed.topMissingScope.map(String) : [],
+    topMissingScope: Array.isArray(parsed.topMissingScope) ? (parsed.topMissingScope as unknown[]).map(String) : [],
     codeCompliance: typeof parsed.codeCompliance === "string" ? parsed.codeCompliance : "",
     suggestedAction: typeof parsed.suggestedAction === "string" ? parsed.suggestedAction : "",
-    gaps: Array.isArray(parsed.gaps) ? parsed.gaps.map(String) : [],
+    gaps: Array.isArray(parsed.gaps) ? (parsed.gaps as unknown[]).map(String) : [],
     recommendedActions: Array.isArray(parsed.recommendedActions)
-      ? parsed.recommendedActions
-          .filter((a: any) => a && typeof a.title === "string")
-          .map((a: any) => ({
+      ? (parsed.recommendedActions as RawRecommendedAction[])
+          .filter((a) => a && typeof a.title === "string")
+          .map((a) => ({
             title: String(a.title),
             detail: typeof a.detail === "string" ? a.detail : "",
-            priority: ["high", "medium", "low"].includes(a.priority) ? a.priority : "medium",
+            priority: (["high", "medium", "low"] as const).includes(a.priority as "high" | "medium" | "low")
+              ? (a.priority as "high" | "medium" | "low")
+              : ("medium" as const),
           }))
       : [],
   };
@@ -307,12 +314,12 @@ ${truncated}`;
   });
 
   const raw = completion.choices[0]?.message?.content || "{}";
-  const parsed = JSON.parse(raw);
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
 
   const str = (v: unknown): string | undefined =>
     typeof v === "string" && v.trim() ? v.trim() : undefined;
   const arr = (v: unknown): string[] | undefined =>
-    Array.isArray(v) && v.length > 0 ? v.filter((x) => typeof x === "string") as string[] : undefined;
+    Array.isArray(v) && v.length > 0 ? (v as unknown[]).filter((x) => typeof x === "string") as string[] : undefined;
 
   const result: ExtractionResult = {
     extractionMethod: "llm",
@@ -322,7 +329,7 @@ ${truncated}`;
         : 0.5,
   };
 
-  const textFields = [
+  const textFields: Array<keyof ExtractionResult> = [
     "claimNumber", "policyNumber", "homeownerName", "insuredName",
     "adjusterName", "adjusterEmail", "adjusterPhone", "iaFirm", "carrier", "vendor",
     "propertyAddress", "city", "state", "zipCode",
@@ -332,23 +339,26 @@ ${truncated}`;
   ];
   for (const key of textFields) {
     const v = str(parsed[key]);
-    if (v !== undefined) (result as any)[key] = v;
+    if (v !== undefined) Object.assign(result, { [key]: v });
   }
 
   if (typeof parsed.denialOverturned === "boolean") {
     result.denialOverturned = parsed.denialOverturned;
   }
 
-  for (const key of ["missingScopeItems", "codeItems", "reinspectionReferences", "escalationReferences"]) {
+  const arrayFields: Array<keyof ExtractionResult> = ["missingScopeItems", "codeItems", "reinspectionReferences", "escalationReferences"];
+  for (const key of arrayFields) {
     const v = arr(parsed[key]);
-    if (v) (result as any)[key] = v;
+    if (v) Object.assign(result, { [key]: v });
   }
 
   if (Array.isArray(parsed.timelineEvents)) {
-    const evts = parsed.timelineEvents.filter(
-      (e: any) => e && typeof e.date === "string" && typeof e.description === "string"
+    interface RawTimelineEvent { date?: unknown; description?: unknown }
+    const evts = (parsed.timelineEvents as RawTimelineEvent[]).filter(
+      (e): e is { date: string; description: string } =>
+        !!e && typeof e.date === "string" && typeof e.description === "string"
     );
-    if (evts.length > 0) result.timelineEvents = evts.map((e: any) => ({ date: e.date, description: e.description }));
+    if (evts.length > 0) result.timelineEvents = evts.map((e) => ({ date: e.date, description: e.description }));
   }
 
   return result;
@@ -365,6 +375,12 @@ export interface PlaybookStrategy {
   }>;
   keyLeveragePoints: string[];
   warningFlags: string[];
+}
+
+interface RawPrioritizedStep {
+  step?: unknown;
+  rationale?: unknown;
+  priority?: unknown;
 }
 
 export async function generatePlaybookStrategy(
@@ -418,26 +434,26 @@ ${playbookContext}`;
   });
 
   const raw = completion.choices[0]?.message?.content || "{}";
-  const parsed = JSON.parse(raw);
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
 
   return {
     summary: typeof parsed.summary === "string" ? parsed.summary : "",
     prioritizedSteps: Array.isArray(parsed.prioritizedSteps)
-      ? parsed.prioritizedSteps
-          .filter((s: any) => s?.step)
-          .map((s: any) => ({
-            step: String(s.step),
+      ? (parsed.prioritizedSteps as RawPrioritizedStep[])
+          .filter((s): s is RawPrioritizedStep & { step: string } => typeof s?.step === "string")
+          .map((s) => ({
+            step: s.step,
             rationale: typeof s.rationale === "string" ? s.rationale : "",
-            priority: (["critical", "high", "medium"] as const).includes(s.priority)
+            priority: (["critical", "high", "medium"] as const).includes(s.priority as "critical" | "high" | "medium")
               ? (s.priority as "critical" | "high" | "medium")
-              : "medium",
+              : ("medium" as const),
           }))
       : [],
     keyLeveragePoints: Array.isArray(parsed.keyLeveragePoints)
-      ? parsed.keyLeveragePoints.map(String)
+      ? (parsed.keyLeveragePoints as unknown[]).map(String)
       : [],
     warningFlags: Array.isArray(parsed.warningFlags)
-      ? parsed.warningFlags.map(String)
+      ? (parsed.warningFlags as unknown[]).map(String)
       : [],
   };
 }
@@ -507,12 +523,12 @@ QUERY: "${query.slice(0, 300)}"`;
   });
 
   const raw = completion.choices[0]?.message?.content || "{}";
-  const parsed = JSON.parse(raw);
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
 
   // Sanitize — only keep truthy non-null values so they cleanly overlay keyword filters.
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(parsed)) {
     if (v !== null && v !== undefined && v !== "" && v !== false) out[k] = v;
   }
-  return out;
+  return out as ReturnType<typeof parsePlaybookQueryWithAI> extends Promise<infer R> ? R : never;
 }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   type StormEvent, type InsertStormEvent,
   type Organization, type InsertOrganization,
@@ -97,7 +96,7 @@ export interface IStorage {
     versionNumber: number;
     changedByUserId: string;
     changeReason?: string;
-    snapshotJson: any;
+    snapshotJson: unknown;
   }): Promise<ClaimVersion>;
   getClaimVersions(claimId: string, orgId: string): Promise<ClaimVersion[]>;
   getLatestVersionNumber(claimId: string): Promise<number>;
@@ -151,8 +150,8 @@ export interface IStorage {
     actionType: string;
     entityType?: string;
     entityId?: string;
-    beforeJson?: any;
-    afterJson?: any;
+    beforeJson?: unknown;
+    afterJson?: unknown;
     ipAddress?: string;
   }): Promise<AuditLog>;
   getAuditLogs(orgId?: string): Promise<AuditLog[]>;
@@ -491,7 +490,7 @@ export class DatabaseStorage implements IStorage {
     versionNumber: number;
     changedByUserId: string;
     changeReason?: string;
-    snapshotJson: any;
+    snapshotJson: unknown;
   }): Promise<ClaimVersion> {
     const [created] = await db.insert(claimVersions).values(data).returning();
     return created;
@@ -683,8 +682,8 @@ export class DatabaseStorage implements IStorage {
     actionType: string;
     entityType?: string;
     entityId?: string;
-    beforeJson?: any;
-    afterJson?: any;
+    beforeJson?: unknown;
+    afterJson?: unknown;
     ipAddress?: string;
   }): Promise<AuditLog> {
     const [created] = await db.insert(auditLogs).values(data).returning();
@@ -1066,7 +1065,7 @@ export class DatabaseStorage implements IStorage {
       and(
         eq(intelligenceEvents.claimId, claimId),
         eq(intelligenceEvents.organizationId, orgId),
-        eq(intelligenceEvents.eventCategory, category as any)
+        eq(intelligenceEvents.eventCategory, category as "denial" | "payment" | "supplement" | "irc_trigger" | "communication_signal" | "lifecycle" | "escalation")
       )
     ).orderBy(desc(intelligenceEvents.createdAt));
   }
@@ -1142,13 +1141,13 @@ export class DatabaseStorage implements IStorage {
     const where = orgId
       ? and(eq(adjusters.id, id), eq(adjusters.organizationId, orgId), sql`${adjusters.archivedAt} IS NULL`)
       : and(eq(adjusters.id, id), sql`${adjusters.archivedAt} IS NULL`);
-    const result = await db.update(adjusters).set({ archivedAt: new Date() } as any).where(where!).returning();
+    const result = await db.update(adjusters).set({ archivedAt: new Date() } as { archivedAt: Date | null }).where(where!).returning();
     return result.length > 0;
   }
 
   async restoreAdjuster(id: string, orgId?: string): Promise<boolean> {
     const where = orgId ? and(eq(adjusters.id, id), eq(adjusters.organizationId, orgId)) : eq(adjusters.id, id);
-    const result = await db.update(adjusters).set({ archivedAt: null } as any).where(where).returning();
+    const result = await db.update(adjusters).set({ archivedAt: null } as { archivedAt: Date | null }).where(where).returning();
     return result.length > 0;
   }
 
@@ -1172,13 +1171,13 @@ export class DatabaseStorage implements IStorage {
     const where = orgId
       ? and(eq(clients.id, id), eq(clients.organizationId, orgId), sql`${clients.archivedAt} IS NULL`)
       : and(eq(clients.id, id), sql`${clients.archivedAt} IS NULL`);
-    const result = await db.update(clients).set({ archivedAt: new Date() } as any).where(where!).returning();
+    const result = await db.update(clients).set({ archivedAt: new Date() } as { archivedAt: Date | null }).where(where!).returning();
     return result.length > 0;
   }
 
   async restoreClient(id: string, orgId?: string): Promise<boolean> {
     const where = orgId ? and(eq(clients.id, id), eq(clients.organizationId, orgId)) : eq(clients.id, id);
-    const result = await db.update(clients).set({ archivedAt: null } as any).where(where).returning();
+    const result = await db.update(clients).set({ archivedAt: null } as { archivedAt: Date | null }).where(where).returning();
     return result.length > 0;
   }
 
@@ -1202,13 +1201,13 @@ export class DatabaseStorage implements IStorage {
     const where = orgId
       ? and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId), sql`${evidenceFiles.archivedAt} IS NULL`)
       : and(eq(evidenceFiles.id, id), sql`${evidenceFiles.archivedAt} IS NULL`);
-    const result = await db.update(evidenceFiles).set({ archivedAt: new Date() } as any).where(where!).returning();
+    const result = await db.update(evidenceFiles).set({ archivedAt: new Date() } as { archivedAt: Date | null }).where(where!).returning();
     return result.length > 0;
   }
 
   async restoreEvidenceFile(id: string, orgId?: string): Promise<boolean> {
     const where = orgId ? and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId)) : eq(evidenceFiles.id, id);
-    const result = await db.update(evidenceFiles).set({ archivedAt: null } as any).where(where).returning();
+    const result = await db.update(evidenceFiles).set({ archivedAt: null } as { archivedAt: Date | null }).where(where).returning();
     return result.length > 0;
   }
 
@@ -1232,13 +1231,13 @@ export class DatabaseStorage implements IStorage {
     const where = orgId
       ? and(eq(audioRecordings.id, id), eq(audioRecordings.organizationId, orgId), sql`${audioRecordings.archivedAt} IS NULL`)
       : and(eq(audioRecordings.id, id), sql`${audioRecordings.archivedAt} IS NULL`);
-    const result = await db.update(audioRecordings).set({ archivedAt: new Date() } as any).where(where!).returning();
+    const result = await db.update(audioRecordings).set({ archivedAt: new Date() } as { archivedAt: Date | null }).where(where!).returning();
     return result.length > 0;
   }
 
   async restoreAudioRecording(id: string, orgId?: string): Promise<boolean> {
     const where = orgId ? and(eq(audioRecordings.id, id), eq(audioRecordings.organizationId, orgId)) : eq(audioRecordings.id, id);
-    const result = await db.update(audioRecordings).set({ archivedAt: null } as any).where(where).returning();
+    const result = await db.update(audioRecordings).set({ archivedAt: null } as { archivedAt: Date | null }).where(where).returning();
     return result.length > 0;
   }
 
@@ -1262,13 +1261,13 @@ export class DatabaseStorage implements IStorage {
     const where = orgId
       ? and(eq(emails.id, id), eq(emails.organizationId, orgId), sql`${emails.archivedAt} IS NULL`)
       : and(eq(emails.id, id), sql`${emails.archivedAt} IS NULL`);
-    const result = await db.update(emails).set({ archivedAt: new Date() } as any).where(where!).returning();
+    const result = await db.update(emails).set({ archivedAt: new Date() } as { archivedAt: Date | null }).where(where!).returning();
     return result.length > 0;
   }
 
   async restoreEmail(id: string, orgId?: string): Promise<boolean> {
     const where = orgId ? and(eq(emails.id, id), eq(emails.organizationId, orgId)) : eq(emails.id, id);
-    const result = await db.update(emails).set({ archivedAt: null } as any).where(where).returning();
+    const result = await db.update(emails).set({ archivedAt: null } as { archivedAt: Date | null }).where(where).returning();
     return result.length > 0;
   }
 
@@ -1372,9 +1371,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ── Section 18 — Evidence Intelligence ───────────────────────────────
-  async updateEvidenceFileIntelligence(id: string, orgId: string, intelligenceJson: unknown, reviewStatus: string): Promise<void> {
+  // Merges intelligence analysis under the `intelligence` key in extractedJson,
+  // preserving the existing `extraction` key written by the LLM extraction pipeline.
+  async updateEvidenceFileIntelligence(id: string, orgId: string, intelligenceJson: unknown, _reviewStatus: string): Promise<void> {
+    const [existing] = await db
+      .select({ extractedJson: evidenceFiles.extractedJson })
+      .from(evidenceFiles)
+      .where(and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId)));
+    const current = (existing?.extractedJson ?? {}) as Record<string, unknown>;
+    const merged = { ...current, intelligence: intelligenceJson };
     await db.update(evidenceFiles)
-      .set({ intelligenceJson: intelligenceJson as any, reviewStatus: reviewStatus as any } as any)
+      .set({ extractedJson: merged })
       .where(and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId)));
   }
 }

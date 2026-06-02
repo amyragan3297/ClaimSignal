@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 type Role = string;
 
 /**
@@ -59,21 +58,21 @@ export function maskString(value: string | null | undefined): string | null {
   return v.slice(0, 2) + "*".repeat(v.length - 2);
 }
 
-export function applyPiiMasking<T extends Record<string, any>>(row: T, role: Role): T {
+export function applyPiiMasking<T extends Record<string, unknown>>(row: T, role: Role): T {
   if (PII_UNMASK_ROLES.includes(role)) return row;
   return {
     ...row,
-    homeownerName: maskName(row.homeownerName),
+    homeownerName: maskName(row.homeownerName as string | null | undefined),
     homeownerPhone: null,
     homeownerEmail: null,
-    propertyAddress: maskAddress(row.propertyAddress),
-    claimNumber: maskClaimNumber(row.claimNumber),
-    policyNumber: maskString(row.policyNumber),
-    insuredName: maskName(row.insuredName),
+    propertyAddress: maskAddress(row.propertyAddress as string | null | undefined),
+    claimNumber: maskClaimNumber(row.claimNumber as string | null | undefined),
+    policyNumber: maskString(row.policyNumber as string | null | undefined),
+    insuredName: maskName(row.insuredName as string | null | undefined),
   };
 }
 
-export function applyPiiMaskingToList<T extends Record<string, any>>(rows: T[], role: Role): T[] {
+export function applyPiiMaskingToList<T extends Record<string, unknown>>(rows: T[], role: Role): T[] {
   return rows.map((r) => applyPiiMasking(r, role));
 }
 
@@ -96,14 +95,14 @@ export function applyPiiMaskingToList<T extends Record<string, any>>(rows: T[], 
  *   - frictionScore, adjusterFrictionScore, escalationLevel, riskScore,
  *     scopeDeltaScore, approvalProbability, supplementProbabilityScore, etc.
  */
-export function sanitizeSharedClaimRecord<T extends Record<string, any>>(row: T, role: Role): T {
+export function sanitizeSharedClaimRecord<T extends Record<string, unknown>>(row: T, role: Role): T {
   if (PII_UNMASK_ROLES.includes(role)) return row;
   const piiMasked = applyPiiMasking(row, role);
   return {
     ...piiMasked,
     // contractor / tenant identity
-    organizationId: undefined as any,
-    clientId: undefined as any,
+    organizationId: undefined,
+    clientId: undefined,
     // internal contractor-side content
     notes: null,
     aiClaimSummary: null,
@@ -111,10 +110,10 @@ export function sanitizeSharedClaimRecord<T extends Record<string, any>>(row: T,
     // exact-location fields (city/state are retained for pattern intelligence)
     address: null,
     zipCode: null,
-  };
+  } as unknown as T;
 }
 
-export function sanitizeSharedClaimList<T extends Record<string, any>>(rows: T[], role: Role): T[] {
+export function sanitizeSharedClaimList<T extends Record<string, unknown>>(rows: T[], role: Role): T[] {
   return rows.map((r) => sanitizeSharedClaimRecord(r, role));
 }
 
@@ -130,9 +129,9 @@ export function sanitizeSharedClaimList<T extends Record<string, any>>(rows: T[]
  * Note: playbook entries never store homeowner identity / claim # / address, but
  * we defensively null any such fields if present.
  */
-export function sanitizePlaybookRecord<T extends Record<string, any>>(row: T, role: Role): T {
+export function sanitizePlaybookRecord<T extends Record<string, unknown>>(row: T, role: Role): T {
   if (PII_UNMASK_ROLES.includes(role)) return row;
-  const out: Record<string, any> = { ...row };
+  const out: Record<string, unknown> = { ...row };
   // linkage back to private source claim / authoring tenant
   out.organizationId = undefined;
   out.sourceClaimId = undefined;
@@ -150,15 +149,15 @@ export function sanitizePlaybookRecord<T extends Record<string, any>>(row: T, ro
   for (const k of ["actionTaken", "whatWorked", "whatDidNotWork", "timelineSummary", "recommendedNextStep"]) {
     if (k in out) out[k] = null;
   }
-  return out as T;
+  return out as unknown as T;
 }
 
-export function sanitizePlaybookList<T extends Record<string, any>>(rows: T[], role: Role): T[] {
+export function sanitizePlaybookList<T extends Record<string, unknown>>(rows: T[], role: Role): T[] {
   return rows.map((r) => sanitizePlaybookRecord(r, role));
 }
 
 /** Aggregate-only projection for Executive role: strips narrative + source detail. */
-export function toPlaybookAggregate<T extends Record<string, any>>(row: T): Record<string, any> {
+export function toPlaybookAggregate<T extends Record<string, unknown>>(row: T): Record<string, unknown> {
   return {
     id: row.id,
     title: row.title,

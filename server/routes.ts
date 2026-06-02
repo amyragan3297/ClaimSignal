@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Express, Response, NextFunction } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
-import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema } from "@shared/schema";
+import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema, type TimelineEvent, type InsertClaim } from "@shared/schema";
 import { applyPiiMasking, canViewUnmasked, sanitizeSharedClaimList, sanitizePlaybookList, sanitizePlaybookRecord, toPlaybookAggregate, isMaster } from "./masking";
 import { computeCarrierIntelligence } from "./carrier-intelligence";
 import { computeAdjusterScorecard } from "./adjuster-scorecard";
@@ -61,8 +60,8 @@ const CLAIM_DATE_FIELDS = [
  * date string fields → Date (or null when blank). Leaves all other keys untouched so
  * this stays additive and safe for partial PATCH bodies.
  */
-function normalizeClaimInput<T extends Record<string, any>>(body: T): T {
-  const out: Record<string, any> = { ...body };
+function normalizeClaimInput<T extends Record<string, unknown>>(body: T): T {
+  const out: Record<string, unknown> = { ...body };
   for (const k of CLAIM_NUMERIC_FIELDS) {
     if (!(k in out)) continue;
     const v = out[k];
@@ -75,7 +74,7 @@ function normalizeClaimInput<T extends Record<string, any>>(body: T): T {
     const v = out[k];
     if (v === "" || v === null || v === undefined) { out[k] = null; continue; }
     if (v instanceof Date) continue;
-    const d = new Date(v);
+    const d = new Date(v as string | number);
     out[k] = isNaN(d.getTime()) ? null : d;
   }
   return out as T;
@@ -131,7 +130,7 @@ export async function registerRoutes(
         founderFlag: planType === "founder",
       });
 
-      const billingData: any = {
+      const billingData: Record<string, unknown> = {
         organizationId: org.id,
         planType,
       };
@@ -145,7 +144,7 @@ export async function registerRoutes(
         billingData.subscriptionStatus = "active";
       }
 
-      await storage.createBillingAccount(billingData);
+      await storage.createBillingAccount(billingData as Parameters<typeof storage.createBillingAccount>[0]);
 
       await storage.createAuditLog({
         organizationId: org.id,
@@ -418,24 +417,23 @@ export async function registerRoutes(
 
       const norm = (s: unknown) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]/g, "");
 
-      const matches: Array<{ claim: Record<string, any>; reasons: string[]; strength: "strong" | "medium" }> = [];
+      const matches: Array<{ claim: Record<string, unknown>; reasons: string[]; strength: "strong" | "medium" }> = [];
 
       for (const c of allClaims) {
-        const a = c as any;
         const reasons: string[] = [];
         let strength: "strong" | "medium" = "medium";
 
         if (claimNumber && c.claimNumber && norm(claimNumber) === norm(c.claimNumber)) {
           reasons.push("Identical claim number"); strength = "strong";
         }
-        if (homeownerName && a.homeownerName && norm(homeownerName) === norm(a.homeownerName)) {
+        if (homeownerName && c.homeownerName && norm(homeownerName) === norm(c.homeownerName)) {
           reasons.push("Same homeowner name");
-          if (propertyAddress && a.propertyAddress && norm(propertyAddress) === norm(a.propertyAddress)) {
+          if (propertyAddress && c.propertyAddress && norm(propertyAddress) === norm(c.propertyAddress)) {
             reasons.push("Same property address"); strength = "strong";
           }
         }
-        if (carrier && c.carrier && norm(carrier) === norm(c.carrier) && dateOfLoss && a.dateOfLoss) {
-          const d1 = new Date(dateOfLoss); const d2 = new Date(a.dateOfLoss);
+        if (carrier && c.carrier && norm(carrier) === norm(c.carrier) && dateOfLoss && c.dateOfLoss) {
+          const d1 = new Date(dateOfLoss); const d2 = new Date(c.dateOfLoss);
           if (!isNaN(d1.getTime()) && !isNaN(d2.getTime()) && d1.toDateString() === d2.toDateString()) {
             reasons.push("Same carrier and date of loss");
           }
@@ -698,7 +696,7 @@ export async function registerRoutes(
       const existing = await storage.getClaimAdjusterLink(req.params.linkId as string, scopeOrg);
       if (!existing || existing.claimId !== claim.id) return res.status(404).json({ message: "Link not found" });
 
-      const patch: any = {};
+      const patch: Record<string, unknown> = {};
       for (const f of ["roleOnClaim", "involvementType", "carrierId", "confidenceScore", "needsReview", "notes"]) {
         if (req.body[f] !== undefined) patch[f] = req.body[f];
       }
@@ -785,9 +783,9 @@ export async function registerRoutes(
           claimNumber: c?.claimNumber ?? null,
           carrier: c?.carrier ?? null,
           status: c?.status ?? null,
-          initialOutcome: (c as any)?.initialOutcome ?? null,
-          finalOutcome: (c as any)?.finalOutcome ?? null,
-          denialOverturned: (c as any)?.denialOverturned ?? null,
+          initialOutcome: c?.initialOutcome ?? null,
+          finalOutcome: c?.finalOutcome ?? null,
+          denialOverturned: c?.denialOverturned ?? null,
         };
       });
 
@@ -940,7 +938,7 @@ export async function registerRoutes(
       const ev = await storage.getTimelineEvent(req.params.id as string, orgId);
       if (!ev) return res.status(404).json({ message: "Timeline event not found" });
       const action = String(req.body?.action || "");
-      const patch: Record<string, any> = {};
+      const patch: Partial<TimelineEvent> = {};
       if (action === "accept") { patch.reviewStatus = "accepted"; patch.needsReview = false; }
       else if (action === "verify") { patch.reviewStatus = "verified"; patch.needsReview = false; patch.dateSource = "user_entered"; }
       else if (action === "reject") { patch.reviewStatus = "rejected"; patch.needsReview = false; patch.deletedAt = new Date(); }
@@ -1144,7 +1142,7 @@ export async function registerRoutes(
       const allAdj = isMaster(role)
         ? await storage.getAllAdjustersAcrossTenants()
         : await storage.getAdjusters(orgId);
-      const adjById = new Map(allAdj.map((a: any) => [a.id, a.adjusterName as string]));
+      const adjById = new Map(allAdj.map((a) => [a.id, a.adjusterName as string]));
 
       // Get target adjuster IDs and resolve which candidate claims share them.
       const targetLinks = await storage.getClaimAdjusters(claimId, isMaster(role) ? undefined : orgId);
@@ -1193,10 +1191,10 @@ export async function registerRoutes(
           carrier: c.carrier,
           lossType: c.lossType,
           adjusters: adjNames,
-          initialOutcome: (c as any).initialOutcome ?? null,
-          finalOutcome: (c as any).finalOutcome ?? null,
-          escalationUsed: (c as any).escalationUsed ?? false,
-          reinspectionRequested: (c as any).reinspectionRequested ?? false,
+          initialOutcome: c.initialOutcome ?? null,
+          finalOutcome: c.finalOutcome ?? null,
+          escalationUsed: c.escalationUsed ?? false,
+          reinspectionRequested: c.reinspectionRequested ?? false,
           similarityScore: score,
           keyFactors: factors,
           strategySummary: strategy,
@@ -1260,7 +1258,7 @@ export async function registerRoutes(
       const allAdj = isMaster(role)
         ? await storage.getAllAdjustersAcrossTenants()
         : await storage.getAdjusters(orgId);
-      const adjById = new Map(allAdj.map((a: any) => [a.id, a.adjusterName as string]));
+      const adjById = new Map(allAdj.map((a) => [a.id, a.adjusterName as string]));
 
       // Build adjusterNames-by-claim for adjuster-name filtering when needed.
       // We lazily resolve only if adjusterName filter is set.
@@ -1292,8 +1290,8 @@ export async function registerRoutes(
         if (filtered.length === 0) {
           return res.json({ executiveAggregateOnly: true, totalResults: 0, message: "No matching playbook history found yet." });
         }
-        const overturned = filtered.filter((c) => (c as any).denialOverturned === true).length;
-        const denied = filtered.filter((c: any) => c.initialOutcome?.toLowerCase().includes("deni")).length;
+        const overturned = filtered.filter((c) => c.denialOverturned === true).length;
+        const denied = filtered.filter((c) => c.initialOutcome?.toLowerCase().includes("deni")).length;
         const topCarriers = Array.from(
           filtered.reduce((m, c) => { m.set(c.carrier || "Unknown", (m.get(c.carrier || "Unknown") || 0) + 1); return m; }, new Map<string, number>())
         ).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count }));
@@ -1326,10 +1324,10 @@ export async function registerRoutes(
           carrier: c.carrier,
           lossType: c.lossType,
           adjusters: adjNames,
-          initialOutcome: (c as any).initialOutcome ?? null,
-          finalOutcome: (c as any).finalOutcome ?? null,
-          escalationUsed: (c as any).escalationUsed ?? false,
-          reinspectionRequested: (c as any).reinspectionRequested ?? false,
+          initialOutcome: c.initialOutcome ?? null,
+          finalOutcome: c.finalOutcome ?? null,
+          escalationUsed: c.escalationUsed ?? false,
+          reinspectionRequested: c.reinspectionRequested ?? false,
           strategySummary: strategy,
         };
       }));
@@ -1366,7 +1364,7 @@ export async function registerRoutes(
       const generatedAt = new Date();
       const updated = await storage.updateClaim(claim.id, claim.organizationId, {
         aiClaimSummary: analysis.narrative,
-        aiAnalysisJson: analysis as any,
+        aiAnalysisJson: analysis as unknown as Record<string, unknown>,
         aiAnalysisAt: generatedAt,
       });
 
@@ -1519,8 +1517,7 @@ export async function registerRoutes(
           durationSeconds: durationSeconds ? Number(durationSeconds) : null,
           sha256Hash,
           transcriptText,
-          processedAt: new Date(),
-        } as any);
+        });
 
         await storage.createAuditLog({
           organizationId: req.auth!.organizationId,
@@ -1999,7 +1996,7 @@ export async function registerRoutes(
 
   // ── Governance routes ────────────────────────────────────────────────────
 
-  function requireCanArchive(req: AuthRequest, res: any, next: any) {
+  function requireCanArchive(req: AuthRequest, res: Response, next: NextFunction) {
     if (!req.auth) return res.status(401).json({ message: "Not authenticated" });
     const noDestructive = ["carrier_analyst"];
     if (noDestructive.includes(req.auth.role)) {
@@ -2022,7 +2019,7 @@ export async function registerRoutes(
   app.get("/api/admin/archived/:entity", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
     try {
       const { entity } = req.params;
-      let records: any[] = [];
+      let records: unknown[] = [];
       switch (entity) {
         case "claims": records = await storage.getArchivedClaims(); break;
         case "adjusters": records = await storage.getArchivedAdjusters(); break;
@@ -2293,19 +2290,19 @@ export async function registerRoutes(
   });
 
   // ── helpers ────────────────────────────────────────────────────────────────
-  function groupByMonth(items: any[], field: string): Record<string, number> {
+  function groupByMonth(items: Record<string, unknown>[], field: string): Record<string, number> {
     const out: Record<string, number> = {};
     for (const item of items) {
-      const d = item[field] ? new Date(item[field]) : null;
+      const d = item[field] ? new Date(item[field] as string | number | Date) : null;
       if (!d) continue;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       out[key] = (out[key] || 0) + 1;
     }
     return out;
   }
-  function countLastNDays(items: any[], field: string, n: number): number {
+  function countLastNDays(items: Record<string, unknown>[], field: string, n: number): number {
     const cutoff = Date.now() - n * 24 * 60 * 60 * 1000;
-    return items.filter(i => i[field] && new Date(i[field]).getTime() >= cutoff).length;
+    return items.filter(i => i[field] && new Date(i[field] as string | number | Date).getTime() >= cutoff).length;
   }
 
   // ─── Section 18: Document Intelligence ────────────────────────────────────
@@ -2317,15 +2314,17 @@ export async function registerRoutes(
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       const ef = await storage.getEvidenceFile(docId, orgId);
       if (!ef) return res.status(404).json({ message: "Evidence file not found" });
-      const textToAnalyze = (ef as any).extractedText || sampleClaimDocumentText(ef.fileName || "");
+      const efWithText = ef as typeof ef & { extractedText?: string };
+      const textToAnalyze = efWithText.extractedText || sampleClaimDocumentText(ef.fileName || "");
       const suggestions = analyzeDocumentText(textToAnalyze, ef.fileName || "");
+      const suggestionsRec = suggestions as unknown as Record<string, unknown>;
       await storage.updateEvidenceFileIntelligence(docId, orgId, { suggestions, analyzedAt: new Date().toISOString() }, "pending");
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DOCUMENT_ANALYZED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { claimId, filename: ef.fileName } });
-      if ((suggestions as any).denialDetection?.isDenied) {
-        await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DENIAL_DETECTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { denialType: (suggestions as any).denialDetection.denialType } });
+      if ((suggestionsRec.denialDetection as Record<string, unknown> | undefined)?.isDenied) {
+        await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DENIAL_DETECTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { denialType: (suggestionsRec.denialDetection as Record<string, unknown>)?.denialType } });
       }
-      if (((suggestions as any).missingLineItems?.length ?? 0) > 0) {
-        await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MISSING_ITEMS_DETECTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { count: (suggestions as any).missingLineItems?.length } });
+      if (((suggestionsRec.missingLineItems as unknown[] | undefined)?.length ?? 0) > 0) {
+        await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MISSING_ITEMS_DETECTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { count: (suggestionsRec.missingLineItems as unknown[])?.length } });
       }
       res.json({ suggestions });
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
@@ -2335,7 +2334,7 @@ export async function registerRoutes(
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
       const { id: claimId, docId } = req.params as Record<string, string>;
-      const { acceptedFields } = req.body as { acceptedFields: Record<string, any> };
+      const { acceptedFields } = req.body as { acceptedFields: Partial<InsertClaim> };
       const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       if (acceptedFields && Object.keys(acceptedFields).length > 0) {
@@ -2398,7 +2397,7 @@ export async function registerRoutes(
       const { carrierId, type } = req.query as Record<string, string>;
       let escs = await storage.getAllOrgEscalations(orgId);
       if (type) escs = escs.filter(e => e.escalationType === type);
-      const effectiveness = computeEscalationEffectiveness(escs as any, carrierId, type);
+      const effectiveness = computeEscalationEffectiveness(escs as Parameters<typeof computeEscalationEffectiveness>[0], carrierId, type);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_EFFECTIVENESS_VIEWED", entityType: "escalation", entityId: "effectiveness", ipAddress: getClientIp(req) });
       res.json(effectiveness);
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
@@ -2411,7 +2410,7 @@ export async function registerRoutes(
       const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       const [escs, allClaims] = await Promise.all([storage.getAllOrgEscalations(orgId), storage.getClaims(orgId)]);
-      const recommendation = buildRecommendedEscalationPath(claim, escs as any, allClaims);
+      const recommendation = buildRecommendedEscalationPath(claim, escs as Parameters<typeof buildRecommendedEscalationPath>[1], allClaims);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_PATH_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json(recommendation);
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
@@ -2462,7 +2461,7 @@ export async function registerRoutes(
         storage.getTimelineEvents(claimId, orgId),
         storage.getEscalations(claimId, orgId),
         storage.getEvidenceFiles(orgId, claimId),
-        storage.getClaimAdjusters(claimId, orgId).catch(() => [] as any[]),
+        storage.getClaimAdjusters(claimId, orgId).catch(() => []),
       ]);
       res.json({
         totalDocuments: docs.length,
@@ -2506,7 +2505,7 @@ export async function registerRoutes(
       const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       const [adjLinks, docs, escs, allOrgClaims] = await Promise.all([
-        storage.getClaimAdjusters(claimId, orgId).catch(() => [] as any[]),
+        storage.getClaimAdjusters(claimId, orgId).catch(() => []),
         storage.getEvidenceFiles(orgId, claimId),
         storage.getEscalations(claimId, orgId),
         storage.getClaims(orgId),
@@ -2516,7 +2515,7 @@ export async function registerRoutes(
       const alerts = computeAlerts(claim, adjLinks.length);
       const summary = buildExecutiveSummary(claim, riskSignals, healthScore, adjLinks.length, false);
       const carrierSignal = claim.carrier
-        ? (computeCarrierIntelligence(allOrgClaims.filter(c => c.carrier === claim.carrier) as any).find(() => true) ?? null)
+        ? (computeCarrierIntelligence(allOrgClaims.filter(c => c.carrier === claim.carrier)).find(() => true) ?? null)
         : null;
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "CLAIM_INTELLIGENCE_DASHBOARD_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json({ healthScore, riskSignals, alerts, executiveSummary: summary, carrierSignal, documentCount: docs.length, escalationCount: escs.length });
@@ -2529,8 +2528,8 @@ export async function registerRoutes(
       const { organizationId: orgId, userId, role } = req.auth!;
       const { claimId, question } = req.body as { claimId?: string; question: string };
       if (!question?.trim()) return res.status(400).json({ message: "Question is required" });
-      let claim: any = null;
-      let docs: any[] = [];
+      let claim: import("@shared/schema").Claim | undefined = undefined;
+      let docs: import("@shared/schema").EvidenceFile[] = [];
       if (claimId) {
         claim = await storage.getClaim(claimId, orgId);
         if (claim) {
@@ -2538,7 +2537,7 @@ export async function registerRoutes(
           docs = await storage.getEvidenceFiles(orgId, claimId);
         }
       }
-      const answer = await runCopilotQuery(question, claim, [], [], docs, role);
+      const answer = await runCopilotQuery(question, claim ?? null, [], [], docs, role);
       const copilotEntityId = claimId ?? "general";
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "COPILOT_QUESTION_SUBMITTED", entityType: "copilot", entityId: copilotEntityId, ipAddress: getClientIp(req), afterJson: { question: question.substring(0, 100) } });
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "COPILOT_RESPONSE_GENERATED", entityType: "copilot", entityId: copilotEntityId, ipAddress: getClientIp(req) });
@@ -2577,7 +2576,7 @@ export async function registerRoutes(
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
       const allClaims = await storage.getAllClaimsAcrossTenants();
-      const leaderboard = computeCarrierIntelligence(allClaims as any)
+      const leaderboard = computeCarrierIntelligence(allClaims)
         .sort((a, b) => b.claimsCount - a.claimsCount).slice(0, 50);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MASTER_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "carriers", ipAddress: getClientIp(req) });
       res.json(leaderboard);
@@ -2588,9 +2587,9 @@ export async function registerRoutes(
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
       const [allClaims, allAdj] = await Promise.all([storage.getAllClaimsAcrossTenants(), storage.getAllAdjustersAcrossTenants()]);
-      const leaderboard = allAdj.slice(0, 50).map((adj: any) => {
-        const adjClaims = allClaims.filter(c => c.adjusterId === adj.id || (c as any).assignedAdjusterId === adj.id);
-        return { adjusterId: adj.id, adjusterName: adj.name || "Unknown", company: adj.company, totalClaims: adjClaims.length, ...computeAdjusterScorecard([], adjClaims) };
+      const leaderboard = allAdj.slice(0, 50).map((adj) => {
+        const adjClaims = allClaims.filter(c => c.adjusterId === adj.id);
+        return { adjusterId: adj.id, adjusterName: adj.adjusterName || "Unknown", totalClaims: adjClaims.length, ...computeAdjusterScorecard([], adjClaims) };
       });
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MASTER_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "adjusters", ipAddress: getClientIp(req) });
       res.json(leaderboard);
@@ -2624,7 +2623,7 @@ export async function registerRoutes(
         isGlobal ? storage.getAllEscalationsAcrossTenants() : storage.getAllOrgEscalations(orgId),
         isGlobal ? storage.getAllAdjustersAcrossTenants() : storage.getAdjusters(orgId),
       ]);
-      const users = isGlobal ? allUsers : allUsers.filter((u: any) => u.organizationId === orgId);
+      const users = isGlobal ? allUsers : allUsers.filter((u) => u.organizationId === orgId);
       const orgs = isGlobal ? await storage.getAllOrganizations() : [await storage.getOrganization(orgId)].filter(Boolean);
       const billing = isGlobal ? await storage.getAllBillingAccounts() : [await storage.getBillingAccountByOrg(orgId)].filter(Boolean);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "EXECUTIVE_DASHBOARD_VIEWED", entityType: "platform", entityId: "overview", ipAddress: getClientIp(req) });
@@ -2636,7 +2635,7 @@ export async function registerRoutes(
         totalOrganizations: orgs.length,
         totalAdjusters: adjs.length,
         totalEscalations: escs.length,
-        activeSubscriptions: (billing as any[]).filter(b => ["active", "trialing"].includes(b?.subscriptionStatus || "")).length,
+        activeSubscriptions: billing.filter(b => b && ["active", "trialing"].includes(b.subscriptionStatus || "")).length,
       });
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
@@ -2646,7 +2645,7 @@ export async function registerRoutes(
       const { organizationId: orgId, userId, role } = req.auth!;
       const isGlobal = isMaster(role);
       const allUsers = await storage.getAllUsers();
-      const users = isGlobal ? allUsers : allUsers.filter((u: any) => u.organizationId === orgId);
+      const users = isGlobal ? allUsers : allUsers.filter((u) => u.organizationId === orgId);
       const claims = isGlobal ? await storage.getAllClaimsAcrossTenants() : await storage.getClaims(orgId);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "EXECUTIVE_DASHBOARD_VIEWED", entityType: "platform", entityId: "growth", ipAddress: getClientIp(req) });
       res.json({
@@ -2686,7 +2685,7 @@ export async function registerRoutes(
       const { organizationId: orgId, userId, role } = req.auth!;
       const isGlobal = isMaster(role);
       const claims = isGlobal ? await storage.getAllClaimsAcrossTenants() : await storage.getClaims(orgId);
-      const docs = await storage.getEvidenceFiles(orgId).catch(() => [] as any[]);
+      const docs = await storage.getEvidenceFiles(orgId).catch(() => []);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "EXECUTIVE_DASHBOARD_VIEWED", entityType: "platform", entityId: "usage", ipAddress: getClientIp(req) });
       res.json({
         totalClaimsWithScoring: claims.filter(c => c.frictionScore != null).length,
@@ -2702,7 +2701,7 @@ export async function registerRoutes(
       if (!["super_admin", "carrier_analyst", "founder", "admin"].includes(role)) return res.status(403).json({ message: "Access denied" });
       const isGlobal = isMaster(role);
       const allUsers = await storage.getAllUsers();
-      const users = isGlobal ? allUsers : allUsers.filter((u: any) => u.organizationId === orgId);
+      const users = isGlobal ? allUsers : allUsers.filter((u) => u.organizationId === orgId);
       const claims = isGlobal ? await storage.getAllClaimsAcrossTenants() : await storage.getClaims(orgId);
       const adjs = isGlobal ? await storage.getAllAdjustersAcrossTenants() : await storage.getAdjusters(orgId);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "INVESTOR_DASHBOARD_VIEWED", entityType: "platform", entityId: "investor-safe", ipAddress: getClientIp(req) });
@@ -2778,7 +2777,7 @@ export async function registerRoutes(
   return httpServer;
 }
 
-function sanitizeUser(user: any) {
+function sanitizeUser(user: import("@shared/schema").User) {
   const { passwordHash: _ph, ...safe } = user;
   return safe;
 }
@@ -2788,7 +2787,7 @@ function sanitizeUser(user: any) {
 async function ensureMasterUser(email: string, password: string, fullName: string) {
   const existing = await storage.getUserByEmail(email);
   if (existing) {
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
     if (!existing.isPlatformOwner || existing.role !== "super_admin") {
       updates.isPlatformOwner = true;
       updates.role = "super_admin";
@@ -3126,7 +3125,7 @@ async function seedDemoUsers() {
     // Billing (org-level — only create once per org)
     const existingBilling = await storage.getBillingAccountByOrg(orgId);
     if (!existingBilling && opts.planType) {
-      const billingData: any = { organizationId: orgId, planType: opts.planType };
+      const billingData: Record<string, unknown> = { organizationId: orgId, planType: opts.planType };
       if (opts.subscriptionStatus === "trialing" && opts.trialDays) {
         billingData.subscriptionStatus = "trialing";
         billingData.trialStartDate = new Date();
@@ -3134,7 +3133,7 @@ async function seedDemoUsers() {
       } else {
         billingData.subscriptionStatus = opts.subscriptionStatus ?? "active";
       }
-      await storage.createBillingAccount(billingData);
+      await storage.createBillingAccount(billingData as Parameters<typeof storage.createBillingAccount>[0]);
     }
 
     return { userId: user.id, orgId };
@@ -3199,7 +3198,7 @@ async function seedDemoUsers() {
     if (!u) continue;
     const bill = await storage.getBillingAccountByOrg(u.organizationId);
     if (!bill) {
-      const bd: any = { organizationId: u.organizationId, planType };
+      const bd: Record<string, unknown> = { organizationId: u.organizationId, planType };
       if (planType === "founder") {
         bd.subscriptionStatus = "trialing";
         bd.trialStartDate = new Date();
@@ -3207,7 +3206,7 @@ async function seedDemoUsers() {
       } else {
         bd.subscriptionStatus = "active";
       }
-      await storage.createBillingAccount(bd);
+      await storage.createBillingAccount(bd as Parameters<typeof storage.createBillingAccount>[0]);
     }
   }
 
