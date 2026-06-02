@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // Escalation Intelligence Engine (Section 19) — MVP, rule-based.
 // Computes effectiveness from REAL escalation records only.

@@ -1,4 +1,5 @@
-import type { Request, Response } from "express";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Response } from "express";
 import { Router } from "express";
 import { storage } from "./storage";
 import { applyPiiMasking, canViewUnmasked } from "./masking";
@@ -162,8 +163,8 @@ router.get("/exports/claims/:claimId", requireAuth, requireActiveSubscription, a
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="claim_${claimId}_${effectiveExportType}.pdf"`);
     return res.status(200).send(pdfBytes);
-  } catch (e: any) {
-    return res.status(500).json({ message: "Export error: " + e.message });
+  } catch (e) {
+    return res.status(500).json({ message: "Export error: " + (e as Error).message });
   }
 });
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // Claim Intelligence Engine (Section 21) — MVP, rule-based.
 // Aggregates all available claim data into a single intelligence dashboard.
@@ -24,7 +25,7 @@ export function computeClaimHealthScore(
   claim: Claim,
   linkedAdjusterCount: number,
   evidenceFileCount: number,
-  escalationCount: number,
+  _escalationCount: number,
 ): ClaimHealthScore {
   const a = claim as any;
 

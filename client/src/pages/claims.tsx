@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -12,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -24,7 +24,7 @@ import type { Claim } from "@shared/schema";
 import {
   Plus, Search, FileText, Eye, Loader2, X, Globe, MoreHorizontal,
   Archive, Trash2, Sparkles, Upload, Brain, FileUp, CheckCircle,
-  PenLine, AlertTriangle, ChevronDown, ChevronUp,
+  PenLine, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { claimAnalysisStatus } from "@/lib/data-source";

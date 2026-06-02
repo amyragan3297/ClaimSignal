@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 function escapeCsv(value: any): string {
   if (value === null || value === undefined) return "";
   const s = String(value);

@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router, type Response, type NextFunction } from "express";
-import { type AuthRequest, requireAuth, requireActiveSubscription, requirePlatformOwner } from "./auth";
+import { type AuthRequest } from "./auth";
 import { storage } from "./storage";
 import {
-  computeAdjusterFrictionScore, computeFullClaimScoring, loadScoringWeights, seedDefaultWeights,
+  computeAdjusterFrictionScore, computeFullClaimScoring, loadScoringWeights,
   computeAdjusterFrictionFromEvents, computeClaimFrictionFromEvents,
   generatePlaybookFromEvents, createSupplementDepthEvents,
 } from "./scoring";
@@ -27,8 +28,8 @@ router.get("/supplements/:claimId", blockCarrierFromLayer1, async (req: AuthRequ
   try {
     const data = await storage.getSupplementIntelligence(req.params.claimId as string, req.auth!.organizationId);
     res.json(data);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -40,8 +41,8 @@ router.post("/supplements", blockCarrierFromLayer1, async (req: AuthRequest, res
     });
     const created = await storage.createSupplementIntelligence(validated);
     res.json(created);
-  } catch (err: any) {
-    return res.status(400).json({ message: err.message });
+  } catch (err) {
+    return res.status(400).json({ message: (err as Error).message });
   }
 });
 
@@ -49,8 +50,8 @@ router.get("/irc-behavior/:adjusterId", blockCarrierFromLayer1, async (req: Auth
   try {
     const data = await storage.getAdjusterIrcBehaviors(req.params.adjusterId as string, req.auth!.organizationId);
     res.json(data);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -62,8 +63,8 @@ router.post("/irc-behavior", blockCarrierFromLayer1, async (req: AuthRequest, re
     });
     const created = await storage.upsertAdjusterIrcBehavior(validated);
     res.json(created);
-  } catch (err: any) {
-    return res.status(400).json({ message: err.message });
+  } catch (err) {
+    return res.status(400).json({ message: (err as Error).message });
   }
 });
 
@@ -71,8 +72,8 @@ router.get("/signals/:claimId", blockCarrierFromLayer1, async (req: AuthRequest,
   try {
     const data = await storage.getCommunicationSignals(req.params.claimId as string, req.auth!.organizationId);
     res.json(data);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -80,8 +81,8 @@ router.get("/signals/adjuster/:adjusterId", blockCarrierFromLayer1, async (req: 
   try {
     const data = await storage.getCommunicationSignalsByAdjuster(req.params.adjusterId as string, req.auth!.organizationId);
     res.json(data);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -93,8 +94,8 @@ router.post("/signals", blockCarrierFromLayer1, async (req: AuthRequest, res: Re
     });
     const created = await storage.createCommunicationSignal(validated);
     res.json(created);
-  } catch (err: any) {
-    return res.status(400).json({ message: err.message });
+  } catch (err) {
+    return res.status(400).json({ message: (err as Error).message });
   }
 });
 
@@ -102,8 +103,8 @@ router.get("/playbook/:adjusterId", blockCarrierFromLayer1, async (req: AuthRequ
   try {
     const data = await storage.getPlaybookInsights(req.params.adjusterId as string, req.auth!.organizationId);
     res.json(data);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -115,8 +116,8 @@ router.post("/playbook", blockCarrierFromLayer1, async (req: AuthRequest, res: R
     });
     const created = await storage.createPlaybookInsight(validated);
     res.json(created);
-  } catch (err: any) {
-    return res.status(400).json({ message: err.message });
+  } catch (err) {
+    return res.status(400).json({ message: (err as Error).message });
   }
 });
 
@@ -131,8 +132,8 @@ router.get("/playbook/auto/:adjusterId", blockCarrierFromLayer1, async (req: Aut
       eventCount: events.length,
       ...playbook,
     });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -140,8 +141,8 @@ router.get("/scoring/claim/:claimId", blockCarrierFromLayer1, async (req: AuthRe
   try {
     const scores = await computeFullClaimScoring(req.params.claimId as string, req.auth!.organizationId);
     res.json(scores);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -164,8 +165,8 @@ router.get("/scoring/adjuster/:adjusterId", blockCarrierFromLayer1, async (req: 
       frictionScoreEventDriven,
       eventCount: events.length,
     });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -174,8 +175,8 @@ router.get("/weights", async (req: AuthRequest, res: Response) => {
     const version = (req.query.version as string) || "v1";
     const weights = await storage.getScoringWeights(version);
     res.json(weights);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -186,8 +187,8 @@ router.post("/weights", async (req: AuthRequest, res: Response) => {
     }
     const created = await storage.upsertScoringWeight(req.body);
     res.json(created);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -206,8 +207,8 @@ router.get("/events/claim/:claimId", blockCarrierFromLayer1, async (req: AuthReq
 
     const claimFrictionScore = computeClaimFrictionFromEvents(events);
     res.json({ claimId, claimFrictionScore, eventCount: events.length, events });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -225,8 +226,8 @@ router.get("/events/adjuster/:adjusterId", blockCarrierFromLayer1, async (req: A
       playbook,
       events,
     });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -249,8 +250,8 @@ router.get("/events/adjuster-carrier/:adjusterId", async (req: AuthRequest, res:
       categoryBreakdown,
       playbook,
     });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -262,8 +263,8 @@ router.post("/events", blockCarrierFromLayer1, async (req: AuthRequest, res: Res
     });
     const created = await storage.createIntelligenceEvent(validated);
     res.json(created);
-  } catch (err: any) {
-    return res.status(400).json({ message: err.message });
+  } catch (err) {
+    return res.status(400).json({ message: (err as Error).message });
   }
 });
 
@@ -290,8 +291,8 @@ router.post("/events/supplement-depth", blockCarrierFromLayer1, async (req: Auth
     }
 
     res.json({ eventsCreated: created.length, events: created });
-  } catch (err: any) {
-    return res.status(400).json({ message: err.message });
+  } catch (err) {
+    return res.status(400).json({ message: (err as Error).message });
   }
 });
 
@@ -304,8 +305,8 @@ router.get("/aggregated", async (req: AuthRequest, res: Response) => {
     };
     const data = await storage.getAggregatedMetrics(filters);
     res.json(data);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -315,8 +316,8 @@ router.get("/aggregated/adjuster", async (req: AuthRequest, res: Response) => {
     if (!name || !carrier) return res.status(400).json({ message: "name and carrier query params required" });
     const data = await storage.getAggregatedMetricsByAdjuster(name as string, carrier as string);
     res.json(data);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -328,8 +329,8 @@ router.post("/aggregated/compute", async (req: AuthRequest, res: Response) => {
     const timePeriod = req.body.timePeriod || new Date().toISOString().slice(0, 7);
     const result = await computeAggregatedMetrics(timePeriod);
     res.json(result);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 

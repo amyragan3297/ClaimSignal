@@ -46,7 +46,7 @@ export interface DocumentIntelligenceResult {
   playbookLinkHint: string | null;
 }
 
-const lc = (s: string) => s.toLowerCase();
+const _lc = (s: string) => s.toLowerCase();
 
 // ── 1. Enhanced entity extraction ──────────────────────────────────────────
 function extractFields(text: string): ExtractedField[] {

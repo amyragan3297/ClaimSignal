@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // Playbook Engine (MVP, rule-based) — shared logic for:
 //   Section 17  : Playbook Search Engine (NL -> filters -> historical results)
@@ -142,7 +143,7 @@ export function isUsableOutcome(c: Claim): boolean {
   return Boolean(anyc.initialOutcome || anyc.finalOutcome || anyc.denialOverturned || anyc.reinspectionRequested || anyc.escalationUsed || anyc.whatWorked);
 }
 
-function cycleTimeDays(c: Claim): number | null {
+function _cycleTimeDays(c: Claim): number | null {
   const anyc = c as any;
   const start = anyc.dateOfLoss ? new Date(anyc.dateOfLoss) : null;
   const end = anyc.resolutionDate ? new Date(anyc.resolutionDate) : (anyc.determinationDate ? new Date(anyc.determinationDate) : null);

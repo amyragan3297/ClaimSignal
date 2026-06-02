@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -8,7 +9,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Users, Building2, CreditCard, FileText, Shield, Loader2, Eye,
-  Archive, Trash2, RotateCcw, AlertTriangle, BarChart3,
+  Archive, Trash2, RotateCcw, BarChart3,
 } from "lucide-react";
 import { Redirect } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";

@@ -1,6 +1,5 @@
 import { storage } from "./storage";
 import type { Claim, Adjuster, CommunicationSignal, SupplementIntelligence, IntelligenceEvent } from "@shared/schema";
-import type { ScoringWeight } from "@shared/schema";
 
 let cachedWeights: Map<string, number> | null = null;
 let cacheTimestamp = 0;
@@ -23,7 +22,7 @@ export async function loadScoringWeights(): Promise<Map<string, number>> {
   return map;
 }
 
-function getWeight(weights: Map<string, number>, key: string, fallback: number): number {
+function _getWeight(weights: Map<string, number>, key: string, fallback: number): number {
   return weights.get(key) ?? fallback;
 }
 

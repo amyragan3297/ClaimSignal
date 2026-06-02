@@ -6,8 +6,6 @@ import {
   Shield,
   ArrowLeft,
   BarChart3,
-  TrendingUp,
-  Users,
   Lock,
   Layers,
   Target,

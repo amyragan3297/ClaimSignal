@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   type StormEvent, type InsertStormEvent,
   type Organization, type InsertOrganization,
@@ -44,7 +45,7 @@ import {
   type Escalation, type InsertEscalation, escalations,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, count, desc, gt, isNull, sql } from "drizzle-orm";
+import { eq, and, count, desc, gt, isNull, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;

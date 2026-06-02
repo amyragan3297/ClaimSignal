@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import crypto from "crypto";
@@ -347,9 +348,9 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       try {
         llmExtraction = await extractClaimFieldsFromText(textContent, classification.category);
         console.log(`[ai-extraction] success for ${req.file.originalname}, confidence=${llmExtraction.confidence}`);
-      } catch (aiErr: any) {
+      } catch (aiErr) {
         recordAiError("extractClaimFieldsFromText/upload", aiErr);
-        console.error("[ai-extraction] non-fatal:", aiErr?.message);
+        console.error("[ai-extraction] non-fatal:", (aiErr as Error)?.message);
       }
     } else if (isOpenAIConfigured() && (!textContent || textContent.trim().length <= 80)) {
       console.log(`[ai-extraction] skipped for ${req.file.originalname} — no readable text content (fileType=${fileType})`);
@@ -502,9 +503,9 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       matchReasons: ranked[0]?.reasons || [],
       draft,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Evidence upload error:", err);
-    return res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -517,8 +518,8 @@ router.get("/files", async (req: AuthRequest, res: Response) => {
       ? await storage.getAllEvidenceFilesAcrossTenants()
       : await storage.getEvidenceFiles(req.auth.organizationId, claimId);
     res.json(files);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -540,8 +541,8 @@ router.get("/files-unmatched", async (req: AuthRequest, res: Response) => {
       afterJson: { count: files.length, crossTenant: master },
     });
     res.json(files);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -601,8 +602,8 @@ router.get("/files/:id/match-suggestions", async (req: AuthRequest, res: Respons
       confidenceLabel: matchConfidenceLabel(best?.score ?? 0),
       masked: !unmask,
     });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -615,8 +616,8 @@ router.get("/files/:id", async (req: AuthRequest, res: Response) => {
       : await storage.getEvidenceFile(req.params.id as string, req.auth.organizationId);
     if (!file) return res.status(404).json({ message: "File not found" });
     res.json(file);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -625,8 +626,8 @@ router.get("/files/:id/entities", async (req: AuthRequest, res: Response) => {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
     const entities = await storage.getExtractedEntities(req.params.id as string);
     res.json(entities);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -672,8 +673,8 @@ router.post("/files/:id/match", async (req: AuthRequest, res: Response) => {
     });
 
     res.json({ matched: true, claimId });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -706,7 +707,7 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
     const f = (fieldKey: string, entityType: string, llmKey: string): string | undefined =>
       accepted[fieldKey]?.trim() || llm(llmKey) || getEntity(entityType) || undefined;
 
-    const NUMERIC_KEYS = ["rcv","acv","deductible","supplementRequested","supplementApproved","recoverableDepreciation"];
+    const _NUMERIC_KEYS = ["rcv","acv","deductible","supplementRequested","supplementApproved","recoverableDepreciation"];
     const numericVal = (v?: string) => {
       if (!v) return undefined;
       const n = parseFloat(v.replace(/[$,\s]/g, ""));
@@ -855,8 +856,8 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
     });
 
     res.json({ created: true, claim });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -902,8 +903,8 @@ router.post("/files/:id/unmatch", async (req: AuthRequest, res: Response) => {
     });
 
     res.json({ unmatched: true, draft });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -1004,8 +1005,8 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
     });
 
     res.json({ claim: updated, fieldsApplied: Object.keys(claimUpdate) });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -1017,8 +1018,8 @@ router.get("/drafts", async (req: AuthRequest, res: Response) => {
       ? await storage.getAllClaimDraftsAcrossTenants()
       : await storage.getClaimDrafts(req.auth.organizationId);
     res.json(drafts);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -1048,8 +1049,8 @@ router.post("/drafts/:id/archive", async (req: AuthRequest, res: Response) => {
     });
 
     res.json({ archived: true, draft: updated });
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -1059,8 +1060,8 @@ router.patch("/drafts/:id", async (req: AuthRequest, res: Response) => {
     const updated = await storage.updateClaimDraft(req.params.id as string, req.auth.organizationId, req.body);
     if (!updated) return res.status(404).json({ message: "Draft not found" });
     res.json(updated);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 
@@ -1069,8 +1070,8 @@ router.get("/timeline/:claimId", async (req: AuthRequest, res: Response) => {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
     const events = await storage.getTimelineEvents(req.params.claimId as string, req.auth.organizationId);
     res.json(events);
-  } catch (err: any) {
-    return res.status(500).json({ message: err.message });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 

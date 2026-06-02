@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // Adjuster Scorecard Engine (Section 14) — MVP, rule-based.
 // Computed only from REAL linked claim outcomes. Never fabricates.

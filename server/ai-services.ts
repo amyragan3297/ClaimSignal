@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { spawn } from "child_process";
 import { writeFile, unlink, readFile } from "fs/promises";
 import { randomUUID } from "crypto";
@@ -25,7 +26,7 @@ interface AiErrorRecord {
 let _lastAiError: AiErrorRecord | null = null;
 
 export function recordAiError(operation: string, err: unknown): void {
-  const message = err instanceof Error ? err.message : String(err);
+  const message = err instanceof Error ? (err as Error).message : String(err);
   // Strip any potential token/key fragments from the log message.
   const safe = message.replace(/sk-[A-Za-z0-9\-_]{8,}/g, "[REDACTED]");
   _lastAiError = { operation, message: safe, at: new Date().toISOString() };

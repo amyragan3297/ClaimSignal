@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import {
   Brain, Activity, TrendingUp, AlertTriangle, Target,
-  FileText, BarChart2, ChevronRight, Shield, DollarSign,
+  FileText, ChevronRight, Shield, DollarSign,
   Clock, Users,
 } from "lucide-react";
 import type { Claim, Adjuster } from "@shared/schema";
@@ -87,7 +87,7 @@ export default function IntelligencePage() {
     : "—";
   const totalSupplementOpp = claims?.reduce((s, c) => s + (c.supplementAmountTotal ?? 0), 0) ?? 0;
   const deniedCount = claims?.filter(c => c.status === "denied").length ?? 0;
-  const highRiskCount = claims?.filter(c => (c.riskScore ?? 0) >= 7 || (c.frictionScore ?? 0) >= 7).length ?? 0;
+  const _highRiskCount = claims?.filter(c => (c.riskScore ?? 0) >= 7 || (c.frictionScore ?? 0) >= 7).length ?? 0;
   const avgApprovalProb = claims?.length
     ? Math.round(claims.reduce((s, c) => s + (c.approvalProbability ?? 0), 0) / claims.length * 100)
     : null;

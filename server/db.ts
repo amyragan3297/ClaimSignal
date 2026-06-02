@@ -15,7 +15,7 @@ try {
     url.password = "";
     connectionString = url.toString();
   }
-} catch (e) {
+} catch (_e) {
   // If URL parsing fails, continue with original string
 }
 

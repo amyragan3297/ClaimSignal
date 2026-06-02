@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,7 +35,7 @@ import {
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { CloudLightning, Plus, Trash2, Cloud, Wind, Droplets, MapPin, AlertTriangle, Info } from "lucide-react";
+import { CloudLightning, Plus, Trash2, Cloud, Wind, Droplets, MapPin, Info } from "lucide-react";
 
 const stormEventFormSchema = z.object({
   dateOfLoss: z.string().min(1, "Date of loss is required"),
@@ -85,7 +86,7 @@ function EventTypeIcon({ type }: { type: string }) {
 export default function StormEventsPage() {
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [_editingId, _setEditingId] = useState<string | null>(null);
 
   const { data: events = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/storm-events"],

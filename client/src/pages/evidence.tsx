@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +44,6 @@ import {
   FileText,
   CheckCircle,
   AlertTriangle,
-  Search,
   X,
   Loader2,
   Link as LinkIcon,

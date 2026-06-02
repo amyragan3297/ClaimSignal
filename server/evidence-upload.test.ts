@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Evidence upload pipeline regression tests.
  * Run with:  npx tsx server/evidence-upload.test.ts

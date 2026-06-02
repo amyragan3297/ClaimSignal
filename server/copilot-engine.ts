@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // ClaimSignal AI Copilot Engine (Section 22)
 //
@@ -39,7 +40,7 @@ export function assembleCopilotContext(
   escalations: Escalation[],
   timelineEvents: TimelineEvent[],
   evidenceFiles: EvidenceFile[],
-  role: string,
+  _role: string,
 ): string {
   if (!claim) return "No specific claim selected. Answering from platform knowledge only.";
 
@@ -223,8 +224,8 @@ export async function runCopilotQuery(
       model: "gpt-4o",
       claimContext: claim !== null,
     };
-  } catch (err: any) {
-    console.error("[copilot] OpenAI error:", err?.message);
+  } catch (err) {
+    console.error("[copilot] OpenAI error:", (err as Error)?.message);
     return ruleBasedResponse(question, claim);
   }
 }

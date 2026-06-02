@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Express, Response, NextFunction } from "express";
-import { createServer, type Server } from "http";
+import { type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
 import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema } from "@shared/schema";
-import { applyPiiMasking, applyPiiMaskingToList, canViewUnmasked, sanitizeSharedClaimList, sanitizePlaybookList, sanitizePlaybookRecord, toPlaybookAggregate, isMaster } from "./masking";
+import { applyPiiMasking, canViewUnmasked, sanitizeSharedClaimList, sanitizePlaybookList, sanitizePlaybookRecord, toPlaybookAggregate, isMaster } from "./masking";
 import { computeCarrierIntelligence } from "./carrier-intelligence";
 import { computeAdjusterScorecard } from "./adjuster-scorecard";
 import { parseQueryToFilters, filterClaims, buildStrategySummary, similarityScore, isUsableOutcome, type PlaybookFilters } from "./playbook-engine";
@@ -41,7 +42,6 @@ import {
   setRefreshTokenCookie,
   clearRefreshTokenCookie,
   getClientIp,
-  hashToken,
 } from "./auth";
 
 const CLAIM_NUMERIC_FIELDS = [
@@ -164,8 +164,8 @@ export async function registerRoutes(
 
       setRefreshTokenCookie(res, refreshToken);
       res.json({ accessToken, user: sanitizeUser(user), orgId: org.id });
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -199,8 +199,8 @@ export async function registerRoutes(
 
       setRefreshTokenCookie(res, refreshToken);
       res.json({ accessToken, user: sanitizeUser(user), orgId: user.organizationId });
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -219,7 +219,7 @@ export async function registerRoutes(
 
       setRefreshTokenCookie(res, result.refreshToken);
       res.json({ accessToken: result.accessToken });
-    } catch (err: any) {
+    } catch (_err) {
       return res.status(401).json({ message: "Refresh failed" });
     }
   });
@@ -255,8 +255,8 @@ export async function registerRoutes(
         isPlatformOwner: !!user.isPlatformOwner || user.role === "super_admin",
         isImpersonation: req.auth!.isImpersonation,
       });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -282,8 +282,8 @@ export async function registerRoutes(
         overturnedDenials,
         avgSupplementOpp: Math.round(avgSupplementOpp * 100) / 100,
       });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -310,8 +310,8 @@ export async function registerRoutes(
       }
 
       res.json(claimsData);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -338,8 +338,8 @@ export async function registerRoutes(
       }
 
       res.json(sanitizeSharedClaimList(allClaims, role));
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -373,8 +373,8 @@ export async function registerRoutes(
       }
 
       res.json(claim);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -383,8 +383,8 @@ export async function registerRoutes(
       const orgId = req.auth!.organizationId;
       const versions = await storage.getClaimVersions(req.params.id as string, orgId);
       res.json(versions);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -439,8 +439,8 @@ export async function registerRoutes(
       });
 
       res.json({ matches, hasStrongMatch: matches.some((m) => m.strength === "strong") });
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -475,8 +475,8 @@ export async function registerRoutes(
       });
 
       res.json(claim);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -532,8 +532,8 @@ export async function registerRoutes(
       });
 
       res.json(claim);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -558,8 +558,8 @@ export async function registerRoutes(
       });
 
       res.json({ message: "Deleted" });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -602,8 +602,8 @@ export async function registerRoutes(
       });
 
       res.json(enriched);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -664,8 +664,8 @@ export async function registerRoutes(
       });
 
       res.json(link);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -705,8 +705,8 @@ export async function registerRoutes(
       });
 
       res.json(updated);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -740,8 +740,8 @@ export async function registerRoutes(
       });
 
       res.json({ message: "Unlinked" });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -776,8 +776,8 @@ export async function registerRoutes(
       });
 
       res.json({ linkedClaimCount: claimIds.length, links: enriched });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -807,8 +807,8 @@ export async function registerRoutes(
       });
 
       res.json({ method: "MVP rule-based", ...scorecard });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -819,8 +819,8 @@ export async function registerRoutes(
         ? await storage.getAllAdjustersAcrossTenants()
         : await storage.getAdjusters(req.auth!.organizationId);
       res.json(adjustersList);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -844,8 +844,8 @@ export async function registerRoutes(
       });
 
       res.json(adjuster);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -868,8 +868,8 @@ export async function registerRoutes(
         ipAddress: getClientIp(req),
       });
       res.json(computeCarrierIntelligence(claims));
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -881,8 +881,8 @@ export async function registerRoutes(
       const orgId = req.auth!.organizationId;
       const claimId = typeof req.query.claimId === "string" ? req.query.claimId : undefined;
       res.json(await storage.getTimelineCandidates(orgId, claimId));
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -912,8 +912,8 @@ export async function registerRoutes(
         ipAddress: getClientIp(req),
       });
       res.json({ created: created.length, events: created });
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -947,8 +947,8 @@ export async function registerRoutes(
         beforeJson: ev, afterJson: updated, ipAddress: getClientIp(req),
       });
       res.json(updated);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -968,8 +968,8 @@ export async function registerRoutes(
       // Executive: aggregate metrics only. Master: full. Others: sanitized.
       if (role === "carrier_analyst") return res.json(entries.map(toPlaybookAggregate));
       return res.json(sanitizePlaybookList(entries, role));
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -988,8 +988,8 @@ export async function registerRoutes(
         ipAddress: getClientIp(req),
       });
       res.json(sanitizePlaybookRecord(entry, role));
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -1008,8 +1008,8 @@ export async function registerRoutes(
         afterJson: entry, ipAddress: getClientIp(req),
       });
       res.json(entry);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -1025,8 +1025,8 @@ export async function registerRoutes(
         beforeJson: existing, afterJson: updated, ipAddress: getClientIp(req),
       });
       res.json(updated);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -1042,8 +1042,8 @@ export async function registerRoutes(
         beforeJson: existing, ipAddress: getClientIp(req),
       });
       res.json({ ok: true });
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -1086,9 +1086,9 @@ export async function registerRoutes(
         try {
           aiStrategy = await generatePlaybookStrategy(claim, scored.map((s) => s.playbook));
           method = "AI-enhanced";
-        } catch (aiErr: any) {
+        } catch (aiErr) {
           recordAiError("generatePlaybookStrategy", aiErr);
-          console.error("[playbook-ai] strategy generation failed (non-fatal):", aiErr?.message);
+          console.error("[playbook-ai] strategy generation failed (non-fatal):", (aiErr as Error)?.message);
         }
       }
 
@@ -1099,8 +1099,8 @@ export async function registerRoutes(
         afterJson: { count: scored.length, aiStrategy: !!aiStrategy }, ipAddress: getClientIp(req),
       });
       res.json({ method, recommendations: scored, aiStrategy });
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -1195,8 +1195,8 @@ export async function registerRoutes(
       });
 
       res.json({ method: "MVP rule-based", similarClaimsFound: matches.length, matches });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1231,7 +1231,7 @@ export async function registerRoutes(
           // Merge AI filters with keyword-parsed fallback (AI wins on overlapping keys).
           parsedFilters = { ...parseQueryToFilters(query, knownCarriers), ...aiFilters };
           searchMethod = "AI-enhanced natural-language parsing";
-        } catch (aiErr: any) {
+        } catch (aiErr) {
           recordAiError("parsePlaybookQueryWithAI", aiErr);
           parsedFilters = parseQueryToFilters(query, knownCarriers);
         }
@@ -1326,8 +1326,8 @@ export async function registerRoutes(
         results,
         confidenceNote,
       });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1367,9 +1367,9 @@ export async function registerRoutes(
       });
 
       res.json({ analysis, generatedAt: generatedAt.toISOString(), claim: updated });
-    } catch (err: any) {
+    } catch (err) {
       recordAiError("generateClaimAnalysis", err);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1405,10 +1405,10 @@ export async function registerRoutes(
         });
       }
 
-      const { latitude, longitude, ...safeWeather } = weather;
+      const { latitude: _lat, longitude: _lng, ...safeWeather } = weather;
       res.json({ available: true, weather: safeWeather });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1420,8 +1420,8 @@ export async function registerRoutes(
     try {
       const recordings = await storage.getAudioRecordingsByOrg(req.auth!.organizationId);
       res.json(recordings);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1429,8 +1429,8 @@ export async function registerRoutes(
     try {
       const recordings = await storage.getAudioRecordings(req.params.claimId as string, req.auth!.organizationId);
       res.json(recordings);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1445,8 +1445,8 @@ export async function registerRoutes(
         transcriptText: req.body.transcriptText || null,
       });
       res.json(recording);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1455,8 +1455,8 @@ export async function registerRoutes(
       const updated = await storage.updateAudioRecording(req.params.id as string, req.auth!.organizationId, req.body);
       if (!updated) return res.status(404).json({ message: "Recording not found" });
       res.json(updated);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1489,9 +1489,9 @@ export async function registerRoutes(
         if (transcriptText && transcriptText.trim().length > 80) {
           try {
             transcriptExtraction = await extractClaimFieldsFromText(transcriptText, "transcript");
-          } catch (extErr: any) {
+          } catch (extErr) {
             recordAiError("extractClaimFieldsFromText/transcript", extErr);
-            console.error("[audio/transcribe] extraction non-fatal:", extErr?.message);
+            console.error("[audio/transcribe] extraction non-fatal:", (extErr as Error)?.message);
           }
         }
 
@@ -1557,8 +1557,8 @@ export async function registerRoutes(
         }
 
         res.json({ ...recording, extractedEventCount, extraction: transcriptExtraction });
-      } catch (err: any) {
-        res.status(500).json({ message: err.message });
+      } catch (err) {
+        res.status(500).json({ message: (err as Error).message });
       }
     }
   );
@@ -1568,8 +1568,8 @@ export async function registerRoutes(
     try {
       const comms = await storage.getEmailsByOrg(req.auth!.organizationId);
       res.json(comms);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1577,8 +1577,8 @@ export async function registerRoutes(
     try {
       const comms = await storage.getEmails(req.params.claimId as string, req.auth!.organizationId);
       res.json(comms);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1594,8 +1594,8 @@ export async function registerRoutes(
         body: req.body.body,
       });
       res.json(comm);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1605,8 +1605,8 @@ export async function registerRoutes(
     try {
       const clientsList = await storage.getClients(req.auth!.organizationId);
       res.json(clientsList);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1615,8 +1615,8 @@ export async function registerRoutes(
       const client = await storage.getClient(req.params.id as string, req.auth!.organizationId);
       if (!client) return res.status(404).json({ message: "Client not found" });
       res.json(client);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1628,8 +1628,8 @@ export async function registerRoutes(
       });
       const client = await storage.createClient(parsed);
       res.json(client);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -1638,8 +1638,8 @@ export async function registerRoutes(
       const updated = await storage.updateClient(req.params.id as string, req.auth!.organizationId, req.body);
       if (!updated) return res.status(404).json({ message: "Client not found" });
       res.json(updated);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -1647,8 +1647,8 @@ export async function registerRoutes(
     try {
       const supps = await storage.getSupplements(req.params.claimId as string, req.auth!.organizationId);
       res.json(supps);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1661,8 +1661,8 @@ export async function registerRoutes(
       });
       const supp = await storage.createSupplement(parsed);
       res.json(supp);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -1671,8 +1671,8 @@ export async function registerRoutes(
       const updated = await storage.updateSupplement(req.params.id as string, req.auth!.organizationId, req.body);
       if (!updated) return res.status(404).json({ message: "Supplement not found" });
       res.json(updated);
-    } catch (err: any) {
-      res.status(400).json({ message: err.message });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
     }
   });
 
@@ -1702,8 +1702,8 @@ export async function registerRoutes(
       }
 
       res.json({ url: result.url });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1718,8 +1718,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: result.error });
       }
       res.json({ received: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1727,8 +1727,8 @@ export async function registerRoutes(
     try {
       const billing = await storage.getBillingAccountByOrg(req.auth!.organizationId);
       res.json(billing || null);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1736,8 +1736,8 @@ export async function registerRoutes(
     try {
       const agreement = await storage.getFounderAgreement(req.auth!.organizationId);
       res.json(agreement || null);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1769,8 +1769,8 @@ export async function registerRoutes(
       });
 
       res.json(agreement);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1792,8 +1792,8 @@ export async function registerRoutes(
         activeCount: allBilling.filter(b => b.subscriptionStatus === "active").length,
         canceledCount: allBilling.filter(b => b.subscriptionStatus === "canceled").length,
       });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1818,8 +1818,8 @@ export async function registerRoutes(
       });
 
       res.json(enriched);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1827,8 +1827,8 @@ export async function registerRoutes(
     try {
       const logs = await storage.getAuditLogs();
       res.json(logs);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1863,8 +1863,8 @@ export async function registerRoutes(
 
       setRefreshTokenCookie(res, refreshToken);
       res.json({ accessToken, user: sanitizeUser(targetUser), orgId: targetUser.organizationId });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1901,8 +1901,8 @@ export async function registerRoutes(
 
       setRefreshTokenCookie(res, refreshToken);
       res.json({ accessToken, user: sanitizeUser(owner), orgId: owner.organizationId });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1911,8 +1911,8 @@ export async function registerRoutes(
     try {
       const events = await storage.getStormEvents(req.auth!.organizationId);
       res.json(events);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1920,8 +1920,8 @@ export async function registerRoutes(
     try {
       const events = await storage.getStormEventsByClaim(req.params.claimId as string, req.auth!.organizationId);
       res.json(events);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1930,8 +1930,8 @@ export async function registerRoutes(
       const event = await storage.getStormEvent(req.params.id as string, req.auth!.organizationId);
       if (!event) return res.status(404).json({ message: "Storm event not found" });
       res.json(event);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1945,8 +1945,8 @@ export async function registerRoutes(
       if (!parsed.success) return res.status(400).json({ message: "Validation error", errors: parsed.error.flatten() });
       const event = await storage.createStormEvent(parsed.data);
       res.status(201).json(event);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1955,8 +1955,8 @@ export async function registerRoutes(
       const updated = await storage.updateStormEvent(req.params.id as string, req.auth!.organizationId, req.body);
       if (!updated) return res.status(404).json({ message: "Storm event not found" });
       res.json(updated);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1976,8 +1976,8 @@ export async function registerRoutes(
         ipAddress: getClientIp(req),
       });
       res.json({ deleted: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -1997,8 +1997,8 @@ export async function registerRoutes(
     try {
       const overview = await storage.getGovernanceOverview();
       res.json(overview);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -2017,8 +2017,8 @@ export async function registerRoutes(
         default: return res.status(400).json({ message: "Unknown entity type" });
       }
       res.json(records);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -2036,7 +2036,7 @@ export async function registerRoutes(
         actionType: "CLAIM_ARCHIVED", entityType: "claim", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ archived: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.patch("/api/claims/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
@@ -2051,7 +2051,7 @@ export async function registerRoutes(
         actionType: "CLAIM_RESTORED", entityType: "claim", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ restored: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.delete("/api/claims/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
@@ -2063,7 +2063,7 @@ export async function registerRoutes(
         actionType: "CLAIM_PERMANENTLY_DELETED", entityType: "claim", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ deleted: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // Adjusters governance
@@ -2080,7 +2080,7 @@ export async function registerRoutes(
         actionType: "ADJUSTER_ARCHIVED", entityType: "adjuster", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ archived: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.patch("/api/adjusters/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
@@ -2095,7 +2095,7 @@ export async function registerRoutes(
         actionType: "ADJUSTER_RESTORED", entityType: "adjuster", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ restored: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.delete("/api/adjusters/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
@@ -2107,7 +2107,7 @@ export async function registerRoutes(
         actionType: "ADJUSTER_PERMANENTLY_DELETED", entityType: "adjuster", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ deleted: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // Clients governance
@@ -2124,7 +2124,7 @@ export async function registerRoutes(
         actionType: "CLIENT_ARCHIVED", entityType: "client", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ archived: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.patch("/api/clients/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
@@ -2139,7 +2139,7 @@ export async function registerRoutes(
         actionType: "CLIENT_RESTORED", entityType: "client", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ restored: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.delete("/api/clients/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
@@ -2151,7 +2151,7 @@ export async function registerRoutes(
         actionType: "CLIENT_PERMANENTLY_DELETED", entityType: "client", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ deleted: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // Evidence governance
@@ -2166,7 +2166,7 @@ export async function registerRoutes(
         actionType: "EVIDENCE_ARCHIVED", entityType: "evidence_file", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ archived: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.patch("/api/evidence/files/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
@@ -2180,7 +2180,7 @@ export async function registerRoutes(
         actionType: "EVIDENCE_RESTORED", entityType: "evidence_file", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ restored: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.delete("/api/evidence/files/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
@@ -2192,7 +2192,7 @@ export async function registerRoutes(
         actionType: "EVIDENCE_PERMANENTLY_DELETED", entityType: "evidence_file", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ deleted: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // Audio governance
@@ -2207,7 +2207,7 @@ export async function registerRoutes(
         actionType: "AUDIO_ARCHIVED", entityType: "audio_recording", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ archived: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.patch("/api/audio/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
@@ -2221,7 +2221,7 @@ export async function registerRoutes(
         actionType: "AUDIO_RESTORED", entityType: "audio_recording", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ restored: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.delete("/api/audio/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
@@ -2233,7 +2233,7 @@ export async function registerRoutes(
         actionType: "AUDIO_PERMANENTLY_DELETED", entityType: "audio_recording", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ deleted: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // Communications governance
@@ -2248,7 +2248,7 @@ export async function registerRoutes(
         actionType: "COMMUNICATION_ARCHIVED", entityType: "email", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ archived: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.patch("/api/communications/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
@@ -2261,7 +2261,7 @@ export async function registerRoutes(
         actionType: "COMMUNICATION_RESTORED", entityType: "email", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ restored: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.delete("/api/communications/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
@@ -2273,7 +2273,7 @@ export async function registerRoutes(
         actionType: "COMMUNICATION_PERMANENTLY_DELETED", entityType: "email", entityId: req.params.id as string, ipAddress: getClientIp(req),
       });
       res.json({ deleted: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // ── helpers ────────────────────────────────────────────────────────────────
@@ -2312,7 +2312,7 @@ export async function registerRoutes(
         await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MISSING_ITEMS_DETECTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { count: (suggestions as any).missingLineItems?.length } });
       }
       res.json({ suggestions });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.post("/api/claims/:id/evidence/:docId/suggestions/accept", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
@@ -2327,7 +2327,7 @@ export async function registerRoutes(
       }
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "DATA_EXTRACTED_ACCEPTED", entityType: "evidence_file", entityId: docId, ipAddress: getClientIp(req), afterJson: { claimId, fields: Object.keys(acceptedFields || {}) } });
       res.json({ updated: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // ─── Section 19: Escalation CRUD + Intelligence ───────────────────────────
@@ -2338,7 +2338,7 @@ export async function registerRoutes(
       const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       res.json(await storage.getEscalations(claimId, orgId));
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.post("/api/claims/:id/escalations", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
@@ -2352,7 +2352,7 @@ export async function registerRoutes(
       const esc = await storage.createEscalation(parsed.data);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_CREATED", entityType: "escalation", entityId: esc.id, ipAddress: getClientIp(req), afterJson: { claimId, type: esc.escalationType } });
       res.status(201).json(esc);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.patch("/api/escalations/:escId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
@@ -2363,7 +2363,7 @@ export async function registerRoutes(
       if (!updated) return res.status(404).json({ message: "Escalation not found" });
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_UPDATED", entityType: "escalation", entityId: escId, ipAddress: getClientIp(req) });
       res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.delete("/api/escalations/:escId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
@@ -2373,7 +2373,7 @@ export async function registerRoutes(
       await storage.deleteEscalation(escId, orgId);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_DELETED", entityType: "escalation", entityId: escId, ipAddress: getClientIp(req) });
       res.json({ deleted: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/escalations/effectiveness", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
@@ -2382,12 +2382,10 @@ export async function registerRoutes(
       const { carrierId, type } = req.query as Record<string, string>;
       let escs = await storage.getAllOrgEscalations(orgId);
       if (type) escs = escs.filter(e => e.escalationType === type);
-      let claims = await storage.getClaims(orgId);
-      if (carrierId) claims = claims.filter(c => (c.carrier ?? "").toLowerCase() === carrierId.toLowerCase());
       const effectiveness = computeEscalationEffectiveness(escs as any, carrierId, type);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_EFFECTIVENESS_VIEWED", entityType: "escalation", entityId: "effectiveness", ipAddress: getClientIp(req) });
       res.json(effectiveness);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/claims/:id/escalation-path", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
@@ -2400,7 +2398,7 @@ export async function registerRoutes(
       const recommendation = buildRecommendedEscalationPath(claim, escs as any, allClaims);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_PATH_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json(recommendation);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // ─── Section 20: Claim Timeline & Audit Intelligence ──────────────────────
@@ -2421,7 +2419,7 @@ export async function registerRoutes(
       }
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "TIMELINE_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json(events);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.post("/api/claims/:id/timeline", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
@@ -2435,7 +2433,7 @@ export async function registerRoutes(
       const event = await storage.createTimelineEvent(parsed.data);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "TIMELINE_EVENT_CREATED", entityType: "timeline_event", entityId: event.id, ipAddress: getClientIp(req), afterJson: { claimId: String(req.params.id) } });
       res.status(201).json(event);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/claims/:id/activity-summary", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
@@ -2458,7 +2456,7 @@ export async function registerRoutes(
         totalAdjusters: adjusters.length,
         totalStatusChanges: events.filter(e => e.eventType === "status_change").length,
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/claims/:id/dispute-export", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
@@ -2481,7 +2479,7 @@ export async function registerRoutes(
         escalations: escs,
         documents: docs.map(d => ({ id: d.id, filename: d.fileName, category: d.docCategory, uploadedAt: d.uploadedAt })),
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // ─── Section 21: Claim Intelligence Dashboard ─────────────────────────────
@@ -2506,7 +2504,7 @@ export async function registerRoutes(
         : null;
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "CLAIM_INTELLIGENCE_DASHBOARD_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json({ healthScore, riskSignals, alerts, executiveSummary: summary, carrierSignal, documentCount: docs.length, escalationCount: escs.length });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // ─── Section 22: AI Copilot ────────────────────────────────────────────────
@@ -2529,7 +2527,7 @@ export async function registerRoutes(
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "COPILOT_QUESTION_SUBMITTED", entityType: "copilot", entityId: copilotEntityId, ipAddress: getClientIp(req), afterJson: { question: question.substring(0, 100) } });
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "COPILOT_RESPONSE_GENERATED", entityType: "copilot", entityId: copilotEntityId, ipAddress: getClientIp(req) });
       res.json({ ...answer, disclosure: AI_DISCLOSURE });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // ─── Section 23: Master Intelligence Center ───────────────────────────────
@@ -2556,7 +2554,7 @@ export async function registerRoutes(
         activeSubscriptions: allBilling.filter(b => ["active", "trialing"].includes(b.subscriptionStatus || "")).length,
         claimsByStatus: Object.entries(allClaims.reduce((acc: Record<string, number>, c) => { acc[c.status] = (acc[c.status] || 0) + 1; return acc; }, {})),
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/master/intelligence/carriers", requireAuth, requirePlatformOwner, async (req: AuthRequest, res: Response) => {
@@ -2567,7 +2565,7 @@ export async function registerRoutes(
         .sort((a, b) => b.claimsCount - a.claimsCount).slice(0, 50);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MASTER_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "carriers", ipAddress: getClientIp(req) });
       res.json(leaderboard);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/master/intelligence/adjusters", requireAuth, requirePlatformOwner, async (req: AuthRequest, res: Response) => {
@@ -2580,7 +2578,7 @@ export async function registerRoutes(
       });
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MASTER_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "adjusters", ipAddress: getClientIp(req) });
       res.json(leaderboard);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/master/intelligence/playbooks", requireAuth, requirePlatformOwner, async (req: AuthRequest, res: Response) => {
@@ -2590,7 +2588,7 @@ export async function registerRoutes(
       const byOutcome = all.reduce((acc: Record<string, number>, p) => { const k = p.outcome ?? "unknown"; acc[k] = (acc[k] || 0) + 1; return acc; }, {});
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "MASTER_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "playbooks", ipAddress: getClientIp(req) });
       res.json({ total: all.length, byOutcome: Object.entries(byOutcome) });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // ─── Section 24: Executive / Investor Reporting ───────────────────────────
@@ -2624,7 +2622,7 @@ export async function registerRoutes(
         totalEscalations: escs.length,
         activeSubscriptions: (billing as any[]).filter(b => ["active", "trialing"].includes(b?.subscriptionStatus || "")).length,
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/executive/growth", requireAuth, requireActiveSubscription, requireExecAccess, async (req: AuthRequest, res: Response) => {
@@ -2643,7 +2641,7 @@ export async function registerRoutes(
         newUsersLast90: countLastNDays(users, "createdAt", 90),
         newClaimsLast90: countLastNDays(claims, "createdAt", 90),
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/executive/revenue", requireAuth, requirePlatformOwner, async (req: AuthRequest, res: Response) => {
@@ -2664,7 +2662,7 @@ export async function registerRoutes(
         canceledCount: canceled,
         churnRate: allBilling.length > 0 ? Number(((canceled / allBilling.length) * 100).toFixed(1)) : 0,
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/executive/usage", requireAuth, requireActiveSubscription, requireExecAccess, async (req: AuthRequest, res: Response) => {
@@ -2679,7 +2677,7 @@ export async function registerRoutes(
         totalDocumentsProcessed: isGlobal ? null : docs.length,
         note: "Detailed per-event usage metrics require audit log aggregation.",
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/executive/investor-safe", requireAuth, async (req: AuthRequest, res: Response) => {
@@ -2701,7 +2699,7 @@ export async function registerRoutes(
         newUsersLast30Days: countLastNDays(users, "createdAt", 30),
         newClaimsLast30Days: countLastNDays(claims, "createdAt", 30),
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   // ─── Section 25: Network Intelligence Engine ──────────────────────────────
@@ -2712,7 +2710,7 @@ export async function registerRoutes(
       const patterns = computePatterns(allClaims, allEscs);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "NETWORK_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "patterns", ipAddress: getClientIp(req) });
       res.json(patterns);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/master/intelligence/trends", requireAuth, requirePlatformOwner, async (req: AuthRequest, res: Response) => {
@@ -2724,7 +2722,7 @@ export async function registerRoutes(
       const trends = computeTrends(allClaims, days);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "NETWORK_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "trends", ipAddress: getClientIp(req) });
       res.json(trends);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/master/intelligence/correlations", requireAuth, requirePlatformOwner, async (req: AuthRequest, res: Response) => {
@@ -2734,7 +2732,7 @@ export async function registerRoutes(
       const correlations = computeOutcomeCorrelations(allClaims);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "NETWORK_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "correlations", ipAddress: getClientIp(req) });
       res.json(correlations);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   app.get("/api/master/intelligence/signals", requireAuth, requirePlatformOwner, async (req: AuthRequest, res: Response) => {
@@ -2744,7 +2742,7 @@ export async function registerRoutes(
       const signals = computeEmergingSignals(allClaims, allEscs);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "NETWORK_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "signals", ipAddress: getClientIp(req) });
       res.json(signals);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
   seedPlatformOwner().catch(console.error);
@@ -2763,7 +2761,7 @@ export async function registerRoutes(
 }
 
 function sanitizeUser(user: any) {
-  const { passwordHash, ...safe } = user;
+  const { passwordHash: _ph, ...safe } = user;
   return safe;
 }
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import Stripe from "stripe";
 import { storage } from "./storage";
 import { log } from "./index";
@@ -107,8 +108,8 @@ export async function handleWebhookEvent(
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-  } catch (err: any) {
-    log(`Webhook signature verification failed: ${err.message}`, "stripe");
+  } catch (err) {
+    log(`Webhook signature verification failed: ${(err as Error).message}`, "stripe");
     return { received: false, error: "Signature verification failed" };
   }
 

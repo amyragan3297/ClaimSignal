@@ -12,7 +12,6 @@ import {
   MASTER_ROLE,
   isMaster,
   canViewUnmasked,
-  applyPiiMasking,
   sanitizeSharedClaimRecord,
   sanitizeSharedClaimList,
   sanitizePlaybookRecord,

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // Network Intelligence Engine (Section 25) — MVP, rule-based, aggregate only.
 // All outputs are aggregate — never expose homeowner/address/claim#/policy#.
@@ -296,7 +297,7 @@ export interface EmergingSignal {
   sufficient: boolean;
 }
 
-export function computeEmergingSignals(allClaims: Claim[], allEscalations: Escalation[]): EmergingSignal[] {
+export function computeEmergingSignals(allClaims: Claim[], _allEscalations: Escalation[]): EmergingSignal[] {
   const now = Date.now();
   const recent = allClaims.filter((c) => {
     const a = c as any;
