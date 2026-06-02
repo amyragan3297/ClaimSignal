@@ -1,15 +1,10 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import crypto from "crypto";
-import { createRequire } from "module";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking } from "./masking";
 import { extractClaimFieldsFromText, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
-
-// pdf-parse is a CommonJS module; createRequire is needed in ESM/tsx context.
-const _require = createRequire(import.meta.url);
-const pdfParse: (buf: Buffer) => Promise<{ text: string }> = _require("pdf-parse");
 
 interface AuthRequest extends Request {
   auth?: {
@@ -330,8 +325,14 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       textContent = buffer.toString("utf-8");
     } else if (fileType === "pdf") {
       try {
-        const pdfData = await pdfParse(buffer);
-        textContent = pdfData.text || "";
+        const { PDFParse } = await import("pdf-parse");
+        const parser = new PDFParse({ data: new Uint8Array(buffer) });
+        try {
+          const pdfData = await parser.getText();
+          textContent = pdfData.text || "";
+        } finally {
+          await parser.destroy().catch(() => {});
+        }
       } catch (pdfErr: any) {
         console.error("[pdf-parse] failed to extract text:", pdfErr?.message);
       }
@@ -381,7 +382,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       fileSize: buffer.length,
       docCategory: classification.category as any,
       confidence: classification.confidence,
-      extractionStatus: llmExtraction ? "complete" : (textContent && textContent.trim().length > 80 ? "failed" : (fileType === "pdf" || fileType === "docx" || fileType === "image" ? "no_text" : "pending")),
+      extractionStatus: llmExtraction ? "complete" : (textContent && textContent.trim().length > 80 ? "failed" : (fileType === "pdf" || fileType === "docx" || fileType === "image" ? "failed" : "pending")),
       extractedJson: (entities.length > 0 || llmExtraction)
         ? { entities, extraction: llmExtraction || null }
         : undefined,
