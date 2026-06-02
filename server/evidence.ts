@@ -1,10 +1,15 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import crypto from "crypto";
+import { createRequire } from "module";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking } from "./masking";
-import { extractClaimFieldsFromText, isOpenAIConfigured, type ExtractionResult } from "./ai-services";
+import { extractClaimFieldsFromText, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
+
+// pdf-parse is a CommonJS module; createRequire is needed in ESM/tsx context.
+const _require = createRequire(import.meta.url);
+const pdfParse: (buf: Buffer) => Promise<{ text: string }> = _require("pdf-parse");
 
 interface AuthRequest extends Request {
   auth?: {
@@ -325,7 +330,6 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       textContent = buffer.toString("utf-8");
     } else if (fileType === "pdf") {
       try {
-        const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse");
         const pdfData = await pdfParse(buffer);
         textContent = pdfData.text || "";
       } catch (pdfErr: any) {
@@ -343,8 +347,11 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         llmExtraction = await extractClaimFieldsFromText(textContent, classification.category);
         console.log(`[ai-extraction] success for ${req.file.originalname}, confidence=${llmExtraction.confidence}`);
       } catch (aiErr: any) {
+        recordAiError("extractClaimFieldsFromText/upload", aiErr);
         console.error("[ai-extraction] non-fatal:", aiErr?.message);
       }
+    } else if (isOpenAIConfigured() && (!textContent || textContent.trim().length <= 80)) {
+      console.log(`[ai-extraction] skipped for ${req.file.originalname} — no readable text content (fileType=${fileType})`);
     }
 
     // Pre-selected claim wins; otherwise attempt high-confidence auto-match.
@@ -374,7 +381,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       fileSize: buffer.length,
       docCategory: classification.category as any,
       confidence: classification.confidence,
-      extractionStatus: llmExtraction ? "complete" : (textContent && textContent.trim().length > 80 ? "failed" : "pending"),
+      extractionStatus: llmExtraction ? "complete" : (textContent && textContent.trim().length > 80 ? "failed" : (fileType === "pdf" || fileType === "docx" || fileType === "image" ? "no_text" : "pending")),
       extractedJson: (entities.length > 0 || llmExtraction)
         ? { entities, extraction: llmExtraction || null }
         : undefined,
@@ -946,9 +953,13 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       deductible: "deductible",
       supplementRequested: "supplementRequested",
       supplementApproved: "supplementApproved",
+      recoverableDepreciation: "recoverableDepreciation",
       denialReason: "denialReason",
       initialOutcome: "initialOutcome",
       finalOutcome: "finalOutcome",
+      iaFirm: "iaFirm",
+      adjusterEmail: "adjusterEmail",
+      adjusterPhone: "adjusterPhone",
     };
     const DATE_KEYS = new Set(["dateOfLoss", "inspectionDate"]);
     const NUMERIC_KEYS = new Set(["rcv", "acv", "deductible", "supplementRequested", "supplementApproved", "recoverableDepreciation"]);
