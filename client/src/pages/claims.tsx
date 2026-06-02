@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -64,8 +63,10 @@ const createClaimSchema = z.object({
   denialOverturned: z.boolean().optional(),
 });
 
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+
 // ─── Colour helpers ────────────────────────────────────────────────────────────
-const statusColors: Record<string, string> = {
+const statusColors: Record<string, BadgeVariant> = {
   draft: "outline", open: "default", active: "default",
   in_progress: "secondary", inspection_scheduled: "secondary",
   inspected: "secondary", supplement_pending: "secondary",
@@ -75,14 +76,14 @@ const statusColors: Record<string, string> = {
   closed: "outline", archived: "outline",
 };
 
-const phaseColors: Record<string, string> = {
+const phaseColors: Record<string, BadgeVariant> = {
   pre_claim: "outline", filed: "default", inspected: "secondary",
   initial_determination: "secondary", supplement_submitted: "secondary",
   reinspection_requested: "secondary", escalated: "destructive",
   resolved: "default", closed: "outline",
 };
 
-const escalationColors = (level: number | null | undefined) => {
+const escalationColors = (level: number | null | undefined): BadgeVariant => {
   if (level == null) return "outline";
   if (level <= 1) return "secondary";
   if (level <= 3) return "secondary";
@@ -145,11 +146,17 @@ const REVIEW_SECTIONS = [
   },
 ];
 
+type ExtractionRecord = Record<string, string | number | boolean | string[] | null | undefined>;
+
 interface UploadResult {
   file: { id: string; fileName: string; docCategory?: string; extractionStatus?: string; confidence?: number };
-  extraction: Record<string, any> | null;
+  extraction: ExtractionRecord | null;
   matchedClaimId: string | null;
   draft: { id: string } | null;
+}
+
+interface CreateFromExtractionResult {
+  claim?: { claimNumber?: string };
 }
 
 // ─── CreateClaimDialog ─────────────────────────────────────────────────────────
@@ -216,7 +223,7 @@ function CreateClaimDialog({
   });
 
   // ── Upload & Extract ───────────────────────────────────────────────────────
-  const populateFields = useCallback((extraction: Record<string, any> | null | undefined) => {
+  const populateFields = useCallback((extraction: ExtractionRecord | null | undefined) => {
     if (!extraction) return;
     const fieldMap: [string, string][] = [
       ["claimNumber","claimNumber"], ["policyNumber","policyNumber"],
@@ -260,7 +267,7 @@ function CreateClaimDialog({
         const body = await res.json();
         if (body.duplicate && body.existingFile) {
           const exFile = body.existingFile;
-          const ext = (exFile.extractedJson as any)?.extraction ?? null;
+          const ext = (exFile.extractedJson as { extraction?: ExtractionRecord } | null)?.extraction ?? null;
           toast({ title: "Document already in library", description: "Loading extraction from existing file." });
           setUploadResult({ file: exFile, extraction: ext, matchedClaimId: exFile.claimId, draft: null });
           populateFields(ext);
@@ -281,8 +288,8 @@ function CreateClaimDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
       setMode("review");
-    } catch (err: any) {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
       setMode("choose");
     }
   }, [populateFields, toast]);
@@ -308,7 +315,7 @@ function CreateClaimDialog({
       });
       return res.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: CreateFromExtractionResult) => {
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
@@ -323,7 +330,7 @@ function CreateClaimDialog({
   });
 
   // ── Extraction stats ───────────────────────────────────────────────────────
-  const uploadConf = uploadResult?.extraction?.confidence ?? 0;
+  const uploadConf = (uploadResult?.extraction?.confidence as number | null | undefined) ?? 0;
   const confLabel = uploadConf >= 0.8 ? "High" : uploadConf >= 0.5 ? "Medium" : "Low";
   const confColor = uploadConf >= 0.8 ? "text-green-400" : uploadConf >= 0.5 ? "text-amber-400" : "text-red-400";
   const extractedCount = Object.keys(extractionFields).filter(k => extractionFields[k]).length;
@@ -570,13 +577,13 @@ function CreateClaimDialog({
               )}
 
               {/* Missing scope items (informational) */}
-              {(uploadResult.extraction?.missingScopeItems?.length ?? 0) > 0 && (
+              {((uploadResult.extraction?.missingScopeItems as string[] | undefined)?.length ?? 0) > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                     Missing Scope Items (informational)
                   </h4>
                   <ul className="space-y-1">
-                    {(uploadResult.extraction?.missingScopeItems ?? []).slice(0, 6).map((item: string, i: number) => (
+                    {((uploadResult.extraction?.missingScopeItems as string[] | undefined) ?? []).slice(0, 6).map((item: string, i: number) => (
                       <li key={i} className="text-xs flex items-start gap-2 text-muted-foreground" data-testid={`text-scope-item-${i}`}>
                         <span className="text-primary mt-0.5">•</span>{item}
                       </li>
@@ -948,7 +955,7 @@ export default function ClaimsPage() {
       (c.claimNumber || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (c.carrier || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (c.propertyAddress || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ((c as any).homeownerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.homeownerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       formatPhase(c.currentPhase || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -1031,7 +1038,7 @@ export default function ClaimsPage() {
                             <span className="font-mono text-sm font-semibold" data-testid={`text-claim-number-${claim.id}`}>
                               {claim.claimNumber}
                             </span>
-                            <Badge variant={(statusColors[claim.status] as any) || "outline"} className="text-xs capitalize">
+                            <Badge variant={statusColors[claim.status] || "outline"} className="text-xs capitalize">
                               {claim.status.replace("_", " ")}
                             </Badge>
                             {analyzingId === claim.id ? (
@@ -1041,12 +1048,12 @@ export default function ClaimsPage() {
                             ) : (() => {
                               const s = claimAnalysisStatus(claim);
                               return s.label !== "No Analysis" ? (
-                                <Badge variant={s.variant as any} className="text-xs" data-testid={`badge-analysis-${claim.id}`}>{s.label}</Badge>
+                                <Badge variant={s.variant} className="text-xs" data-testid={`badge-analysis-${claim.id}`}>{s.label}</Badge>
                               ) : null;
                             })()}
                           </div>
                           <p className="text-sm text-muted-foreground truncate" data-testid={`text-homeowner-${claim.id}`}>
-                            {[(claim as any).homeownerName, claim.carrier].filter(Boolean).join(" · ") || "—"}
+                            {[claim.homeownerName, claim.carrier].filter(Boolean).join(" · ") || "—"}
                           </p>
                           {claim.propertyAddress && (
                             <p className="text-xs text-muted-foreground/70 truncate mt-0.5" data-testid={`text-address-${claim.id}`}>
@@ -1054,11 +1061,11 @@ export default function ClaimsPage() {
                             </p>
                           )}
                           <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                            <Badge variant={(phaseColors[claim.currentPhase || ""] as any) || "outline"} className="text-xs" data-testid={`badge-phase-${claim.id}`}>
+                            <Badge variant={phaseColors[claim.currentPhase || ""] || "outline"} className="text-xs" data-testid={`badge-phase-${claim.id}`}>
                               {formatPhase(claim.currentPhase || "pre claim")}
                             </Badge>
                             {claim.escalationLevel != null && claim.escalationLevel > 0 && (
-                              <Badge variant={(escalationColors(claim.escalationLevel) as any) || "outline"} className="text-xs" data-testid={`badge-escalation-${claim.id}`}>
+                              <Badge variant={escalationColors(claim.escalationLevel)} className="text-xs" data-testid={`badge-escalation-${claim.id}`}>
                                 Esc {claim.escalationLevel}
                               </Badge>
                             )}
@@ -1176,7 +1183,7 @@ export default function ClaimsPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap mb-1">
                               <span className="font-mono text-sm text-muted-foreground">{claim.claimNumber || "—"}</span>
-                              <Badge variant={(statusColors[claim.status] as any) || "outline"} className="text-xs capitalize">
+                              <Badge variant={statusColors[claim.status] || "outline"} className="text-xs capitalize">
                                 {claim.status.replace("_", " ")}
                               </Badge>
                               {claim.riskScore != null && (
@@ -1186,7 +1193,7 @@ export default function ClaimsPage() {
                               )}
                             </div>
                             <p className="text-sm text-muted-foreground truncate">
-                              {[(claim as any).homeownerName, claim.carrier].filter(Boolean).join(" · ") || "—"}
+                              {[claim.homeownerName, claim.carrier].filter(Boolean).join(" · ") || "—"}
                             </p>
                             {claim.propertyAddress && (
                               <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{claim.propertyAddress}</p>

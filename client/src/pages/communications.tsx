@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +39,13 @@ function commLabel(type: string) {
   return COMM_TYPES.find(t => t.value === type)?.label ?? type;
 }
 
+interface CommInput {
+  claimId: string;
+  direction: string;
+  subject: string;
+  body: string;
+}
+
 interface Communication {
   id: string;
   claimId: string;
@@ -70,7 +76,7 @@ export default function CommunicationsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: CommInput) => {
       const res = await apiRequest("POST", "/api/communications", data);
       return res.json();
     },

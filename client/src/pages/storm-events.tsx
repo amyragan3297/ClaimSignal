@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import type { StormEvent } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -88,7 +88,7 @@ export default function StormEventsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [_editingId, _setEditingId] = useState<string | null>(null);
 
-  const { data: events = [], isLoading } = useQuery<any[]>({
+  const { data: events = [], isLoading } = useQuery<StormEvent[]>({
     queryKey: ["/api/storm-events"],
   });
 
@@ -118,7 +118,7 @@ export default function StormEventsPage() {
       setDialogOpen(false);
       form.reset();
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       toast({ title: "Failed to save", description: err.message, variant: "destructive" });
     },
   });
@@ -216,7 +216,7 @@ export default function StormEventsPage() {
                   <Label>Event Type *</Label>
                   <Select
                     defaultValue="hail"
-                    onValueChange={(v) => form.setValue("eventType", v as any)}
+                    onValueChange={(v) => form.setValue("eventType", v as StormEventForm["eventType"])}
                   >
                     <SelectTrigger data-testid="select-event-type">
                       <SelectValue />
@@ -233,7 +233,7 @@ export default function StormEventsPage() {
                   <Label>Report Source *</Label>
                   <Select
                     defaultValue="noaa"
-                    onValueChange={(v) => form.setValue("reportSource", v as any)}
+                    onValueChange={(v) => form.setValue("reportSource", v as StormEventForm["reportSource"])}
                   >
                     <SelectTrigger data-testid="select-report-source">
                       <SelectValue />
@@ -286,7 +286,7 @@ export default function StormEventsPage() {
                   <Label>Location Match Confidence *</Label>
                   <Select
                     defaultValue="medium"
-                    onValueChange={(v) => form.setValue("locationMatchConfidence", v as any)}
+                    onValueChange={(v) => form.setValue("locationMatchConfidence", v as StormEventForm["locationMatchConfidence"])}
                   >
                     <SelectTrigger data-testid="select-confidence">
                       <SelectValue />
@@ -389,7 +389,7 @@ export default function StormEventsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {events.map((event: any) => (
+                {events.map((event) => (
                   <TableRow key={event.id} data-testid={`row-storm-event-${event.id}`}>
                     <TableCell className="font-mono text-sm">
                       {event.dateOfLoss || "—"}
@@ -397,19 +397,19 @@ export default function StormEventsPage() {
                     <TableCell>
                       <div className="flex items-center gap-1.5 max-w-[160px]">
                         <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
-                        <span className="text-sm truncate" title={event.propertyLocation}>
+                        <span className="text-sm truncate" title={event.propertyLocation ?? undefined}>
                           {event.propertyLocation || "—"}
                         </span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
-                        <EventTypeIcon type={event.eventType} />
-                        <span className="text-sm">{EVENT_TYPE_LABELS[event.eventType] || event.eventType}</span>
+                        <EventTypeIcon type={event.eventType ?? "other"} />
+                        <span className="text-sm">{event.eventType ? (EVENT_TYPE_LABELS[event.eventType] || event.eventType) : "—"}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {SOURCE_LABELS[event.reportSource] || event.reportSource}
+                      {event.reportSource ? (SOURCE_LABELS[event.reportSource] || event.reportSource) : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="text-xs text-muted-foreground space-y-0.5">
@@ -422,10 +422,10 @@ export default function StormEventsPage() {
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className={`text-xs capitalize ${CONFIDENCE_COLORS[event.locationMatchConfidence] || ""}`}
+                        className={`text-xs capitalize ${event.locationMatchConfidence ? (CONFIDENCE_COLORS[event.locationMatchConfidence] || "") : ""}`}
                         data-testid={`badge-confidence-${event.id}`}
                       >
-                        {event.locationMatchConfidence}
+                        {event.locationMatchConfidence || "—"}
                       </Badge>
                     </TableCell>
                     <TableCell>

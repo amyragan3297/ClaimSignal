@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +18,17 @@ import {
   Mic, Clock, CheckCircle, FileAudio,
   Plus, ChevronDown, ChevronUp, MoreHorizontal, Archive, Trash2,
 } from "lucide-react";
+
+interface AudioLogInput {
+  claimId?: string;
+  fileUrl?: string;
+  durationSeconds?: number;
+  transcriptText?: string;
+}
+
+interface TranscribeResult {
+  extractedEventCount?: number;
+}
 
 interface AudioRecording {
   id: string;
@@ -85,7 +95,7 @@ export default function AudioPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: AudioLogInput) => {
       const res = await apiRequest("POST", "/api/audio", data);
       return res.json();
     },
@@ -108,7 +118,7 @@ export default function AudioPage() {
       const res = await apiRequest("POST", "/api/audio/transcribe", data);
       return res.json();
     },
-    onSuccess: (rec: any) => {
+    onSuccess: (rec: TranscribeResult) => {
       queryClient.invalidateQueries({ queryKey: ["/api/audio"] });
       const n = rec?.extractedEventCount ?? 0;
       toast({

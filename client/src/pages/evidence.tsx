@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,7 +59,9 @@ import {
 const ACCEPTED_TYPES =
   ".pdf,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.docx,.txt,.eml";
 
-const categoryColors: Record<string, string> = {
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+
+const categoryColors: Record<string, BadgeVariant> = {
   denial_letter: "destructive",
   estimate: "secondary",
   scope: "secondary",
@@ -72,6 +73,14 @@ const categoryColors: Record<string, string> = {
   email_thread: "outline",
   unknown: "outline",
 };
+
+function getExtraction(file: EvidenceFile): ExtractionData | null {
+  return (file.extractedJson as { extraction?: ExtractionData } | null)?.extraction ?? null;
+}
+
+interface ApplyExtractionResult {
+  fieldsApplied: string[];
+}
 
 function fmt(s: string) {
   return s.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
@@ -260,15 +269,14 @@ function ExtractionReviewDialog({
     enabled: !!fileId && open,
   });
 
-  const extraction: ExtractionData | null =
-    (file?.extractedJson as any)?.extraction ?? null;
+  const extraction: ExtractionData | null = file ? getExtraction(file) : null;
 
   if (extraction && !initialized) {
     const init: Record<string, string> = {};
     for (const section of EXTRACTION_SECTIONS) {
       for (const f of section.fields) {
-        const v = (extraction as any)[f.key];
-        if (v != null && typeof v !== "boolean") init[f.key] = String(v);
+        const v = extraction[f.key as keyof ExtractionData];
+        if (v != null && typeof v !== "boolean" && !Array.isArray(v)) init[f.key] = String(v);
       }
     }
     setFields(init);
@@ -276,10 +284,11 @@ function ExtractionReviewDialog({
   }
 
   const applyMutation = useMutation({
-    mutationFn: async (acceptedFields: Record<string, string>) => {
-      return apiRequest("POST", `/api/evidence/files/${fileId}/apply-extraction`, { fields: acceptedFields });
+    mutationFn: async (acceptedFields: Record<string, string>): Promise<ApplyExtractionResult> => {
+      const res = await apiRequest("POST", `/api/evidence/files/${fileId}/apply-extraction`, { fields: acceptedFields });
+      return res.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: ApplyExtractionResult) => {
       const count = data?.fieldsApplied?.length ?? 0;
       toast({ title: "AI extraction applied", description: `${count} field${count !== 1 ? "s" : ""} updated on the claim` });
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
@@ -338,7 +347,7 @@ function ExtractionReviewDialog({
             </div>
 
             {EXTRACTION_SECTIONS.map((section) => {
-              const visible = section.fields.filter(f => (extraction as any)[f.key] != null);
+              const visible = section.fields.filter(f => extraction[f.key as keyof ExtractionData] != null);
               if (!visible.length) return null;
               return (
                 <div key={section.title}>
@@ -350,7 +359,7 @@ function ExtractionReviewDialog({
                         <Input
                           value={fields[f.key] ?? ""}
                           onChange={e => setFields(p => ({ ...p, [f.key]: e.target.value }))}
-                          placeholder={String((extraction as any)[f.key])}
+                          placeholder={String(extraction[f.key as keyof ExtractionData])}
                           className="h-8 text-sm"
                           data-testid={`input-extraction-${f.key}`}
                         />
@@ -655,8 +664,8 @@ export default function EvidencePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/drafts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
       toast({ title: "File uploaded successfully" });
-    } catch (err: any) {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setIsUploading(false);
     }
@@ -789,7 +798,7 @@ export default function EvidencePage() {
           onOpenFile={f => { openFileDetail(f.id); setDuplicateResult(null); }}
           onMatchExisting={fileId => {
             const f = evidenceFiles?.find(x => x.id === fileId);
-            const ext = (f?.extractedJson as any)?.extraction ?? null;
+            const ext = f ? getExtraction(f) : null;
             openMatchDialog(fileId, ext);
             setDuplicateResult(null);
           }}
@@ -811,7 +820,7 @@ export default function EvidencePage() {
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Classification</p>
                 <div className="flex items-center gap-2">
-                  <Badge variant={(categoryColors[uploadResult.file.docCategory || "unknown"] as any) || "outline"} data-testid="badge-upload-category">
+                  <Badge variant={categoryColors[uploadResult.file.docCategory || "unknown"] || "outline"} data-testid="badge-upload-category">
                     {fmt(uploadResult.file.docCategory || "unknown")}
                   </Badge>
                   {uploadResult.file.confidence != null && (
@@ -873,7 +882,7 @@ export default function EvidencePage() {
                   <p className="text-sm font-medium">
                     AI extracted {Object.keys(uploadResult.extraction).filter(
                       k => !["confidence","extractionMethod","documentType","missingScopeItems","codeItems","reinspectionReferences","escalationReferences","timelineEvents","denialOverturned"].includes(k) &&
-                        (uploadResult.extraction as any)[k] != null
+                        uploadResult.extraction![k as keyof ExtractionData] != null
                     ).length} claim fields
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -964,7 +973,7 @@ export default function EvidencePage() {
                             {file.fileType || "—"}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={(categoryColors[file.docCategory || "unknown"] as any) || "outline"} className="text-xs" data-testid={`badge-category-${file.id}`}>
+                            <Badge variant={categoryColors[file.docCategory || "unknown"] || "outline"} className="text-xs" data-testid={`badge-category-${file.id}`}>
                               {fmt(file.docCategory || "unknown")}
                             </Badge>
                           </TableCell>
@@ -1031,7 +1040,7 @@ export default function EvidencePage() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Category</p>
-                    <Badge variant={(categoryColors[selectedFile.docCategory || "unknown"] as any) || "outline"} className="mt-1" data-testid="badge-detail-category">
+                    <Badge variant={categoryColors[selectedFile.docCategory || "unknown"] || "outline"} className="mt-1" data-testid="badge-detail-category">
                       {fmt(selectedFile.docCategory || "unknown")}
                     </Badge>
                   </div>
@@ -1059,7 +1068,7 @@ export default function EvidencePage() {
 
                 {/* AI extraction banner */}
                 {(() => {
-                  const ext = (selectedFile.extractedJson as any)?.extraction as ExtractionData | null;
+                  const ext = getExtraction(selectedFile);
                   return ext ? (
                     <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 p-3">
                       <Brain className="w-4 h-4 text-primary flex-shrink-0" />
@@ -1083,7 +1092,7 @@ export default function EvidencePage() {
                     <Button
                       variant="outline"
                       onClick={() => {
-                        const ext = (selectedFile.extractedJson as any)?.extraction ?? null;
+                        const ext = getExtraction(selectedFile);
                         openMatchDialog(selectedFile.id, ext);
                       }}
                       data-testid="button-match-claim"
@@ -1138,9 +1147,9 @@ export default function EvidencePage() {
             <div className="space-y-3">
               {drafts!.filter(d => d.status === "needs_review").map(draft => {
                 const sourceFile = evidenceFiles?.find(f => f.id === draft.createdFromEvidenceFileId);
-                const conf = (draft as any).extractionConfidence as number | null;
+                const conf: number | null = draft.extractionConfidence ?? null;
                 const confLabel = conf == null ? null : conf >= 0.8 ? "High" : conf >= 0.5 ? "Medium" : "Low";
-                const confVariant = conf == null ? "outline" : conf >= 0.8 ? "default" : conf >= 0.5 ? "secondary" : "destructive";
+                const confVariant: BadgeVariant = conf == null ? "outline" : conf >= 0.8 ? "default" : conf >= 0.5 ? "secondary" : "destructive";
 
                 return (
                   <Card key={draft.id} data-testid={`card-draft-${draft.id}`}>
@@ -1153,7 +1162,7 @@ export default function EvidencePage() {
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           {confLabel && (
-                            <Badge variant={confVariant as any} className="text-xs" data-testid={`badge-draft-conf-${draft.id}`}>
+                            <Badge variant={confVariant} className="text-xs" data-testid={`badge-draft-conf-${draft.id}`}>
                               {(conf! * 100).toFixed(0)}% — {confLabel} Confidence
                             </Badge>
                           )}
@@ -1164,11 +1173,11 @@ export default function EvidencePage() {
                       </div>
 
                       {/* Source file */}
-                      {((draft as any).sourceFileName || sourceFile) && (
+                      {(draft.sourceFileName || sourceFile) && (
                         <div>
                           <p className="text-xs text-muted-foreground mb-0.5">Source File</p>
                           <p className="text-sm truncate" data-testid={`text-draft-source-${draft.id}`}>
-                            {(draft as any).sourceFileName || sourceFile?.fileName}
+                            {draft.sourceFileName || sourceFile?.fileName}
                           </p>
                         </div>
                       )}
@@ -1193,10 +1202,10 @@ export default function EvidencePage() {
                             <p className="font-medium" data-testid={`text-draft-carrier-${draft.id}`}>{draft.extractedCarrier}</p>
                           </div>
                         )}
-                        {(draft as any).extractedAdjuster && (
+                        {draft.extractedAdjuster && (
                           <div className="rounded bg-muted/40 px-2 py-1.5">
                             <p className="text-muted-foreground/70 mb-0.5">Adjuster</p>
-                            <p className="font-medium" data-testid={`text-draft-adjuster-${draft.id}`}>{(draft as any).extractedAdjuster}</p>
+                            <p className="font-medium" data-testid={`text-draft-adjuster-${draft.id}`}>{draft.extractedAdjuster}</p>
                           </div>
                         )}
                         {draft.extractedAddress && (
@@ -1231,7 +1240,7 @@ export default function EvidencePage() {
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                const ext = (sourceFile?.extractedJson as any)?.extraction ?? null;
+                                const ext = sourceFile ? getExtraction(sourceFile) : null;
                                 openMatchDialog(draft.createdFromEvidenceFileId!, ext);
                               }}
                               data-testid={`button-draft-match-${draft.id}`}
@@ -1290,7 +1299,7 @@ export default function EvidencePage() {
           ) : (
             <div className="space-y-2">
               {unmatchedFiles.map(f => {
-                const ext = (f.extractedJson as any)?.extraction as ExtractionData | null;
+                const ext = getExtraction(f);
                 return (
                   <Card key={f.id} data-testid={`card-unmatched-${f.id}`}>
                     <CardContent className="p-3 flex items-start justify-between gap-3 flex-wrap">
