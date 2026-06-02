@@ -265,6 +265,18 @@ export default function ClaimDetailPage() {
     onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
   });
 
+  // ── Move claim to a different lifecycle phase ──
+  const phaseMutation = useMutation({
+    mutationFn: async (newPhase: string) => {
+      await apiRequest("PATCH", `/api/claims/${claimId}`, { currentPhase: newPhase });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId] });
+      toast({ title: "Lifecycle phase updated" });
+    },
+    onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+  });
+
   // ── Capture outcome as playbook (Master only) ──
   const [playbookDialogOpen, setPlaybookDialogOpen] = useState(false);
   const playbookForm = useForm<{ title: string; actionTaken: string; whatWorked: string; outcome: string; recommendedNextStep: string }>({
@@ -433,23 +445,28 @@ export default function ClaimDetailPage() {
               {LIFECYCLE_PHASES.map((phase, idx) => {
                 const isCompleted = idx < currentPhaseIndex;
                 const isCurrent = idx === currentPhaseIndex;
+                const isLoading = phaseMutation.isPending && phaseMutation.variables === phase.key;
                 return (
                   <div key={phase.key} className="flex items-center">
-                    <div
-                      className={`flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap transition-colors ${
+                    <button
+                      type="button"
+                      disabled={isCurrent || phaseMutation.isPending}
+                      onClick={() => phaseMutation.mutate(phase.key)}
+                      className={`flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ${
                         isCurrent
-                          ? "bg-primary text-primary-foreground"
+                          ? "bg-primary text-primary-foreground cursor-default"
                           : isCompleted
-                          ? "bg-primary/20 text-primary"
-                          : "bg-muted text-muted-foreground"
-                      }`}
+                          ? "bg-primary/20 text-primary hover:bg-primary/35 cursor-pointer"
+                          : "bg-muted text-muted-foreground hover:bg-muted/70 cursor-pointer"
+                      } disabled:opacity-60`}
                       data-testid={`phase-step-${phase.key}`}
+                      title={isCurrent ? "Current phase" : `Move to ${phase.label}`}
                     >
-                      {phase.label}
-                    </div>
+                      {isLoading ? "…" : phase.label}
+                    </button>
                     {idx < LIFECYCLE_PHASES.length - 1 && (
                       <div
-                        className={`w-4 h-0.5 ${
+                        className={`w-4 h-0.5 flex-shrink-0 ${
                           idx < currentPhaseIndex ? "bg-primary" : "bg-muted"
                         }`}
                       />
