@@ -249,19 +249,9 @@ export interface ExtractionResult {
   extractionMethod: "llm";
 }
 
-const EXTRACTION_SYSTEM_PROMPT = `You are an expert property insurance claims analyst. Extract structured data from insurance claim documents with high precision. Only include fields where you have clear evidence in the text — never invent or guess values. Respond ONLY with valid JSON.`;
+const EXTRACTION_SYSTEM_PROMPT = `You are an expert property insurance claims analyst. Extract structured data from insurance claim documents with high precision. Only include fields where you have clear evidence in the document — never invent or guess values. Respond ONLY with valid JSON.`;
 
-export async function extractClaimFieldsFromText(
-  text: string,
-  hint?: string
-): Promise<ExtractionResult> {
-  const client = getOpenAIClient();
-  const truncated = text.slice(0, 12000);
-  const docHint = hint ? hint.replace(/_/g, " ") : "insurance document";
-
-  const userPrompt = `Extract all claim-related information from this ${docHint} and return JSON with this schema (omit any field not found in the text — never invent):
-
-{
+const EXTRACTION_SCHEMA = `{
   "claimNumber": "claim number string",
   "policyNumber": "policy number string",
   "homeownerName": "homeowner full name",
@@ -299,21 +289,9 @@ export async function extractClaimFieldsFromText(
   "timelineEvents": [{"date": "YYYY-MM-DD", "description": "brief event description"}],
   "documentType": "denial_letter | estimate | scope | supplement | payment_letter | invoice | policy | email_thread | other",
   "confidence": 0.0 to 1.0
-}
+}`;
 
-DOCUMENT TEXT:
-${truncated}`;
-
-  const completion = await client.chat.completions.create({
-    model: ANALYSIS_MODEL,
-    messages: [
-      { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-  });
-
-  const raw = completion.choices[0]?.message?.content || "{}";
+function parseExtractionResponse(raw: string): ExtractionResult {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
 
   const str = (v: unknown): string | undefined =>
@@ -362,6 +340,71 @@ ${truncated}`;
   }
 
   return result;
+}
+
+export async function extractClaimFieldsFromText(
+  text: string,
+  hint?: string
+): Promise<ExtractionResult> {
+  const client = getOpenAIClient();
+  const truncated = text.slice(0, 12000);
+  const docHint = hint ? hint.replace(/_/g, " ") : "insurance document";
+
+  const userPrompt = `Extract all claim-related information from this ${docHint} and return JSON with this schema (omit any field not found in the text — never invent):
+
+${EXTRACTION_SCHEMA}
+
+DOCUMENT TEXT:
+${truncated}`;
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    messages: [
+      { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  return parseExtractionResponse(raw);
+}
+
+/**
+ * Vision-based extraction for scanned / image-only documents (PDFs with no
+ * embedded text layer, photographed letters, JPG/PNG uploads). Pass one or more
+ * image data URLs (e.g. "data:image/png;base64,...."). Used as a fallback when
+ * pdf-parse yields no readable text.
+ */
+export async function extractClaimFieldsFromImages(
+  imageDataUrls: string[],
+  hint?: string
+): Promise<ExtractionResult> {
+  const client = getOpenAIClient();
+  const docHint = hint ? hint.replace(/_/g, " ") : "insurance document";
+  const images = imageDataUrls.slice(0, 6);
+
+  const instruction = `These image(s) are pages of a ${docHint}. Read all visible text (including handwriting, stamps, and tables) and extract claim-related information. Return JSON with this schema (omit any field not visible in the images — never invent):
+
+${EXTRACTION_SCHEMA}`;
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    messages: [
+      { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: instruction },
+          ...images.map((url) => ({ type: "image_url" as const, image_url: { url } })),
+        ],
+      },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  return parseExtractionResponse(raw);
 }
 
 // ── Playbook: AI strategy synthesis ───────────────────────────────────────────

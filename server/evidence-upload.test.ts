@@ -68,16 +68,17 @@ async function run() {
     );
     check("AI extraction result present in response", !!r1.json?.extraction);
 
-    // ── PDF: text-less ──────────────────────────────────────────────────────
-    console.log("\n=== 2. Text-less PDF: upload succeeds, status 'failed' ===");
+    // ── PDF: text-less (scanned) → vision OCR fallback ───────────────────────
+    console.log("\n=== 2. Text-less PDF: vision OCR fallback recovers fields ===");
     const blankPdf = buildPdf("");
     const r2 = await uploadFile(port, "blank.pdf", blankPdf, "application/pdf");
     check("upload returns HTTP 200 (does not crash)", r2.status === 200);
     check("response includes the persisted file", !!r2.json?.file);
     check(
-      "extractionStatus is 'failed' (valid enum, not a crash)",
-      r2.json?.file?.extractionStatus === "failed",
+      "extractionStatus is 'complete' (recovered via vision, not 'failed')",
+      r2.json?.file?.extractionStatus === "complete",
     );
+    check("vision extraction result present in response", !!r2.json?.extraction);
 
     // ── TXT ─────────────────────────────────────────────────────────────────
     console.log("\n=== 3. TXT upload: direct UTF-8 text path ===");

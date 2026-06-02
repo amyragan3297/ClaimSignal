@@ -4,7 +4,8 @@ import crypto from "crypto";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking } from "./masking";
-import { extractClaimFieldsFromText, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
+import { extractClaimFieldsFromText, extractClaimFieldsFromImages, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
+import { renderPdfToImages } from "./pdf-render";
 
 interface AuthRequest extends Request {
   auth?: {
@@ -507,22 +508,30 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     const classification = classifyDocument(textContent);
     const entities = extractEntities(textContent);
 
-    // ── Debug logging (all PDFs + any file matching DEBUG_EXTRACTION env) ──
-    const debugExtraction = fileType === "pdf" || process.env.DEBUG_EXTRACTION === "true";
-    if (debugExtraction) {
-      console.log(`[extraction-debug] file="${req.file.originalname}" fileType=${fileType} sha256=${sha256.slice(0, 12)}`);
-      console.log(`[extraction-debug] text_length=${textContent.length}`);
-      if (textContent.length > 0) {
-        console.log(`[extraction-debug] text_preview=\n${textContent.slice(0, 2000)}`);
-      } else {
-        console.log(`[extraction-debug] text_preview=(empty — pdf-parse extracted nothing)`);
-      }
+    // ── Diagnostics ──────────────────────────────────────────────────────────
+    // The length-only line is PII-safe and is logged for PDFs to help diagnose
+    // the text-vs-vision branch. The raw text preview and LLM result can contain
+    // homeowner PII, so they are gated behind the explicit DEBUG_EXTRACTION flag.
+    const debugExtraction = process.env.DEBUG_EXTRACTION === "true";
+    if (fileType === "pdf" || debugExtraction) {
+      console.log(`[extraction] file="${req.file.originalname}" fileType=${fileType} text_length=${textContent.length}`);
+    }
+    if (debugExtraction && textContent.length > 0) {
+      console.log(`[extraction-debug] text_preview=\n${textContent.slice(0, 2000)}`);
     }
 
     // ── LLM field extraction (runs after rule-based, non-blocking on failure) ──
     let llmExtraction: ExtractionResult | null = null;
     let llmExtractionError: string | null = null;
-    if (isOpenAIConfigured() && textContent && textContent.trim().length > 80) {
+    const hasText = !!textContent && textContent.trim().length > 80;
+    // Trust the upload's MIME type too, so image formats that detectFileType maps
+    // to "other" (bmp/tiff/webp) still get the vision fallback.
+    const isImageUpload = fileType === "image" || !!req.file.mimetype?.startsWith("image/");
+    // Scanned PDFs and photographed/image documents have no text layer, so
+    // pdf-parse returns nothing. Fall back to vision OCR on the rendered pages.
+    const needsVision = !hasText && (fileType === "pdf" || isImageUpload);
+
+    if (isOpenAIConfigured() && hasText) {
       try {
         llmExtraction = await extractClaimFieldsFromText(textContent, classification.category);
         console.log(`[ai-extraction] success for ${req.file.originalname}, confidence=${llmExtraction.confidence}`);
@@ -534,13 +543,55 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         recordAiError("extractClaimFieldsFromText/upload", aiErr);
         console.error("[ai-extraction] non-fatal:", llmExtractionError);
       }
-    } else if (!textContent || textContent.trim().length <= 80) {
-      llmExtractionError = "Document uploaded but text extraction failed.";
-      if (isOpenAIConfigured()) {
-        console.log(`[ai-extraction] skipped for ${req.file.originalname} — no readable text content (fileType=${fileType})`);
+    } else if (isOpenAIConfigured() && needsVision) {
+      try {
+        let images: string[] = [];
+        if (fileType === "pdf") {
+          images = await renderPdfToImages(buffer);
+        } else {
+          const mime = req.file.mimetype && req.file.mimetype.startsWith("image/")
+            ? req.file.mimetype
+            : "image/jpeg";
+          images = [`data:${mime};base64,${buffer.toString("base64")}`];
+        }
+        if (images.length === 0) {
+          llmExtractionError = "Document uploaded but no readable pages could be rendered.";
+          console.log(`[ai-extraction] vision skipped for ${req.file.originalname} — 0 pages rendered`);
+        } else {
+          llmExtraction = await extractClaimFieldsFromImages(images, classification.category);
+          console.log(`[ai-extraction] vision success for ${req.file.originalname}, pages=${images.length}, confidence=${llmExtraction.confidence}`);
+          if (debugExtraction) {
+            console.log(`[extraction-debug] vision_result=${JSON.stringify(llmExtraction)}`);
+          }
+        }
+      } catch (aiErr) {
+        llmExtractionError = (aiErr as Error)?.message ?? "unknown error";
+        recordAiError("extractClaimFieldsFromImages/upload", aiErr);
+        console.error("[ai-extraction] vision non-fatal:", llmExtractionError);
       }
+    } else if (!isOpenAIConfigured()) {
+      llmExtractionError = "AI extraction unavailable — integration not configured.";
+    } else if (!hasText) {
+      llmExtractionError = "Document uploaded but text extraction failed.";
+      console.log(`[ai-extraction] skipped for ${req.file.originalname} — no readable text content (fileType=${fileType})`);
     } else {
       llmExtractionError = "Document uploaded but AI structured extraction failed.";
+    }
+
+    // When rule-based classification found nothing (e.g. a scanned PDF with no
+    // text layer), promote the document type identified by vision extraction.
+    const VALID_DOC_CATEGORIES = new Set([
+      "denial_letter", "estimate", "scope", "supplement", "payment_letter",
+      "invoice", "photo_report", "policy", "email_thread", "unknown",
+    ]);
+    let effectiveCategory = classification.category;
+    const visionDocType = llmExtraction?.documentType;
+    if (
+      effectiveCategory === "unknown" &&
+      visionDocType && visionDocType !== "other" &&
+      VALID_DOC_CATEGORIES.has(visionDocType)
+    ) {
+      effectiveCategory = visionDocType;
     }
 
     // Pre-selected claim wins; otherwise attempt high-confidence auto-match.
@@ -568,7 +619,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       fileType: fileType as "pdf" | "image" | "docx" | "eml" | "msg" | "txt" | "other",
       sha256,
       fileSize: buffer.length,
-      docCategory: classification.category as "denial_letter" | "estimate" | "scope" | "supplement" | "payment_letter" | "invoice" | "photo_report" | "policy" | "email_thread" | "unknown",
+      docCategory: effectiveCategory as "denial_letter" | "estimate" | "scope" | "supplement" | "payment_letter" | "invoice" | "photo_report" | "policy" | "email_thread" | "unknown",
       confidence: classification.confidence,
       extractionStatus: llmExtraction ? "complete" : (textContent && textContent.trim().length > 80 ? "failed" : (fileType === "pdf" || fileType === "docx" || fileType === "image" ? "failed" : "pending")),
       extractedJson: (entities.length > 0 || llmExtraction)
@@ -589,7 +640,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     }
     
     if (claimId) {
-      await generateTimelineEvents(claimId, timelineOrgId, evidenceFile.id, classification.category, entities, userId);
+      await generateTimelineEvents(claimId, timelineOrgId, evidenceFile.id, effectiveCategory, entities, userId);
       // AI date-extraction MVP: derive event-dated timeline candidates from the
       // document text. Low-confidence dates become needsReview candidates. Never
       // allowed to break the upload pipeline.
@@ -710,7 +761,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
           createdClaim = await createClaimFromExtraction({
             fileId: evidenceFile.id,
             fileOrganizationId: organizationId,
-            fileDocCategory: classification.category,
+            fileDocCategory: effectiveCategory,
             llmExtraction,
             entities,
             userId,
@@ -732,7 +783,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       actionType: "EVIDENCE_UPLOADED",
       entityType: "evidence_file",
       entityId: evidenceFile.id,
-      afterJson: { fileName: req.file.originalname, docCategory: classification.category, claimId },
+      afterJson: { fileName: req.file.originalname, docCategory: effectiveCategory, claimId },
     });
 
     // Audit the auto-match attempt and its outcome (additive, never fabricated).
