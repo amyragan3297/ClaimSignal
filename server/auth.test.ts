@@ -46,7 +46,7 @@ async function loadConfig(env: Record<string, string | undefined>) {
 async function run() {
   console.log("\n=== 1. Production fails fast when SESSION_SECRET missing ===");
   {
-    const { mod, restore } = await loadConfig({ NODE_ENV: "production", SESSION_SECRET: undefined, DEMO_MODE: undefined });
+    const { mod, restore } = await loadConfig({ NODE_ENV: "production", JWT_SECRET: undefined, SESSION_SECRET: undefined, DEMO_MODE: undefined });
     let threw = false;
     let leaked = false;
     try {
@@ -63,7 +63,7 @@ async function run() {
 
   console.log("\n=== 2. Production uses provided SESSION_SECRET, never a fallback ===");
   {
-    const { mod, restore } = await loadConfig({ NODE_ENV: "production", SESSION_SECRET: "real-prod-secret-from-env", DEMO_MODE: undefined });
+    const { mod, restore } = await loadConfig({ NODE_ENV: "production", JWT_SECRET: undefined, SESSION_SECRET: "real-prod-secret-from-env", DEMO_MODE: undefined });
     let secret = "";
     let threw = false;
     try { secret = mod.resolveJwtSecret(); } catch { threw = true; }
@@ -75,7 +75,7 @@ async function run() {
 
   console.log("\n=== 3. Development/test run safely with labeled dev fallback ===");
   for (const env of ["development", "test"]) {
-    const { mod, restore } = await loadConfig({ NODE_ENV: env, SESSION_SECRET: undefined, DEMO_MODE: undefined });
+    const { mod, restore } = await loadConfig({ NODE_ENV: env, JWT_SECRET: undefined, SESSION_SECRET: undefined, DEMO_MODE: undefined });
     let secret = "";
     let threw = false;
     try { secret = mod.resolveJwtSecret(); } catch { threw = true; }
@@ -134,7 +134,7 @@ async function run() {
     r.restore();
 
     // production WITH explicit secure creds → uses them, marked non-demo
-    r = await loadConfig({ NODE_ENV: "production", MASTER_EMAIL: "owner@example.com", MASTER_INITIAL_PASSWORD: "x", DEMO_MODE: undefined });
+    r = await loadConfig({ NODE_ENV: "production", MASTER_EMAIL: "owner@example.com", MASTER_INITIAL_PASSWORD: "x", ADMIN_EMAIL: undefined, ADMIN_PASSWORD: undefined, DEMO_MODE: undefined });
     const prodSeed = r.mod.resolveSeedMasterCredentials();
     check("[production] uses explicit Master creds when provided", prodSeed?.email === "owner@example.com");
     check("[production] never uses hardcoded admin@claimsignal.com", prodSeed?.email !== "admin@claimsignal.com");

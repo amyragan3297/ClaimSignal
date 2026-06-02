@@ -53,6 +53,21 @@ export function isDemoSeedingAllowed(): boolean {
 }
 
 /**
+ * Read production Master account credentials from environment.
+ * Returns null when either MASTER_EMAIL or MASTER_INITIAL_PASSWORD is absent.
+ * Only for production use — never reads fallback/demo defaults.
+ */
+export function getProductionMasterCredentials(): {
+  email: string;
+  password: string;
+} | null {
+  const email = process.env.MASTER_EMAIL;
+  const password = process.env.MASTER_INITIAL_PASSWORD;
+  if (!email || !email.trim() || !password || !password.trim()) return null;
+  return { email: email.trim().toLowerCase(), password: password.trim() };
+}
+
+/**
  * Read explicit admin/master credentials from environment secrets.
  * Returns null when either value is absent — callers must skip seeding.
  * No hardcoded credential fallbacks are ever used in any environment.
@@ -77,11 +92,14 @@ export function resolveSeedMasterCredentials(): {
     process.env.MASTER_INITIAL_PASSWORD;
 
   if (!email || !email.trim() || !password || !password.trim()) {
+    // In development/test, fall back to clearly-labeled demo defaults so the
+    // app can start without manual configuration (parallel to resolveJwtSecret).
     if (isDevelopment || isTest) {
-      console.warn(
-        "[config] ADMIN_EMAIL / ADMIN_PASSWORD not set — skipping Master seeding. " +
-          "Set both as environment secrets to create the master account on startup.",
-      );
+      return {
+        email: "admin@demo.local",
+        password: "claimsignal-dev-only-insecure-DO-NOT-USE-IN-PRODUCTION",
+        isDemo: true,
+      };
     }
     return null;
   }
