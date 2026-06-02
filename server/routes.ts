@@ -21,6 +21,7 @@ import { seedSamplePlaybooks } from "./playbook-seed";
 import { insertPlaybookEntrySchema } from "@shared/schema";
 import { createCheckoutSession, handleWebhookEvent } from "./billing";
 import exportsRouter from "./exports";
+import { registerSeoRoutes } from "./seo/routes";
 import evidenceRouter from "./evidence";
 import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity } from "./scoring";
@@ -2756,6 +2757,8 @@ export async function registerRoutes(
   } else {
     console.log("[seedDemoData] skipped — demo seeding not allowed in this environment.");
   }
+
+  registerSeoRoutes(app);
 
   return httpServer;
 }

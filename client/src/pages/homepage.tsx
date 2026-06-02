@@ -204,16 +204,34 @@ export default function Homepage() {
 
       {/* Footer */}
       <footer className="border-t border-border/40 py-10 px-6">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-blue-500" />
-            <span className="text-sm font-bold tracking-tight">ClaimSignal&#8482;</span>
+        <div className="max-w-6xl mx-auto flex flex-col gap-8">
+          <div className="flex flex-col sm:flex-row justify-between gap-8">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-blue-500" />
+                <span className="text-sm font-bold tracking-tight">ClaimSignal&#8482;</span>
+              </div>
+              <p className="text-xs text-muted-foreground max-w-[200px] leading-relaxed">Operational intelligence for property insurance claims.</p>
+            </div>
+            <div className="flex flex-wrap gap-10 text-xs text-muted-foreground">
+              <div className="flex flex-col gap-2">
+                <span className="font-semibold text-foreground uppercase tracking-wider text-[10px]">Intelligence</span>
+                <a href="/learn" className="hover:text-foreground transition-colors">Glossary</a>
+                <a href="/carriers" className="hover:text-foreground transition-colors">Carrier Profiles</a>
+                <a href="/claims" className="hover:text-foreground transition-colors">Claim Patterns</a>
+              </div>
+              <div className="flex flex-col gap-2">
+                <span className="font-semibold text-foreground uppercase tracking-wider text-[10px]">Platform</span>
+                <a href="#platform" className="hover:text-foreground transition-colors">Overview</a>
+                <a href="#security" className="hover:text-foreground transition-colors">Security</a>
+                <Link href="/login" className="hover:text-foreground transition-colors">Log In</Link>
+              </div>
+            </div>
           </div>
-          <nav className="flex items-center gap-6 text-xs text-muted-foreground">
-            <a href="#platform" className="hover:text-foreground transition-colors">Platform</a>
-            <a href="#security" className="hover:text-foreground transition-colors">Security</a>
-            <Link href="/login" className="hover:text-foreground transition-colors">Log In</Link>
-          </nav>
+          <div className="border-t border-border/40 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span>© {new Date().getFullYear()} ClaimSignal™. All rights reserved.</span>
+            <span>All carrier information is educational and informational only. Not legal advice.</span>
+          </div>
         </div>
       </footer>
     </div>

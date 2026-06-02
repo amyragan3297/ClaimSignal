@@ -1,0 +1,52 @@
+URGENT BUG: AI extraction is not using the uploaded document content.
+
+Specific test file:
+Blaxton estimate.2023.pdf
+
+Observed behavior:
+The file appears in Evidence Files as uploaded.
+The claim draft opens.
+AI Claim Intelligence says the claim is almost entirely undocumented.
+Homeowner info, location, financial summary, date of loss, weather, code compliance, adjusters, and defensibility score remain blank or zero.
+
+This is incorrect because an estimate PDF was uploaded and should contain structured claim data.
+
+Required fix:
+Trace the Blaxton estimate PDF from upload to claim population.
+
+Do not redesign UI.
+Do not add demo data.
+Do not add fake fallback values.
+Do not generate generic AI narrative when extraction fails.
+
+Audit and fix this exact pipeline:
+
+1. Uploaded PDF is saved.
+2. PDF text/OCR is extracted.
+3. Extracted text is passed into AI extraction.
+4. AI returns structured JSON.
+5. Structured JSON maps into claim fields.
+6. Claim record is updated.
+7. Claim detail page reads the updated claim record.
+8. AI Claim Intelligence uses the actual extracted claim data, not blank/default claim data.
+
+Add temporary debug logging for this file only:
+
+- uploaded file id
+- linked claim id
+- raw PDF text length
+- first 2,000 characters of extracted text
+- AI extraction JSON
+- mapped claim update payload
+- final saved claim record
+
+Acceptance criteria:
+After uploading Blaxton estimate.2023.pdf, the claim detail page must populate all available fields found in the document, including homeowner/insured, carrier if present, claim number if present, property address if present, date fields if present, estimate totals, RCV, ACV, deductible, and any adjuster/vendor information if present.
+
+If the PDF text cannot be read, show a clear extraction failure message:
+"Document uploaded but text extraction failed."
+
+If AI extraction fails, show:
+"Document uploaded but AI structured extraction failed."
+
+Do not allow AI Claim Intelligence to say the file is undocumented when uploaded evidence exists.
