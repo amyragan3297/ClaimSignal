@@ -21,9 +21,9 @@ export interface Escalation {
   outcomeBeforeEscalation: string | null;
   outcomeAfterEscalation: string | null;
   escalationResult: string | null;
-  savedToPlaybook: boolean;
+  savedToPlaybook: boolean | null;
   createdByUserId: string | null;
-  createdAt: Date | string;
+  createdAt: Date | null;
 }
 
 const SUCCESSFUL_RESULTS = new Set([

@@ -2414,7 +2414,7 @@ export async function registerRoutes(
       const { carrierId, type } = req.query as Record<string, string>;
       let escs = await storage.getAllOrgEscalations(orgId);
       if (type) escs = escs.filter(e => e.escalationType === type);
-      const effectiveness = computeEscalationEffectiveness(escs as Parameters<typeof computeEscalationEffectiveness>[0], carrierId, type);
+      const effectiveness = computeEscalationEffectiveness(escs, carrierId, type);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_EFFECTIVENESS_VIEWED", entityType: "escalation", entityId: "effectiveness", ipAddress: getClientIp(req) });
       res.json(effectiveness);
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
@@ -2427,7 +2427,7 @@ export async function registerRoutes(
       const claim = await storage.getClaim(claimId, orgId);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
       const [escs, allClaims] = await Promise.all([storage.getAllOrgEscalations(orgId), storage.getClaims(orgId)]);
-      const recommendation = buildRecommendedEscalationPath(claim, escs as Parameters<typeof buildRecommendedEscalationPath>[1], allClaims);
+      const recommendation = buildRecommendedEscalationPath(claim, escs, allClaims);
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "ESCALATION_PATH_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json(recommendation);
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
