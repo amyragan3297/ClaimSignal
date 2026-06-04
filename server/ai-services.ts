@@ -249,7 +249,14 @@ export interface ExtractionResult {
   extractionMethod: "llm";
 }
 
-const EXTRACTION_SYSTEM_PROMPT = `You are an expert property insurance claims analyst. Extract structured data from insurance claim documents with high precision. Only include fields where you have clear evidence in the document — never invent or guess values. Respond ONLY with valid JSON.`;
+const EXTRACTION_SYSTEM_PROMPT = `You are an expert property insurance claims analyst. Extract structured data from insurance claim documents with high precision.
+
+Rules you must follow exactly:
+1. Only include fields where you have clear evidence in the document — never invent or guess values.
+2. Respond ONLY with valid JSON matching the provided schema.
+3. "propertyAddress" must contain ONLY the street address (e.g. "123 Main St" or "456 Oak Ave Apt 2"). Never include city, state, zip, date of loss, carrier name, policy number, or any other information in this field. If you cannot extract a clean street address, omit this field entirely.
+4. All date fields (dateOfLoss, inspectionDate, etc.) must be in YYYY-MM-DD format only. Convert any MM/DD/YYYY or spelled-out dates to YYYY-MM-DD before returning. If you cannot determine a date with confidence, omit that field.
+5. Numeric fields (rcv, acv, deductible, etc.) must be plain decimal strings, e.g. "18500.00". No currency symbols or commas.`;
 
 const EXTRACTION_SCHEMA = `{
   "claimNumber": "claim number string",
@@ -262,7 +269,7 @@ const EXTRACTION_SCHEMA = `{
   "iaFirm": "independent adjusting firm name",
   "carrier": "insurance carrier or company name",
   "vendor": "engineering firm, ITEL, or vendor name",
-  "propertyAddress": "street address of property",
+  "propertyAddress": "street address ONLY — e.g. '123 Main St' (never include city, state, zip, dates, or carrier info)",
   "city": "city",
   "state": "2-letter state code",
   "zipCode": "zip code",
@@ -350,7 +357,12 @@ export async function extractClaimFieldsFromText(
   const truncated = text.slice(0, 12000);
   const docHint = hint ? hint.replace(/_/g, " ") : "insurance document";
 
-  const userPrompt = `Extract all claim-related information from this ${docHint} and return JSON with this schema (omit any field not found in the text — never invent):
+  const userPrompt = `Extract all claim-related information from this ${docHint} and return JSON with this schema (omit any field not found in the text — never invent).
+
+CRITICAL FORMAT RULES:
+- "propertyAddress" = street address line only (e.g. "742 Evergreen Terrace"). Do NOT put date of loss, carrier, or other fields here.
+- All dates must be YYYY-MM-DD (convert "01/15/2025" → "2025-01-15", "January 15, 2025" → "2025-01-15").
+- Numeric values as plain decimal strings without $ or commas.
 
 ${EXTRACTION_SCHEMA}
 
@@ -384,7 +396,12 @@ export async function extractClaimFieldsFromImages(
   const docHint = hint ? hint.replace(/_/g, " ") : "insurance document";
   const images = imageDataUrls.slice(0, 6);
 
-  const instruction = `These image(s) are pages of a ${docHint}. Read all visible text (including handwriting, stamps, and tables) and extract claim-related information. Return JSON with this schema (omit any field not visible in the images — never invent):
+  const instruction = `These image(s) are pages of a ${docHint}. Read all visible text (including handwriting, stamps, and tables) and extract claim-related information. Return JSON with this schema (omit any field not visible in the images — never invent).
+
+CRITICAL FORMAT RULES:
+- "propertyAddress" = street address line only (e.g. "742 Evergreen Terrace"). Do NOT put date of loss, carrier, or other fields here.
+- All dates must be YYYY-MM-DD (convert "01/15/2025" → "2025-01-15", "January 15, 2025" → "2025-01-15").
+- Numeric values as plain decimal strings without $ or commas.
 
 ${EXTRACTION_SCHEMA}`;
 

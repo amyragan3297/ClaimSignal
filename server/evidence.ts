@@ -27,6 +27,62 @@ function computeSha256(buffer: Buffer): string {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
+/**
+ * Robustly parse a date string that may be in YYYY-MM-DD, MM/DD/YYYY,
+ * M/D/YYYY, "January 15 2025", "Jan 15, 2025", or ISO 8601 format.
+ * Returns null if the value cannot be confidently parsed into a valid Date.
+ */
+function parseFlexDate(val: string): Date | null {
+  if (!val || typeof val !== "string") return null;
+  const s = val.trim();
+  if (!s) return null;
+
+  // Try ISO 8601 / native parse first (handles "2025-01-15" and "2025-01-15T...")
+  const direct = new Date(s);
+  if (!isNaN(direct.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(s)) return direct;
+
+  // MM/DD/YYYY or M/D/YYYY (US format)
+  const mdyMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdyMatch) {
+    const [, m, d, y] = mdyMatch;
+    const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    const dt = new Date(iso);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+
+  // MM-DD-YYYY
+  const mdyDashMatch = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (mdyDashMatch) {
+    const [, m, d, y] = mdyDashMatch;
+    const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    const dt = new Date(iso);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+
+  // "January 15, 2025" or "Jan 15 2025" — let JS parse spelled-out dates
+  const spelled = new Date(s);
+  if (!isNaN(spelled.getTime())) return spelled;
+
+  return null;
+}
+
+const ADDRESS_CONTAMINATION_RE = /date\s+of\s+loss|date\s+of\s+damage|d\.o\.l|carrier|policy\s+#|policy\s+number|claim\s+#|claim\s+number|insured\s+name|adjuster/i;
+
+/**
+ * Validate a propertyAddress value returned by AI extraction.
+ * Returns the cleaned address string, or null if the value looks contaminated
+ * (contains other field keywords) or is unreasonably long.
+ */
+function sanitizeAddress(val: string): string | null {
+  if (!val || typeof val !== "string") return null;
+  const s = val.trim();
+  // Reject if the string is clearly multi-field (contains Date of Loss, Carrier, etc.)
+  if (ADDRESS_CONTAMINATION_RE.test(s)) return null;
+  // Reject if unreasonably long (a street address should rarely exceed 120 chars)
+  if (s.length > 120) return null;
+  return s;
+}
+
 function detectFileType(fileName: string): string {
   const ext = fileName.toLowerCase().split(".").pop();
   const map: Record<string, string> = {
@@ -337,8 +393,7 @@ async function createClaimFromExtraction(opts: {
   };
   const dateVal = (v?: string) => {
     if (!v) return undefined;
-    const d = new Date(v);
-    return d && !isNaN(d.getTime()) ? d : undefined;
+    return parseFlexDate(v) ?? undefined;
   };
 
   const claimNumber = f("claimNumber", "claim_number", "claimNumber") || `CLM-${Date.now().toString().slice(-6)}`;
@@ -699,18 +754,25 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         "supplementApproved", "recoverableDepreciation",
       ]);
 
-      const claimUpdate: Record<string, string | Date> = {};
-      const ex = llmExtraction as unknown as Record<string, string>;
+      const claimUpdate: Record<string, string | number | Date> = {};
+      const ex = llmExtraction as unknown as Record<string, unknown>;
       for (const [exKey, claimKey] of Object.entries(APPLY_FIELD_MAP)) {
         const raw = ex[exKey];
-        if (!raw || String(raw).trim() === "") continue;
+        if (raw == null || String(raw).trim() === "") continue;
         const val = String(raw).trim();
         if (DATE_APPLY_KEYS.has(exKey)) {
-          const d = new Date(val);
-          if (!isNaN(d.getTime())) claimUpdate[claimKey] = d;
+          const d = parseFlexDate(val);
+          if (d) claimUpdate[claimKey] = d;
         } else if (NUMERIC_APPLY_KEYS.has(exKey)) {
           const n = parseFloat(val.replace(/[$,\s]/g, ""));
-          if (!isNaN(n)) claimUpdate[claimKey] = String(n);
+          if (!isNaN(n)) claimUpdate[claimKey] = n;
+        } else if (exKey === "propertyAddress") {
+          // Sanitize address — reject contaminated/oversized values
+          const existingVal = (matchedClaim as Record<string, unknown>)[claimKey];
+          if (existingVal == null || existingVal === "") {
+            const clean = sanitizeAddress(val);
+            if (clean) claimUpdate[claimKey] = clean;
+          }
         } else {
           // Only apply if claim field is currently blank/null — never overwrite
           // a field the user has already filled in manually.
@@ -1126,11 +1188,14 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       if (!raw || String(raw).trim() === "") continue;
       const val = String(raw).trim();
       if (DATE_KEYS.has(exKey)) {
-        const d = new Date(val);
-        if (!isNaN(d.getTime())) claimUpdate[claimKey] = d;
+        const d = parseFlexDate(val);
+        if (d) claimUpdate[claimKey] = d;
       } else if (NUMERIC_KEYS.has(exKey)) {
         const n = parseFloat(val.replace(/[$,\s]/g, ""));
-        if (!isNaN(n)) claimUpdate[claimKey] = String(n);
+        if (!isNaN(n)) claimUpdate[claimKey] = n;
+      } else if (exKey === "propertyAddress") {
+        const clean = sanitizeAddress(val);
+        if (clean) claimUpdate[claimKey] = clean;
       } else {
         claimUpdate[claimKey] = val;
       }
