@@ -28,4 +28,10 @@ export default [
       "@typescript-eslint/no-require-imports": "off",
     },
   },
+  {
+    files: ["client/src/pages/**/*.ts", "client/src/pages/**/*.tsx", "client/src/components/**/*.ts", "client/src/components/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
+    },
+  },
 ];
