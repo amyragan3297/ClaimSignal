@@ -3,6 +3,36 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, GradientFill
 from openpyxl.utils import get_column_letter
 import csv
+import re
+import dns.resolver
+from datetime import datetime, timezone
+
+# RFC 5322 simplified regex — rejects obvious placeholders and malformed addresses
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+
+
+def validate_email_format(email: str) -> str:
+    """Return 'yes' if the email string matches a valid address format, 'no' otherwise.
+    Template placeholders like [name]@example.com are flagged as invalid."""
+    if not email or "[" in email or "]" in email:
+        return "no"
+    return "yes" if _EMAIL_RE.match(email.strip()) else "no"
+
+
+def check_mx(domain: str) -> str:
+    """Return 'yes' if the domain has at least one MX record, 'no' otherwise.
+    DNS-only check — no SMTP connection is made."""
+    try:
+        answers = dns.resolver.resolve(domain, "MX", lifetime=10)
+        return "yes" if answers else "no"
+    except (
+        dns.resolver.NXDOMAIN,
+        dns.resolver.NoAnswer,
+        dns.resolver.NoNameservers,
+        dns.exception.Timeout,
+        dns.resolver.LifetimeTimeout,
+    ):
+        return "no"
 
 prospects = [
     # ── TIER 1: ICP match + active buying signal ──────────────────────────────
@@ -654,12 +684,14 @@ prospects = [
     },
 ]
 
-# ── Column order for output ────────────────────────────────────────────────────
-COLUMNS = [
+# ── Column order for base output ──────────────────────────────────────────────
+BASE_COLUMNS = [
     "Tier", "Segment", "Company", "Domain", "Headcount", "Fit Score",
     "Buying Signal / Trigger", "Target Contact Name", "Target Title",
     "LinkedIn URL", "Email Pattern", "Why Now",
 ]
+
+COLUMNS = BASE_COLUMNS + ["Email Format Valid", "Domain MX Valid", "Verified At"]
 
 # Sort: Tier 1 → Tier 2 → Tier 3, then by Fit Score desc
 tier_order = {"Tier 1": 0, "Tier 2": 1, "Tier 3": 2}
@@ -676,6 +708,66 @@ TIER_FONT_COLORS = {
     "Tier 2": "BDD7EE",  # light blue
     "Tier 3": "FFDAB9",  # light peach
 }
+
+# ── Write base CSV (without verification columns) ─────────────────────────────
+CSV_PATH = "claimsignal_prospects.csv"
+with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=BASE_COLUMNS)
+    writer.writeheader()
+    for p in prospects:
+        writer.writerow({col: p[col] for col in BASE_COLUMNS})
+
+print(f"✓ Base CSV written — {len(prospects)} rows")
+
+# ── Verification pass: reads CSV, adds email + MX checks, writes back ─────────
+print("\nRunning email format validation and MX record checks (DNS-only, no SMTP)...")
+verified_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+with open(CSV_PATH, newline="", encoding="utf-8") as f:
+    rows = list(csv.DictReader(f))
+
+seen_domains: dict[str, str] = {}
+for row in rows:
+    row["Email Format Valid"] = validate_email_format(row.get("Email Pattern", ""))
+
+    domain = row["Domain"]
+    if domain not in seen_domains:
+        mx_result = check_mx(domain)
+        seen_domains[domain] = mx_result
+        fmt_status = "✓" if row["Email Format Valid"] == "yes" else "✗"
+        mx_status = "✓" if mx_result == "yes" else "✗"
+        print(
+            f"  email {fmt_status}  mx {mx_status}  "
+            f"{row['Email Pattern']:45s}  [{domain}]"
+        )
+    row["Domain MX Valid"] = seen_domains[domain]
+    row["Verified At"] = verified_at
+
+with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=COLUMNS)
+    writer.writeheader()
+    writer.writerows(rows)
+
+email_valid_count = sum(1 for r in rows if r["Email Format Valid"] == "yes")
+email_invalid_count = len(rows) - email_valid_count
+mx_valid_count = sum(1 for r in rows if r["Domain MX Valid"] == "yes")
+mx_invalid_count = len(rows) - mx_valid_count
+
+print(f"\nEmail format: {email_valid_count} valid, {email_invalid_count} flagged")
+print(f"Domain MX:    {mx_valid_count} valid, {mx_invalid_count} flagged\n")
+print(f"✓ Verified CSV saved — {len(rows)} rows")
+
+# Merge verified columns back into the in-memory prospects for XLSX
+verified_by_domain_email: dict[tuple, dict] = {
+    (r["Domain"], r["Email Pattern"]): r for r in rows
+}
+for p in prospects:
+    key = (p["Domain"], p["Email Pattern"])
+    if key in verified_by_domain_email:
+        vrow = verified_by_domain_email[key]
+        p["Email Format Valid"] = vrow["Email Format Valid"]
+        p["Domain MX Valid"] = vrow["Domain MX Valid"]
+        p["Verified At"] = vrow["Verified At"]
 
 # ── Build XLSX ────────────────────────────────────────────────────────────────
 wb = Workbook()
@@ -709,7 +801,6 @@ for row_idx, p in enumerate(prospects, start=2):
     font_color = TIER_FONT_COLORS[tier]
 
     for col_idx, cell in enumerate(ws[row_idx], start=1):
-        # Tier and Segment columns get tier color
         if col_idx in (1, 2):
             cell.fill = fill
             cell.font = Font(bold=True, color=font_color, size=10)
@@ -737,7 +828,31 @@ col_widths = {
     "J": 40,   # LinkedIn
     "K": 35,   # Email Pattern
     "L": 55,   # Why Now
+    "M": 18,   # Email Format Valid
+    "N": 16,   # Domain MX Valid
+    "O": 22,   # Verified At
 }
+
+# Color-code Email Format Valid and Domain MX Valid columns
+yes_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+no_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+yes_font_color = "276221"
+no_font_color = "9C0006"
+
+EMAIL_COL_IDX = COLUMNS.index("Email Format Valid") + 1
+MX_VALID_COL_IDX = COLUMNS.index("Domain MX Valid") + 1
+
+for row_idx in range(2, len(prospects) + 2):
+    for col_idx in (EMAIL_COL_IDX, MX_VALID_COL_IDX):
+        cell = ws.cell(row=row_idx, column=col_idx)
+        if cell.value == "yes":
+            cell.fill = yes_fill
+            cell.font = Font(size=10, color=yes_font_color)
+        else:
+            cell.fill = no_fill
+            cell.font = Font(size=10, color=no_font_color)
+        cell.alignment = Alignment(horizontal="center", vertical="top")
+
 for col_letter, width in col_widths.items():
     ws.column_dimensions[col_letter].width = width
 
@@ -772,18 +887,16 @@ for tier, count in totals.items():
 ws2.append([])
 for seg, count in seg_totals.items():
     ws2.append([seg, count])
+ws2.append([])
+ws2.append(["— Email & Domain Verification —", ""])
+ws2.append(["Email Format Valid", email_valid_count])
+ws2.append(["Email Format Invalid (flagged)", email_invalid_count])
+ws2.append(["Domains MX Valid", mx_valid_count])
+ws2.append(["Domains MX Invalid (flagged)", mx_invalid_count])
+ws2.append(["Verified At (UTC)", verified_at])
 
 wb.save("claimsignal_prospects.xlsx")
 print(f"✓ XLSX saved — {len(prospects)} prospects")
-
-# ── Write CSV ─────────────────────────────────────────────────────────────────
-with open("claimsignal_prospects.csv", "w", newline="", encoding="utf-8") as f:
-    writer = csv.DictWriter(f, fieldnames=COLUMNS)
-    writer.writeheader()
-    for p in prospects:
-        writer.writerow({col: p[col] for col in COLUMNS})
-
-print(f"✓ CSV saved — {len(prospects)} rows")
 
 # Print breakdown
 print(f"\nBreakdown:")
