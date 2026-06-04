@@ -39,11 +39,11 @@ async function main() {
   }
 
   // Delete adjusters created by demo data (they are scoped to orgId)
-  const adjusterResult = await db.delete(adjusters).where(eq(adjusters.organizationId, orgId));
+  await db.delete(adjusters).where(eq(adjusters.organizationId, orgId));
   console.log(`[delete-demo] deleted adjusters for org`);
 
   // Delete audit logs related to these claims
-  const auditResult = await db.delete(auditLogs).where(eq(auditLogs.organizationId, orgId));
+  await db.delete(auditLogs).where(eq(auditLogs.organizationId, orgId));
   console.log(`[delete-demo] deleted audit logs for org`);
 
   console.log(`[delete-demo] done — removed ${claimIds.length} demo claims and all related data`);
