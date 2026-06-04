@@ -801,7 +801,7 @@ export async function registerRoutes(
   });
 
   // Unlink an adjuster from a claim (preserves adjuster + other claims; history intact).
-  app.delete("/api/claims/:id/adjusters/:linkId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+  app.delete("/api/claims/:id/adjusters/:linkId", requireAuth, requireActiveSubscription, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
       if (role === "carrier_analyst") return res.status(403).json({ message: "Not permitted for this role" });
@@ -2134,18 +2134,30 @@ export async function registerRoutes(
     try {
       const masterOrgId = req.auth!.organizationId;
 
-      // 1. Identify demo organizations by their users' email domains
+      // 1. Identify demo organizations by email domain AND org-name "(DEMO)" suffix
       const allUsers = await storage.getAllUsers();
+      const allOrgs = await storage.getAllOrganizations();
+
+      // Orgs whose users have test email addresses
+      const emailDemoOrgIds = new Set(
+        allUsers
+          .filter(
+            (u) =>
+              (u.email.endsWith("@claimsignal.test") || u.email === "test@example.com") &&
+              u.organizationId !== masterOrgId,
+          )
+          .map((u) => u.organizationId),
+      );
+
+      // Orgs explicitly marked with a "(DEMO)" suffix in their name
+      const nameDemoOrgIds = new Set(
+        allOrgs
+          .filter((o) => o.id !== masterOrgId && o.name.includes("(DEMO)"))
+          .map((o) => o.id),
+      );
+
       const demoOrgIds = Array.from(
-        new Set(
-          allUsers
-            .filter(
-              (u) =>
-                (u.email.endsWith("@claimsignal.test") || u.email === "test@example.com") &&
-                u.organizationId !== masterOrgId,
-            )
-            .map((u) => u.organizationId),
-        ),
+        new Set([...Array.from(emailDemoOrgIds), ...Array.from(nameDemoOrgIds)]),
       );
 
       if (demoOrgIds.length === 0) {
@@ -2556,7 +2568,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.delete("/api/escalations/:escId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
+  app.delete("/api/escalations/:escId", requireAuth, requireActiveSubscription, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
       const escId = String(req.params.escId);
@@ -2966,6 +2978,11 @@ async function ensureMasterUser(email: string, password: string, fullName: strin
     if (!existing.isPlatformOwner || existing.role !== "super_admin") {
       updates.isPlatformOwner = true;
       updates.role = "super_admin";
+    }
+    // Sync display name: strip any stale "(DEMO)" suffix or other drift.
+    if (existing.fullName !== fullName) {
+      updates.fullName = fullName;
+      console.log(`[ensureMasterUser] Display name synced: "${existing.fullName}" → "${fullName}".`);
     }
     // Sync password: if the secret changed since last seed, update the hash.
     const passwordMatch = existing.passwordHash
