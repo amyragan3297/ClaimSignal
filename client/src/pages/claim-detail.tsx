@@ -302,6 +302,7 @@ export default function ClaimDetailPage() {
 
   // ── Capture outcome as playbook (Master only) ──
   const [playbookDialogOpen, setPlaybookDialogOpen] = useState(false);
+  const [useMetric, setUseMetric] = useState(false);
   const playbookForm = useForm<{ title: string; actionTaken: string; whatWorked: string; outcome: string; recommendedNextStep: string }>({
     defaultValues: { title: "", actionTaken: "", whatWorked: "", outcome: "", recommendedNextStep: "" },
   });
@@ -716,11 +717,22 @@ export default function ClaimDetailPage() {
         </Card>
 
         <Card data-testid="card-weather">
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <Cloud className="w-4 h-4 text-primary" />
               Weather at Loss
             </CardTitle>
+            {weatherData?.weather && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[10px] text-muted-foreground"
+                onClick={() => setUseMetric((m) => !m)}
+                data-testid="button-weather-unit-toggle"
+              >
+                {useMetric ? "Switch to °F" : "Switch to °C"}
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             {weatherLoading ? (
@@ -746,32 +758,48 @@ export default function ClaimDetailPage() {
                   <span data-testid="weather-date">{weatherData.weather.date}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {weatherData.weather.tempMaxF != null && (
+                  {(useMetric ? weatherData.weather.tempMaxC : weatherData.weather.tempMaxF) != null && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-temp">
                       <Thermometer className="w-4 h-4 text-orange-400" />
-                      <span className="text-sm">{weatherData.weather.tempMinF ?? "—"}° / {weatherData.weather.tempMaxF}°F</span>
+                      {useMetric
+                        ? <span className="text-sm">{Math.round(weatherData.weather.tempMinC ?? 0)}° / {Math.round(weatherData.weather.tempMaxC!)}°C</span>
+                        : <span className="text-sm">{weatherData.weather.tempMinF ?? "—"}° / {weatherData.weather.tempMaxF}°F</span>
+                      }
                     </div>
                   )}
-                  {weatherData.weather.windGustMaxMph != null && (
+                  {(useMetric ? weatherData.weather.windGustMaxKmh : weatherData.weather.windGustMaxMph) != null && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-wind">
                       <Wind className="w-4 h-4 text-sky-400" />
-                      <span className="text-sm">{weatherData.weather.windGustMaxMph} mph gust</span>
+                      {useMetric
+                        ? <span className="text-sm">{Math.round(weatherData.weather.windGustMaxKmh!)} km/h gust</span>
+                        : <span className="text-sm">{weatherData.weather.windGustMaxMph} mph gust</span>
+                      }
                     </div>
                   )}
-                  {weatherData.weather.precipitationIn != null && weatherData.weather.precipitationIn > 0 && (
+                  {(useMetric
+                    ? (weatherData.weather.precipitationMm != null && weatherData.weather.precipitationMm > 0)
+                    : (weatherData.weather.precipitationIn != null && weatherData.weather.precipitationIn > 0)) && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-precip">
                       <Droplets className="w-4 h-4 text-blue-400" />
-                      <span className="text-sm">{weatherData.weather.precipitationIn.toFixed(2)} in</span>
+                      {useMetric
+                        ? <span className="text-sm">{weatherData.weather.precipitationMm!.toFixed(1)} mm</span>
+                        : <span className="text-sm">{weatherData.weather.precipitationIn!.toFixed(2)} in</span>
+                      }
                     </div>
                   )}
-                  {weatherData.weather.snowfallIn != null && weatherData.weather.snowfallIn > 0 && (
+                  {(useMetric
+                    ? (weatherData.weather.snowfallCm != null && weatherData.weather.snowfallCm > 0)
+                    : (weatherData.weather.snowfallIn != null && weatherData.weather.snowfallIn > 0)) && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-snow">
                       <Snowflake className="w-4 h-4 text-cyan-300" />
-                      <span className="text-sm">{weatherData.weather.snowfallIn.toFixed(1)} in</span>
+                      {useMetric
+                        ? <span className="text-sm">{weatherData.weather.snowfallCm!.toFixed(1)} cm</span>
+                        : <span className="text-sm">{weatherData.weather.snowfallIn!.toFixed(1)} in</span>
+                      }
                     </div>
                   )}
                 </div>
-                <p className="text-[10px] text-muted-foreground/70">Historical data via Open-Meteo</p>
+                <p className="text-[10px] text-muted-foreground/70">Historical data via Open-Meteo · {useMetric ? "Metric units" : "US customary units"}</p>
               </div>
             ) : null}
           </CardContent>
@@ -1186,7 +1214,7 @@ export default function ClaimDetailPage() {
         </CardContent>
       </Card>
 
-      {playbookRecs && playbookRecs.recommendations && playbookRecs.recommendations.length > 0 && (
+      {playbookRecs && (
         <Card data-testid="card-playbook-recs">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -1209,8 +1237,13 @@ export default function ClaimDetailPage() {
                     {playbookRecs.aiStrategy.prioritizedSteps.map((s, i) => (
                       <div key={i} className="flex items-start gap-2 text-xs" data-testid={`text-ai-step-${i}`}>
                         <Badge
-                          variant={s.priority === "critical" ? "destructive" : s.priority === "high" ? "default" : "secondary"}
-                          className="shrink-0 text-[10px] mt-0.5"
+                          className={`shrink-0 text-[10px] mt-0.5 border-0 ${
+                            s.priority === "critical"
+                              ? "bg-red-600 text-white"
+                              : s.priority === "high"
+                              ? "bg-amber-500 text-black"
+                              : "bg-secondary text-secondary-foreground"
+                          }`}
                         >
                           {s.priority}
                         </Badge>
@@ -1244,24 +1277,40 @@ export default function ClaimDetailPage() {
                 )}
               </div>
             )}
-            {playbookRecs.recommendations.map((rec) => (
-              <div key={rec.playbook.id} className="rounded-md border border-border p-3" data-testid={`playbook-rec-${rec.playbook.id}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium">{rec.playbook.title}</p>
-                  <Badge variant="secondary" className="shrink-0">match {rec.matchScore}</Badge>
-                </div>
-                {rec.playbook.recommendedNextStep && (
-                  <p className="text-xs text-muted-foreground mt-1">{rec.playbook.recommendedNextStep}</p>
-                )}
-                {(rec.matchReasons?.length ?? 0) > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {rec.matchReasons?.map((r: string, i: number) => (
-                      <Badge key={i} variant="outline" className="text-[10px]">{r}</Badge>
-                    ))}
-                  </div>
-                )}
+            {playbookRecs.recommendations.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground" data-testid="playbook-recs-empty">
+                <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No similar historical claims found yet.</p>
+                <p className="text-xs mt-1 opacity-70">Recommendations appear as your playbook library grows.</p>
               </div>
-            ))}
+            ) : (
+              playbookRecs.recommendations.map((rec) => (
+                <div key={rec.playbook.id} className="rounded-md border border-border p-3 space-y-2" data-testid={`playbook-rec-${rec.playbook.id}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">{rec.playbook.title}</p>
+                    <div className="flex items-center gap-2 shrink-0" data-testid={`rec-match-score-${rec.playbook.id}`}>
+                      <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${Math.min(rec.matchScore, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground">{rec.matchScore}%</span>
+                    </div>
+                  </div>
+                  {rec.playbook.recommendedNextStep && (
+                    <p className="text-xs text-muted-foreground">{rec.playbook.recommendedNextStep}</p>
+                  )}
+                  {(rec.matchReasons?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {rec.matchReasons?.map((r: string, i: number) => (
+                        <Badge key={i} variant="outline" className="text-[10px]">{r}</Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
       )}

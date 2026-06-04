@@ -71,21 +71,29 @@ const US_STATE_NAMES: Record<string, string> = {
 
 export interface GeoResult { lat: number; lon: number; label: string; }
 
+// In-memory geocode caches — avoids repeated external API calls within a server session
+const _zipCache = new Map<string, GeoResult | null>();
+const _cityCache = new Map<string, GeoResult | null>();
+
 // US ZIP code → coordinates via the keyless zippopotam.us API.
 export async function geocodeZip(zip: string): Promise<GeoResult | null> {
   const clean = zip.trim().slice(0, 5);
   if (!/^\d{5}$/.test(clean)) return null;
+  if (_zipCache.has(clean)) return _zipCache.get(clean)!;
   try {
     interface ZippoPlace { "place name": string; "state abbreviation": string; latitude: string; longitude: string; }
     interface ZippoData { places?: ZippoPlace[]; }
     const res = await fetch(`https://api.zippopotam.us/us/${clean}`);
-    if (!res.ok) return null;
+    if (!res.ok) { _zipCache.set(clean, null); return null; }
     const data = await res.json() as ZippoData;
     const place = data?.places?.[0];
-    if (!place) return null;
+    if (!place) { _zipCache.set(clean, null); return null; }
     const label = `${place["place name"]}, ${place["state abbreviation"]} ${clean}`;
-    return { lat: Number(place.latitude), lon: Number(place.longitude), label };
+    const result = { lat: Number(place.latitude), lon: Number(place.longitude), label };
+    _zipCache.set(clean, result);
+    return result;
   } catch {
+    _zipCache.set(clean, null);
     return null;
   }
 }
@@ -93,26 +101,35 @@ export async function geocodeZip(zip: string): Promise<GeoResult | null> {
 // Open-Meteo geocoder needs a bare place name; pass the city only and prefer a
 // result whose region matches the claim's state.
 export async function geocodeCity(city: string, state?: string | null): Promise<GeoResult | null> {
+  const cacheKey = `${city.trim().toLowerCase()}|${(state || "").toUpperCase()}`;
+  if (_cityCache.has(cacheKey)) return _cityCache.get(cacheKey)!;
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city.trim())}&count=10&language=en&format=json`;
   interface GeoItem { name?: string; latitude?: number; longitude?: number; admin1?: string; admin1_code?: string; country_code?: string; }
   interface GeoData { results?: GeoItem[]; }
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const data = await res.json() as GeoData;
-  const results: GeoItem[] = Array.isArray(data?.results) ? data.results : [];
-  if (results.length === 0) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) { _cityCache.set(cacheKey, null); return null; }
+    const data = await res.json() as GeoData;
+    const results: GeoItem[] = Array.isArray(data?.results) ? data.results : [];
+    if (results.length === 0) { _cityCache.set(cacheKey, null); return null; }
 
-  let chosen = results[0];
-  if (state) {
-    const st = state.trim().toUpperCase();
-    const full = (US_STATE_NAMES[st] || state).toLowerCase();
-    const match = results.find(
-      (r) => String(r.admin1 || "").toLowerCase() === full || String(r.admin1_code || "").toUpperCase() === st,
-    );
-    if (match) chosen = match;
+    let chosen = results[0];
+    if (state) {
+      const st = state.trim().toUpperCase();
+      const full = (US_STATE_NAMES[st] || state).toLowerCase();
+      const match = results.find(
+        (r) => String(r.admin1 || "").toLowerCase() === full || String(r.admin1_code || "").toUpperCase() === st,
+      );
+      if (match) chosen = match;
+    }
+    const label = [chosen.name, chosen.admin1, chosen.country_code].filter(Boolean).join(", ");
+    const result = { lat: chosen.latitude ?? 0, lon: chosen.longitude ?? 0, label };
+    _cityCache.set(cacheKey, result);
+    return result;
+  } catch {
+    _cityCache.set(cacheKey, null);
+    return null;
   }
-  const label = [chosen.name, chosen.admin1, chosen.country_code].filter(Boolean).join(", ");
-  return { lat: chosen.latitude ?? 0, lon: chosen.longitude ?? 0, label };
 }
 
 /**

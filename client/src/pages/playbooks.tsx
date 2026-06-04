@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import { BookOpen, Plus, Loader2, Trash2, CheckCircle2, TrendingUp, Building2, FileText, Search, Sparkles, X, Filter } from "lucide-react";
+import { BookOpen, Plus, Loader2, Trash2, CheckCircle2, TrendingUp, Building2, FileText, Search, Sparkles, X, Filter, Copy, Check } from "lucide-react";
 
 interface PlaybookEntry {
   id: string;
@@ -125,6 +125,7 @@ export default function PlaybooksPage() {
     outcome: "", recommendedNextStep: "",
   });
   const [aiGenerated, setAiGenerated] = useState(false);
+  const [copiedStrategyId, setCopiedStrategyId] = useState<string | null>(null);
 
   const generateMutation = useMutation({
     mutationFn: async () => {
@@ -333,9 +334,29 @@ export default function PlaybooksPage() {
                   )}
                   {r.strategySummary?.reusableStrategy?.length > 0 && (
                     <div>
-                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-1">Reusable Strategy</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Reusable Strategy</p>
+                        <button
+                          onClick={() => {
+                            const text = r.strategySummary.reusableStrategy
+                              .map((s: string, i: number) => `${i + 1}. ${s}`)
+                              .join("\n");
+                            navigator.clipboard.writeText(text).then(() => {
+                              setCopiedStrategyId(r.claimId);
+                              setTimeout(() => setCopiedStrategyId(null), 2000);
+                            });
+                          }}
+                          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                          data-testid={`button-copy-strategy-${r.claimId}`}
+                        >
+                          {copiedStrategyId === r.claimId
+                            ? <><Check className="w-3 h-3 text-green-500" /><span className="text-green-500">Copied!</span></>
+                            : <><Copy className="w-3 h-3" /><span>Copy strategy</span></>
+                          }
+                        </button>
+                      </div>
                       <div className="flex flex-wrap gap-1">
-                        {r.strategySummary.reusableStrategy.map((s, i) => (
+                        {r.strategySummary.reusableStrategy.map((s: string, i: number) => (
                           <Badge key={i} variant="outline" className="text-[10px]">{s}</Badge>
                         ))}
                       </div>

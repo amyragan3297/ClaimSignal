@@ -377,8 +377,10 @@ export async function registerRoutes(
       const CONCURRENCY = 8;
       const results: Array<{
         id: string; lat: number; lon: number;
-        frictionScore: number | null; status: string;
-        lossType: string | null; carrier: string | null;
+        frictionScore: number | null; riskScore: number | null;
+        status: string; lossType: string | null; carrier: string | null;
+        city: string | null; state: string | null; zipCode: string | null;
+        lifecyclePhase: string | null; dateOfLoss: string | null;
         claimIdentifier: string;
       }> = [];
 
@@ -394,14 +396,21 @@ export async function registerRoutes(
               geo = await geocodeCity(c.city, c.state);
             }
             if (!geo) return null;
+            const lossDateRaw = c.dateOfLoss || c.lossDate;
             return {
               id: c.id,
               lat: geo.lat,
               lon: geo.lon,
               frictionScore: c.frictionScore ?? null,
+              riskScore: c.riskScore ?? null,
               status: c.status,
               lossType: c.lossType ?? null,
               carrier: c.carrier ?? null,
+              city: c.city ?? null,
+              state: c.state ?? null,
+              zipCode: c.zipCode ?? null,
+              lifecyclePhase: c.currentPhase ?? null,
+              dateOfLoss: lossDateRaw ? new Date(lossDateRaw).toISOString().slice(0, 10) : null,
               claimIdentifier: c.claimNumber
                 ? (role === "super_admin" ? c.claimNumber : "CLM-" + c.id.slice(0, 6).toUpperCase())
                 : "CLM-" + c.id.slice(0, 6).toUpperCase(),
