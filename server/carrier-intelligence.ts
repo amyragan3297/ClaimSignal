@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Claim } from "@shared/schema";
 
 /**
@@ -107,16 +106,15 @@ export function computeCarrierIntelligence(claims: Claim[]): CarrierIntelligence
 
     // ── Section 15 — Carrier Scorecard metrics (real data only)
     const overturned = group.filter((c) => c.denialOverturned === true).length;
-    const reinspected = group.filter((c) => (c as any).reinspectionRequested === true).length;
+    const reinspected = group.filter((c) => c.reinspectionRequested === true).length;
     const deniedThenApproved = group.filter((c) => {
-      const init = ((c as any).initialOutcome || "").toLowerCase();
-      const fin = ((c as any).finalOutcome || "").toLowerCase();
+      const init = (c.initialOutcome || "").toLowerCase();
+      const fin = (c.finalOutcome || "").toLowerCase();
       return (init.includes("deni") || init.includes("reject")) && (fin.includes("approv") || fin.includes("paid") || c.denialOverturned === true);
     }).length;
     const resDays = group.map((c) => {
-      const a = c as any;
-      const start = a.dateOfLoss ? new Date(a.dateOfLoss) : null;
-      const end = a.resolutionDate ? new Date(a.resolutionDate) : (a.determinationDate ? new Date(a.determinationDate) : null);
+      const start = c.dateOfLoss ? new Date(c.dateOfLoss) : null;
+      const end = c.resolutionDate ? new Date(c.resolutionDate) : (c.determinationDate ? new Date(c.determinationDate) : null);
       if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) return null;
       const d = Math.round((end.getTime() - start.getTime()) / 86400000);
       return d >= 0 ? d : null;

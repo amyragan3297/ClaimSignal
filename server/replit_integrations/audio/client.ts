@@ -129,7 +129,8 @@ export async function voiceChat(
       ],
     }],
   });
-  const message = response.choices[0]?.message as any;
+  type AudioMessage = { audio?: { transcript?: string; data?: string }; content?: string };
+  const message = response.choices[0]?.message as AudioMessage;
   const transcript = message?.audio?.transcript || message?.content || "";
   const audioData = message?.audio?.data ?? "";
   return {
@@ -167,9 +168,10 @@ export async function voiceChatStream(
     stream: true,
   });
 
+  type AudioStreamDelta = { audio?: { transcript?: string; data?: string } };
   return (async function* () {
     for await (const chunk of stream) {
-      const delta = chunk.choices?.[0]?.delta as any;
+      const delta = chunk.choices?.[0]?.delta as AudioStreamDelta;
       if (!delta) continue;
       if (delta?.audio?.transcript) {
         yield { type: "transcript", data: delta.audio.transcript };
@@ -199,7 +201,8 @@ export async function textToSpeech(
       { role: "user", content: `Repeat the following text verbatim: ${text}` },
     ],
   });
-  const audioData = (response.choices[0]?.message as any)?.audio?.data ?? "";
+  type AudioMessage = { audio?: { data?: string } };
+  const audioData = (response.choices[0]?.message as AudioMessage)?.audio?.data ?? "";
   return Buffer.from(audioData, "base64");
 }
 
@@ -223,9 +226,10 @@ export async function textToSpeechStream(
     stream: true,
   });
 
+  type TtsStreamDelta = { audio?: { data?: string } };
   return (async function* () {
     for await (const chunk of stream) {
-      const delta = chunk.choices?.[0]?.delta as any;
+      const delta = chunk.choices?.[0]?.delta as TtsStreamDelta;
       if (!delta) continue;
       if (delta?.audio?.data) {
         yield delta.audio.data;

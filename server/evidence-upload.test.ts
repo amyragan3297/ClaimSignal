@@ -36,7 +36,8 @@ async function run() {
 
   // Point the OpenAI integration at our local fake so extraction is hermetic.
   const fakeOpenAI = await startFakeOpenAI({ claimNumber: "ABC-12345", confidence: 0.9 });
-  const aiPort = (fakeOpenAI.address() as any).port;
+  const fakeAddr = fakeOpenAI.address();
+  const aiPort = typeof fakeAddr === "object" && fakeAddr !== null ? fakeAddr.port : 0;
   process.env.AI_INTEGRATIONS_OPENAI_API_KEY = "test-key";
   process.env.AI_INTEGRATIONS_OPENAI_BASE_URL = `http://127.0.0.1:${aiPort}/v1`;
 
@@ -58,7 +59,7 @@ async function run() {
     );
     check(
       "claim number entity extracted from PDF text",
-      (r1.json?.entities || []).some((e: any) => e.entityType === "claim_number"),
+      (r1.json?.entities || []).some((e: { entityType?: string }) => e.entityType === "claim_number"),
     );
     check("a real claim was created from extracted indicators", !!r1.json?.createdClaim?.id);
     check("created claim carries the extracted claim number", r1.json?.createdClaim?.claimNumber === "ABC-12345");
@@ -92,7 +93,7 @@ async function run() {
     );
     check(
       "claim number entity extracted from TXT",
-      (r3.json?.entities || []).some((e: any) => e.entityType === "claim_number"),
+      (r3.json?.entities || []).some((e: { entityType?: string }) => e.entityType === "claim_number"),
     );
     check(
       "TXT extractionStatus is 'complete' when AI configured",
@@ -117,7 +118,7 @@ async function run() {
     );
     check(
       "claim number entity extracted from EML",
-      (r4.json?.entities || []).some((e: any) => e.entityType === "claim_number"),
+      (r4.json?.entities || []).some((e: { entityType?: string }) => e.entityType === "claim_number"),
     );
     check(
       "EML extractionStatus is 'complete' when AI configured",

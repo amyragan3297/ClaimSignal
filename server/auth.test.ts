@@ -52,10 +52,10 @@ async function run() {
     let leaked = false;
     try {
       mod.resolveJwtSecret();
-    } catch (e: any) {
+    } catch (e: unknown) {
       threw = true;
       // ensure the error message does not contain a secret value
-      leaked = /claimsignal-dev-only/.test(e.message);
+      leaked = /claimsignal-dev-only/.test((e as Error).message);
     }
     check("resolveJwtSecret throws in production with no SESSION_SECRET", threw);
     check("error message does not leak a fallback secret value", !leaked);

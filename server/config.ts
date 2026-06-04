@@ -143,10 +143,10 @@ const SENSITIVE_LOG_KEYS = new Set([
  * Never mutates the input. Used by the request logger so auth responses
  * (which carry access tokens) never leak into logs.
  */
-export function redactSensitive(value: any): any {
+export function redactSensitive(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactSensitive);
   if (value && typeof value === "object") {
-    const out: Record<string, any> = {};
+    const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
       out[k] = SENSITIVE_LOG_KEYS.has(k) ? "[REDACTED]" : redactSensitive(v);
     }

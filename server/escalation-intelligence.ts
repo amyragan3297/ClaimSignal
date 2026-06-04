@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // Escalation Intelligence Engine (Section 19) — MVP, rule-based.
 // Computes effectiveness from REAL escalation records only.
@@ -200,7 +199,7 @@ export function buildRecommendedEscalationPath(
 
   // Find escalations on claims with same carrier and/or similar denial reason.
   const targetCarrier = (targetClaim.carrier || "").toLowerCase();
-  const targetDenial = ((targetClaim as any).denialReason || "").toLowerCase();
+  const targetDenial = (targetClaim.denialReason || "").toLowerCase();
 
   const relatedClaimIds = new Set(
     orgClaims

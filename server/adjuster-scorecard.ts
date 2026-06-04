@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // Adjuster Scorecard Engine (Section 14) — MVP, rule-based.
 // Computed only from REAL linked claim outcomes. Never fabricates.
@@ -38,9 +37,8 @@ export interface AdjusterScorecard {
 }
 
 function resolutionDays(c: Claim): number | null {
-  const a = c as any;
-  const start = a.dateOfLoss ? new Date(a.dateOfLoss) : null;
-  const end = a.resolutionDate ? new Date(a.resolutionDate) : (a.determinationDate ? new Date(a.determinationDate) : null);
+  const start = c.dateOfLoss ? new Date(c.dateOfLoss) : null;
+  const end = c.resolutionDate ? new Date(c.resolutionDate) : (c.determinationDate ? new Date(c.determinationDate) : null);
   if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) return null;
   const d = Math.round((end.getTime() - start.getTime()) / 86400000);
   return d >= 0 ? d : null;
@@ -76,14 +74,13 @@ export function computeAdjusterScorecard(links: ClaimAdjuster[], claims: Claim[]
   const resDays: number[] = [];
 
   for (const c of uniqueClaims) {
-    const a = c as any;
-    if (isDenied(a.initialOutcome)) initialDenials++;
-    if (isApproved(a.finalOutcome)) finalApprovals++;
-    if (isPartial(a.initialOutcome) || isPartial(a.finalOutcome)) partialApprovals++;
-    if (a.denialOverturned === true) denialsOverturned++;
-    if (a.reinspectionRequested === true) reinspectionsRequested++;
-    if (a.escalationUsed === true) escalationsUsed++;
-    if (a.paymentReceived === true) paymentsReceived++;
+    if (isDenied(c.initialOutcome)) initialDenials++;
+    if (isApproved(c.finalOutcome)) finalApprovals++;
+    if (isPartial(c.initialOutcome) || isPartial(c.finalOutcome)) partialApprovals++;
+    if (c.denialOverturned === true) denialsOverturned++;
+    if (c.reinspectionRequested === true) reinspectionsRequested++;
+    if (c.escalationUsed === true) escalationsUsed++;
+    if (c.paymentReceived === true) paymentsReceived++;
     const rd = resolutionDays(c);
     if (rd !== null) resDays.push(rd);
   }

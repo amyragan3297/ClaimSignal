@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Claim } from "@shared/schema";
 
 export interface ClaimWeather {
@@ -61,9 +60,11 @@ async function geocodeZip(zip: string): Promise<GeoResult | null> {
   const clean = zip.trim().slice(0, 5);
   if (!/^\d{5}$/.test(clean)) return null;
   try {
+    interface ZippoPlace { "place name": string; "state abbreviation": string; latitude: string; longitude: string; }
+    interface ZippoData { places?: ZippoPlace[]; }
     const res = await fetch(`https://api.zippopotam.us/us/${clean}`);
     if (!res.ok) return null;
-    const data: any = await res.json();
+    const data = await res.json() as ZippoData;
     const place = data?.places?.[0];
     if (!place) return null;
     const label = `${place["place name"]}, ${place["state abbreviation"]} ${clean}`;
@@ -77,10 +78,12 @@ async function geocodeZip(zip: string): Promise<GeoResult | null> {
 // result whose region matches the claim's state.
 async function geocodeCity(city: string, state?: string | null): Promise<GeoResult | null> {
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city.trim())}&count=10&language=en&format=json`;
+  interface GeoItem { name?: string; latitude?: number; longitude?: number; admin1?: string; admin1_code?: string; country_code?: string; }
+  interface GeoData { results?: GeoItem[]; }
   const res = await fetch(url);
   if (!res.ok) return null;
-  const data: any = await res.json();
-  const results: any[] = Array.isArray(data?.results) ? data.results : [];
+  const data = await res.json() as GeoData;
+  const results: GeoItem[] = Array.isArray(data?.results) ? data.results : [];
   if (results.length === 0) return null;
 
   let chosen = results[0];
@@ -93,7 +96,7 @@ async function geocodeCity(city: string, state?: string | null): Promise<GeoResu
     if (match) chosen = match;
   }
   const label = [chosen.name, chosen.admin1, chosen.country_code].filter(Boolean).join(", ");
-  return { lat: chosen.latitude, lon: chosen.longitude, label };
+  return { lat: chosen.latitude ?? 0, lon: chosen.longitude ?? 0, label };
 }
 
 /**
@@ -120,13 +123,15 @@ export async function getClaimWeather(claim: Claim): Promise<ClaimWeather | null
 
   const dailyVars = "temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,snowfall_sum,wind_gusts_10m_max,wind_speed_10m_max,weather_code";
   const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${dateStr}&end_date=${dateStr}&daily=${dailyVars}&timezone=auto`;
+  interface MeteoDaily { time?: unknown[]; temperature_2m_max?: (number|null)[]; temperature_2m_min?: (number|null)[]; precipitation_sum?: (number|null)[]; rain_sum?: (number|null)[]; snowfall_sum?: (number|null)[]; wind_gusts_10m_max?: (number|null)[]; wind_speed_10m_max?: (number|null)[]; weather_code?: (number|null)[]; }
+  interface MeteoData { daily?: MeteoDaily; }
   const res = await fetch(url);
   if (!res.ok) return null;
-  const data: any = await res.json();
+  const data = await res.json() as MeteoData;
   const d = data?.daily;
   if (!d || !Array.isArray(d.time) || d.time.length === 0) return null;
 
-  const pick = (arr: any[] | undefined): number | null => (Array.isArray(arr) && arr[0] != null ? Number(arr[0]) : null);
+  const pick = (arr: (number | null)[] | undefined): number | null => (Array.isArray(arr) && arr[0] != null ? Number(arr[0]) : null);
 
   const base = {
     location: geo.label,

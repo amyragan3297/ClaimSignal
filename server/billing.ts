@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import Stripe from "stripe";
+import type { BillingAccount } from "@shared/schema";
 import { storage } from "./storage";
 import { log } from "./index";
 
@@ -37,14 +37,14 @@ export async function createCheckoutSession(
         const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
         await storage.updateBillingAccount(existing.id, {
           subscriptionStatus: "trialing",
-          planType: planType as any,
+          planType: planType as BillingAccount["planType"],
           trialStartDate: new Date(),
           trialEndDate: trialEnd,
         });
       } else {
         await storage.updateBillingAccount(existing.id, {
           subscriptionStatus: "active",
-          planType: planType as any,
+          planType: planType as BillingAccount["planType"],
         });
       }
     }
@@ -65,7 +65,7 @@ export async function createCheckoutSession(
 
   const appUrl = process.env.APP_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
 
-  const subscriptionData: any = {
+  const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
     metadata: {
       org_id: orgId,
       user_id: userId,
@@ -133,7 +133,7 @@ export async function handleWebhookEvent(
       break;
     }
     case "invoice.payment_failed": {
-      const invoice = event.data.object;
+      const invoice = event.data.object as unknown as Record<string, unknown>;
       await handlePaymentFailed(invoice);
       break;
     }
@@ -153,13 +153,13 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
 
   const existing = await storage.getBillingAccountByOrg(orgId);
   if (existing) {
-    const updateData: any = {
+    const updateData: Partial<BillingAccount> = {
       stripeCustomerId: session.customer as string,
       stripeSubscriptionId: session.subscription as string,
       subscriptionStatus: planType === "founder" ? "trialing" : "active",
     };
     if (planType) {
-      updateData.planType = planType;
+      updateData.planType = planType as BillingAccount["planType"];
     }
     await storage.updateBillingAccount(existing.id, updateData);
   }
@@ -182,15 +182,15 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
 
   const existing = await storage.getBillingAccountByOrg(orgId);
   if (existing) {
-    const updateData: any = {
-      subscriptionStatus: status as any,
+    const updateData: Partial<BillingAccount> = {
+      subscriptionStatus: status as BillingAccount["subscriptionStatus"],
       stripeSubscriptionId: subscription.id,
       stripeCustomerId: subscription.customer as string,
       trialStartDate: trialStart,
       trialEndDate: trialEnd,
     };
     if (planType) {
-      updateData.planType = planType;
+      updateData.planType = planType as BillingAccount["planType"];
     }
     await storage.updateBillingAccount(existing.id, updateData);
   }
@@ -212,8 +212,8 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   log(`Subscription canceled for org ${orgId}`, "stripe");
 }
 
-async function handlePaymentFailed(invoice: any) {
-  const sub = invoice.subscription;
+async function handlePaymentFailed(invoice: Record<string, unknown>) {
+  const sub = invoice.subscription as string | { id: string } | null | undefined;
   const subscriptionId = typeof sub === "string" ? sub : sub?.id;
   if (!subscriptionId) return;
 
@@ -237,7 +237,7 @@ async function handlePaymentFailed(invoice: any) {
   log(`Payment failed for org ${orgId}, subscription ${subscriptionId}`, "stripe");
 }
 
-function mapStripeStatus(stripeStatus: string): string {
+function mapStripeStatus(stripeStatus: string): BillingAccount["subscriptionStatus"] {
   switch (stripeStatus) {
     case "active": return "active";
     case "trialing": return "trialing";

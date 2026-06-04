@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Response } from "express";
 import { Router } from "express";
 import { storage } from "./storage";
 import { applyPiiMasking, canViewUnmasked } from "./masking";
 import { toCsv } from "./csv";
+import type { Supplement } from "@shared/schema";
 import {
   type AuthRequest,
   requireAuth,
@@ -13,8 +13,8 @@ import {
 
 async function renderClaimPdf(args: {
   exportType: "intelligence_summary" | "claim_packet_masked" | "claim_packet_unmasked";
-  claim: any;
-  supplements: any[];
+  claim: Record<string, unknown>;
+  supplements: Supplement[];
   generatedBy: { userId: string; role: string; tenantId: string };
 }): Promise<Buffer> {
   const lines: string[] = [];
@@ -96,7 +96,7 @@ router.get("/exports/claims/:claimId", requireAuth, requireActiveSubscription, a
 
     const supps = await storage.getSupplements(claimId, claim.organizationId);
 
-    let merged: any = { ...claim };
+    let merged: Record<string, unknown> = { ...claim };
 
     if (effectiveExportType === "claim_packet_masked") {
       merged = applyPiiMasking(merged, role);

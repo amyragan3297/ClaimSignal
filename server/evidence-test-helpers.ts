@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Shared helpers for evidence upload regression tests.
  *
@@ -91,14 +90,16 @@ export function buildTextFile(content: string): Buffer {
 // ── Storage stubs (no real DB) ────────────────────────────────────────────────
 
 export function installStorageStubs() {
-  (storage as any).getEvidenceFileBySha256 = async () => undefined;
-  (storage as any).getClaims = async () => [];
-  (storage as any).getAllClaimsAcrossTenants = async () => [];
-  (storage as any).createEvidenceFile = async (file: any) => ({ id: "ef-test-1", ...file });
-  (storage as any).createExtractedEntity = async (e: any) => ({ id: "ee-1", ...e });
-  (storage as any).createClaimDraft = async (d: any) => ({ id: "draft-1", ...d });
-  (storage as any).createTimelineEvent = async (e: any) => ({ id: "te-1", ...e });
-  (storage as any).createAuditLog = async () => ({ id: "al-1" });
+  Object.assign(storage, {
+    getEvidenceFileBySha256: async () => undefined,
+    getClaims: async () => [],
+    getAllClaimsAcrossTenants: async () => [],
+    createEvidenceFile: async (file: object) => ({ id: "ef-test-1", ...file }),
+    createExtractedEntity: async (e: object) => ({ id: "ee-1", ...e }),
+    createClaimDraft: async (d: object) => ({ id: "draft-1", ...d }),
+    createTimelineEvent: async (e: object) => ({ id: "te-1", ...e }),
+    createAuditLog: async () => ({ id: "al-1" }),
+  });
 }
 
 // ── Fake OpenAI server ────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ export function startFakeOpenAI(
 
 export interface UploadResult {
   status: number;
-  json: any;
+  json: unknown;
 }
 
 export function uploadFile(
@@ -172,7 +173,7 @@ export function uploadFile(
         let data = "";
         res.on("data", (c) => (data += c));
         res.on("end", () => {
-          let json: any = null;
+          let json: unknown = null;
           try { json = JSON.parse(data); } catch { /* leave null */ }
           resolve({ status: res.statusCode || 0, json });
         });
@@ -193,8 +194,8 @@ export interface MountedApp {
 
 export function mountEvidenceApp(): Promise<MountedApp> {
   const app = express();
-  app.use((req: any, _res, next) => {
-    req.auth = {
+  app.use((req, _res, next) => {
+    (req as unknown as Record<string, unknown>).auth = {
       userId: "user-1",
       organizationId: "org-1",
       role: "standard",
@@ -204,9 +205,10 @@ export function mountEvidenceApp(): Promise<MountedApp> {
   });
   app.use("/api/evidence", evidenceRouter);
   return new Promise((resolve) => {
-    const s = app.listen(0, "127.0.0.1", () =>
-      resolve({ port: (s.address() as any).port, server: s }),
-    );
+    const s = app.listen(0, "127.0.0.1", () => {
+      const addr = s.address();
+      resolve({ port: typeof addr === "object" && addr !== null ? addr.port : 0, server: s });
+    });
   });
 }
 
@@ -221,7 +223,7 @@ export interface ErrorCapture {
 export function captureConsoleError(): ErrorCapture {
   const lines: string[] = [];
   const original = console.error;
-  console.error = (...args: any[]) => lines.push(args.map(String).join(" "));
+  console.error = (...args: unknown[]) => lines.push(args.map(String).join(" "));
   return {
     lines,
     restore() { console.error = original; },

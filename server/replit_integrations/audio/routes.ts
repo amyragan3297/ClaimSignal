@@ -106,7 +106,7 @@ export function registerAudioRoutes(app: Express): void {
       let assistantTranscript = "";
 
       for await (const chunk of stream) {
-        const delta = chunk.choices?.[0]?.delta as any;
+        const delta = chunk.choices?.[0]?.delta as { audio?: { data?: string; transcript?: string }; content?: string };
         if (!delta) continue;
 
         if (delta?.audio?.transcript) {

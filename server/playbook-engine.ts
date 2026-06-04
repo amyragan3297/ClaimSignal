@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // Playbook Engine (MVP, rule-based) — shared logic for:
 //   Section 17  : Playbook Search Engine (NL -> filters -> historical results)
@@ -50,12 +49,11 @@ function outcomeIs(value: unknown, kind: "denied" | "approved" | "partial" | "pa
 }
 
 function claimText(c: Claim): string {
-  const anyc = c as any;
   return [
-    c.carrier, c.lossType, c.status, anyc.initialOutcome, anyc.finalOutcome,
-    anyc.denialReason, anyc.supplementOutcome, anyc.reinspectionOutcome,
-    anyc.whatWorked, anyc.whatDidNotWork, anyc.playbookNote, anyc.notes,
-    anyc.aiClaimSummary,
+    c.carrier, c.lossType, c.status, c.initialOutcome, c.finalOutcome,
+    c.denialReason, c.supplementOutcome, c.reinspectionOutcome,
+    c.whatWorked, c.whatDidNotWork, c.playbookNote, c.notes,
+    c.aiClaimSummary,
   ].map(lc).join(" ");
 }
 
@@ -109,7 +107,6 @@ export function filterClaims(
   adjusterNamesByClaim?: Map<string, string[]>,
 ): Claim[] {
   return claims.filter((c) => {
-    const anyc = c as any;
     if (f.carrier && lc(c.carrier) !== lc(f.carrier)) return false;
     if (f.status && lc(c.status) !== lc(f.status)) return false;
     if (f.damageType && !lc(c.lossType).includes(lc(f.damageType))) return false;
@@ -117,15 +114,15 @@ export function filterClaims(
       const names = adjusterNamesByClaim?.get(c.id) ?? [];
       if (!names.some((n) => lc(n).includes(lc(f.adjusterName!)))) return false;
     }
-    if (f.initialOutcome === "denied" && !outcomeIs(anyc.initialOutcome, "denied")) return false;
-    if (f.finalOutcome === "approved" && !(outcomeIs(anyc.finalOutcome, "approved") || anyc.denialOverturned === true)) return false;
-    if (f.deniedThenApproved && !(outcomeIs(anyc.initialOutcome, "denied") && (outcomeIs(anyc.finalOutcome, "approved") || anyc.denialOverturned === true))) return false;
-    if (f.partialToFull && !(outcomeIs(anyc.initialOutcome, "partial") && outcomeIs(anyc.finalOutcome, "approved"))) return false;
-    if (f.reinspectionRequested && anyc.reinspectionRequested !== true) return false;
-    if (f.escalationUsed && anyc.escalationUsed !== true) return false;
-    if (f.denialReason && !lc(anyc.denialReason).includes(lc(f.denialReason))) return false;
-    if (f.supplementOutcome && f.supplementOutcome !== "any" && !lc(anyc.supplementOutcome).includes(lc(f.supplementOutcome))) return false;
-    if (f.supplementOutcome === "any" && !anyc.supplementOutcome && !anyc.supplementRequested) return false;
+    if (f.initialOutcome === "denied" && !outcomeIs(c.initialOutcome, "denied")) return false;
+    if (f.finalOutcome === "approved" && !(outcomeIs(c.finalOutcome, "approved") || c.denialOverturned === true)) return false;
+    if (f.deniedThenApproved && !(outcomeIs(c.initialOutcome, "denied") && (outcomeIs(c.finalOutcome, "approved") || c.denialOverturned === true))) return false;
+    if (f.partialToFull && !(outcomeIs(c.initialOutcome, "partial") && outcomeIs(c.finalOutcome, "approved"))) return false;
+    if (f.reinspectionRequested && c.reinspectionRequested !== true) return false;
+    if (f.escalationUsed && c.escalationUsed !== true) return false;
+    if (f.denialReason && !lc(c.denialReason).includes(lc(f.denialReason))) return false;
+    if (f.supplementOutcome && f.supplementOutcome !== "any" && !lc(c.supplementOutcome).includes(lc(f.supplementOutcome))) return false;
+    if (f.supplementOutcome === "any" && !c.supplementOutcome && !c.supplementRequested) return false;
     if (f.repairabilityIssue && !claimText(c).includes("repairab")) return false;
     if (f.matchingIssue && !claimText(c).includes("match")) return false;
     if (f.brittleTest && !claimText(c).includes("brittle")) return false;
@@ -139,14 +136,12 @@ export function filterClaims(
 
 // A claim is a usable "playbook outcome" if it has enough recorded outcome data.
 export function isUsableOutcome(c: Claim): boolean {
-  const anyc = c as any;
-  return Boolean(anyc.initialOutcome || anyc.finalOutcome || anyc.denialOverturned || anyc.reinspectionRequested || anyc.escalationUsed || anyc.whatWorked);
+  return Boolean(c.initialOutcome || c.finalOutcome || c.denialOverturned || c.reinspectionRequested || c.escalationUsed || c.whatWorked);
 }
 
 function _cycleTimeDays(c: Claim): number | null {
-  const anyc = c as any;
-  const start = anyc.dateOfLoss ? new Date(anyc.dateOfLoss) : null;
-  const end = anyc.resolutionDate ? new Date(anyc.resolutionDate) : (anyc.determinationDate ? new Date(anyc.determinationDate) : null);
+  const start = c.dateOfLoss ? new Date(c.dateOfLoss) : null;
+  const end = c.resolutionDate ? new Date(c.resolutionDate) : (c.determinationDate ? new Date(c.determinationDate) : null);
   if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) return null;
   const d = Math.round((end.getTime() - start.getTime()) / 86400000);
   return d >= 0 ? d : null;
@@ -161,42 +156,41 @@ export function buildStrategySummary(c: Claim): {
   reusableStrategy: string[];
   confidence: "high" | "medium" | "low";
 } {
-  const anyc = c as any;
   const path: string[] = [];
-  if (outcomeIs(anyc.initialOutcome, "denied")) path.push("Initial denial");
-  if (outcomeIs(anyc.initialOutcome, "partial")) path.push("Initial partial approval");
-  if (anyc.reinspectionRequested) path.push("Reinspection requested" + (anyc.reinspectionOutcome ? ` (${anyc.reinspectionOutcome})` : ""));
-  if (anyc.escalationUsed) path.push("Escalation used");
-  if (anyc.denialOverturned) path.push("Denial overturned");
-  if (anyc.supplementOutcome) path.push(`Supplement ${anyc.supplementOutcome}`);
-  if (outcomeIs(anyc.finalOutcome, "approved")) path.push("Reached approval");
+  if (outcomeIs(c.initialOutcome, "denied")) path.push("Initial denial");
+  if (outcomeIs(c.initialOutcome, "partial")) path.push("Initial partial approval");
+  if (c.reinspectionRequested) path.push("Reinspection requested" + (c.reinspectionOutcome ? ` (${c.reinspectionOutcome})` : ""));
+  if (c.escalationUsed) path.push("Escalation used");
+  if (c.denialOverturned) path.push("Denial overturned");
+  if (c.supplementOutcome) path.push(`Supplement ${c.supplementOutcome}`);
+  if (outcomeIs(c.finalOutcome, "approved")) path.push("Reached approval");
 
   const keyEvidence: string[] = [];
-  if (anyc.photosUploaded) keyEvidence.push("Photo documentation");
-  if (anyc.denialLetterUploaded) keyEvidence.push("Denial letter");
-  if (anyc.estimateUploaded) keyEvidence.push("Estimate comparison");
-  if (anyc.supplementUploaded) keyEvidence.push("Supplement package");
-  if (anyc.codeDocUploaded) keyEvidence.push("Code documentation");
-  if (anyc.manufacturerDocUploaded) keyEvidence.push("Manufacturer documentation");
-  if (anyc.stormReportStatus) keyEvidence.push("Storm report");
+  if (c.photosUploaded) keyEvidence.push("Photo documentation");
+  if (c.denialLetterUploaded) keyEvidence.push("Denial letter");
+  if (c.estimateUploaded) keyEvidence.push("Estimate comparison");
+  if (c.supplementUploaded) keyEvidence.push("Supplement package");
+  if (c.codeDocUploaded) keyEvidence.push("Code documentation");
+  if (c.manufacturerDocUploaded) keyEvidence.push("Manufacturer documentation");
+  if (c.stormReportStatus) keyEvidence.push("Storm report");
 
   const reusableStrategy: string[] = [];
-  if (anyc.whatWorked && typeof anyc.whatWorked === "string") reusableStrategy.push(anyc.whatWorked);
+  if (c.whatWorked && typeof c.whatWorked === "string") reusableStrategy.push(c.whatWorked);
   else {
-    if (anyc.reinspectionRequested) reusableStrategy.push("Request reinspection with organized supporting documentation");
-    if (anyc.photosUploaded) reusableStrategy.push("Submit annotated photo evidence");
-    if (anyc.escalationUsed) reusableStrategy.push("Escalate when carrier resists supported claim");
+    if (c.reinspectionRequested) reusableStrategy.push("Request reinspection with organized supporting documentation");
+    if (c.photosUploaded) reusableStrategy.push("Submit annotated photo evidence");
+    if (c.escalationUsed) reusableStrategy.push("Escalate when carrier resists supported claim");
   }
 
   let confidence: "high" | "medium" | "low" = "low";
-  const dataPoints = [anyc.initialOutcome, anyc.finalOutcome, anyc.reinspectionOutcome, anyc.supplementOutcome, anyc.whatWorked].filter(Boolean).length
+  const dataPoints = [c.initialOutcome, c.finalOutcome, c.reinspectionOutcome, c.supplementOutcome, c.whatWorked].filter(Boolean).length
     + keyEvidence.length;
   if (dataPoints >= 5) confidence = "high";
   else if (dataPoints >= 3) confidence = "medium";
 
   return {
-    initialOutcome: anyc.initialOutcome ?? null,
-    finalOutcome: anyc.finalOutcome ?? null,
+    initialOutcome: c.initialOutcome ?? null,
+    finalOutcome: c.finalOutcome ?? null,
     path,
     keyEvidence,
     reusableStrategy,
@@ -209,15 +203,13 @@ export function similarityScore(target: Claim, candidate: Claim, targetAdjusterI
   score: number;
   factors: string[];
 } {
-  const t = target as any;
-  const c = candidate as any;
   let score = 0;
   let max = 0;
   const factors: string[] = [];
 
   // Same carrier (weight 30)
   max += 30;
-  if (t.carrier && c.carrier && lc(t.carrier) === lc(c.carrier)) { score += 30; factors.push("Same carrier"); }
+  if (target.carrier && candidate.carrier && lc(target.carrier) === lc(candidate.carrier)) { score += 30; factors.push("Same carrier"); }
 
   // Shared adjuster (weight 20)
   max += 20;
@@ -226,22 +218,22 @@ export function similarityScore(target: Claim, candidate: Claim, targetAdjusterI
 
   // Similar damage type (weight 15)
   max += 15;
-  if (t.lossType && c.lossType && lc(t.lossType) === lc(c.lossType)) { score += 15; factors.push("Similar damage type"); }
+  if (target.lossType && candidate.lossType && lc(target.lossType) === lc(candidate.lossType)) { score += 15; factors.push("Similar damage type"); }
 
   // Similar denial reason (weight 15)
   max += 15;
-  if (t.denialReason && c.denialReason && lc(c.denialReason).includes(lc(t.denialReason).split(/\s+/)[0] || "~")) { score += 15; factors.push("Similar denial reason"); }
+  if (target.denialReason && candidate.denialReason && lc(candidate.denialReason).includes(lc(target.denialReason).split(/\s+/)[0] || "~")) { score += 15; factors.push("Similar denial reason"); }
 
   // Similar escalation path (weight 10)
   max += 10;
-  if (Boolean(t.escalationUsed) === Boolean(c.escalationUsed) && (t.escalationUsed || c.reinspectionRequested === t.reinspectionRequested)) {
-    if (t.escalationUsed && c.escalationUsed) { score += 10; factors.push("Similar escalation path"); }
-    else if (Boolean(t.reinspectionRequested) && Boolean(c.reinspectionRequested)) { score += 10; factors.push("Similar reinspection path"); }
+  if (Boolean(target.escalationUsed) === Boolean(candidate.escalationUsed) && (target.escalationUsed || candidate.reinspectionRequested === target.reinspectionRequested)) {
+    if (target.escalationUsed && candidate.escalationUsed) { score += 10; factors.push("Similar escalation path"); }
+    else if (Boolean(target.reinspectionRequested) && Boolean(candidate.reinspectionRequested)) { score += 10; factors.push("Similar reinspection path"); }
   }
 
   // Similar initial outcome (weight 10)
   max += 10;
-  if (t.initialOutcome && c.initialOutcome && lc(t.initialOutcome) === lc(c.initialOutcome)) { score += 10; factors.push("Similar initial outcome"); }
+  if (target.initialOutcome && candidate.initialOutcome && lc(target.initialOutcome) === lc(candidate.initialOutcome)) { score += 10; factors.push("Similar initial outcome"); }
 
   const pct = max > 0 ? Math.round((score / max) * 100) : 0;
   return { score: pct, factors };

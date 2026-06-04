@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // ──────────────────────────────────────────────────────────────────────────
 // Network Intelligence Engine (Section 25) — MVP, rule-based, aggregate only.
 // All outputs are aggregate — never expose homeowner/address/claim#/policy#.
@@ -53,7 +52,7 @@ export function computePatterns(
   const byCarrier = groupBy(allClaims, (c) => (c.carrier ?? "unknown").toLowerCase());
   for (const [carrier, clms] of Object.entries(byCarrier)) {
     if (clms.length < MIN_SAMPLE || !carrier || carrier === "unknown") continue;
-    const denialCount = clms.filter((c) => isDenied((c as any).initialOutcome)).length;
+    const denialCount = clms.filter((c) => isDenied(c.initialOutcome)).length;
     const denialRate = pct(denialCount, clms.length);
     if (denialRate > 50) {
       patterns.push({
@@ -70,8 +69,8 @@ export function computePatterns(
 
   // 2. Denial reason frequency patterns
   const denialReasons = groupBy(
-    allClaims.filter((c) => isDenied((c as any).initialOutcome) && (c as any).denialReason),
-    (c) => lc((c as any).denialReason ?? "unknown"),
+    allClaims.filter((c) => isDenied(c.initialOutcome) && c.denialReason),
+    (c) => lc(c.denialReason ?? "unknown"),
   );
   for (const [reason, clms] of Object.entries(denialReasons)) {
     if (clms.length < MIN_SAMPLE) continue;
@@ -91,7 +90,7 @@ export function computePatterns(
   for (const [type, escs] of Object.entries(byEscType)) {
     if (escs.length < MIN_SAMPLE) continue;
     const successSet = new Set(["full_approval", "partial_approval", "supplement_approved", "payment_increased", "reinspection_scheduled", "claim_reopened"]);
-    const successes = escs.filter((e: any) => e.escalationResult && successSet.has(e.escalationResult)).length;
+    const successes = escs.filter((e: Escalation) => e.escalationResult && successSet.has(e.escalationResult)).length;
     const successRate = pct(successes, escs.length);
     if (successRate > 40) {
       patterns.push({
@@ -107,9 +106,9 @@ export function computePatterns(
   }
 
   // 4. Supplement resistance pattern
-  const withSupplement = allClaims.filter((c) => (c as any).supplementRequested);
+  const withSupplement = allClaims.filter((c) => c.supplementRequested);
   if (withSupplement.length >= MIN_SAMPLE) {
-    const notApproved = withSupplement.filter((c) => !(c as any).supplementApproved).length;
+    const notApproved = withSupplement.filter((c) => !c.supplementApproved).length;
     const resistRate = pct(notApproved, withSupplement.length);
     if (resistRate > 30) {
       patterns.push({
@@ -125,10 +124,10 @@ export function computePatterns(
   }
 
   // 5. Reinspection request increase signal
-  const withReinspection = allClaims.filter((c) => (c as any).reinspectionRequested);
+  const withReinspection = allClaims.filter((c) => c.reinspectionRequested);
   if (withReinspection.length >= MIN_SAMPLE) {
     const successRate = pct(
-      withReinspection.filter((c) => isApproved((c as any).reinspectionOutcome)).length,
+      withReinspection.filter((c) => isApproved(c.reinspectionOutcome)).length,
       withReinspection.length,
     );
     patterns.push({
@@ -188,10 +187,10 @@ export function computeOutcomeCorrelations(allClaims: Claim[]): OutcomeCorrelati
   const correlations: OutcomeCorrelation[] = [];
 
   const factors: Array<{ key: string; label: string; test: (c: Claim) => boolean }> = [
-    { key: "reinspection", label: "Reinspection Requested", test: (c) => !!(c as any).reinspectionRequested },
-    { key: "supplement", label: "Supplement Submitted", test: (c) => !!(c as any).supplementRequested },
-    { key: "escalation", label: "Escalation Used", test: (c) => !!(c as any).escalationUsed },
-    { key: "denial_overturned", label: "Denial Overturned", test: (c) => !!(c as any).denialOverturned },
+    { key: "reinspection", label: "Reinspection Requested", test: (c) => !!c.reinspectionRequested },
+    { key: "supplement", label: "Supplement Submitted", test: (c) => !!c.supplementRequested },
+    { key: "escalation", label: "Escalation Used", test: (c) => !!c.escalationUsed },
+    { key: "denial_overturned", label: "Denial Overturned", test: (c) => !!c.denialOverturned },
   ];
 
   for (const f of factors) {
@@ -200,8 +199,8 @@ export function computeOutcomeCorrelations(allClaims: Claim[]): OutcomeCorrelati
 
     if (withFactor.length < MIN_SAMPLE || withoutFactor.length < MIN_SAMPLE) continue;
 
-    const approveWith = withFactor.filter((c) => isApproved((c as any).finalOutcome) || isApproved((c as any).initialOutcome)).length;
-    const approveWithout = withoutFactor.filter((c) => isApproved((c as any).finalOutcome) || isApproved((c as any).initialOutcome)).length;
+    const approveWith = withFactor.filter((c) => isApproved(c.finalOutcome) || isApproved(c.initialOutcome)).length;
+    const approveWithout = withoutFactor.filter((c) => isApproved(c.finalOutcome) || isApproved(c.initialOutcome)).length;
 
     correlations.push({
       factor: f.key,
@@ -236,8 +235,7 @@ export function computeTrends(allClaims: Claim[], days: 30 | 90 | 180 | 365): Tr
   const now = Date.now();
   const cutoff = now - days * 86400000;
   const relevant = allClaims.filter((c) => {
-    const a = c as any;
-    const d = a.createdAt ?? a.dateOfLoss;
+    const d = c.createdAt ?? c.dateOfLoss;
     return d && new Date(d).getTime() >= cutoff;
   });
 
@@ -255,19 +253,18 @@ export function computeTrends(allClaims: Claim[], days: 30 | 90 | 180 | 365): Tr
     const pLabel = `Period ${i + 1}`;
 
     const pClaims = relevant.filter((c) => {
-      const a = c as any;
-      const d = a.createdAt ?? a.dateOfLoss;
+      const d = c.createdAt ?? c.dateOfLoss;
       if (!d) return false;
       const t = new Date(d).getTime();
       return t >= pStart && t < pEnd;
     });
 
     const total = pClaims.length;
-    const denialCount = pClaims.filter((c) => isDenied((c as any).initialOutcome)).length;
-    const approvalCount = pClaims.filter((c) => isApproved((c as any).finalOutcome ?? (c as any).initialOutcome)).length;
-    const escalationCount = pClaims.filter((c) => (c as any).escalationUsed).length;
-    const supplementCount = pClaims.filter((c) => (c as any).supplementRequested).length;
-    const reinspectionCount = pClaims.filter((c) => (c as any).reinspectionRequested).length;
+    const denialCount = pClaims.filter((c) => isDenied(c.initialOutcome)).length;
+    const approvalCount = pClaims.filter((c) => isApproved(c.finalOutcome ?? c.initialOutcome)).length;
+    const escalationCount = pClaims.filter((c) => c.escalationUsed).length;
+    const supplementCount = pClaims.filter((c) => c.supplementRequested).length;
+    const reinspectionCount = pClaims.filter((c) => c.reinspectionRequested).length;
 
     periods.push({
       period: pLabel,
@@ -300,13 +297,11 @@ export interface EmergingSignal {
 export function computeEmergingSignals(allClaims: Claim[], _allEscalations: Escalation[]): EmergingSignal[] {
   const now = Date.now();
   const recent = allClaims.filter((c) => {
-    const a = c as any;
-    const d = a.createdAt ?? a.dateOfLoss;
+    const d = c.createdAt ?? c.dateOfLoss;
     return d && new Date(d).getTime() >= now - 90 * 86400000;
   });
   const prior = allClaims.filter((c) => {
-    const a = c as any;
-    const d = a.createdAt ?? a.dateOfLoss;
+    const d = c.createdAt ?? c.dateOfLoss;
     if (!d) return false;
     const t = new Date(d).getTime();
     return t >= now - 180 * 86400000 && t < now - 90 * 86400000;
@@ -317,10 +312,10 @@ export function computeEmergingSignals(allClaims: Claim[], _allEscalations: Esca
   if (recent.length < MIN_SAMPLE || prior.length < MIN_SAMPLE) return signals;
 
   const metrics: Array<{ key: string; label: string; cat: string; test: (c: Claim) => boolean }> = [
-    { key: "denials", label: "Denial Activity", cat: "carrier", test: (c) => isDenied((c as any).initialOutcome) },
-    { key: "supplements", label: "Supplement Resistance", cat: "carrier", test: (c) => !!(c as any).supplementRequested && !(c as any).supplementApproved },
-    { key: "reinspections", label: "Reinspection Requests", cat: "adjuster", test: (c) => !!(c as any).reinspectionRequested },
-    { key: "escalations", label: "Escalation Usage", cat: "escalation", test: (c) => !!(c as any).escalationUsed },
+    { key: "denials", label: "Denial Activity", cat: "carrier", test: (c) => isDenied(c.initialOutcome) },
+    { key: "supplements", label: "Supplement Resistance", cat: "carrier", test: (c) => !!c.supplementRequested && !c.supplementApproved },
+    { key: "reinspections", label: "Reinspection Requests", cat: "adjuster", test: (c) => !!c.reinspectionRequested },
+    { key: "escalations", label: "Escalation Usage", cat: "escalation", test: (c) => !!c.escalationUsed },
   ];
 
   for (const m of metrics) {

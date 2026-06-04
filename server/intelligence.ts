@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router, type Response, type NextFunction } from "express";
 import { type AuthRequest } from "./auth";
 import { storage } from "./storage";
@@ -286,7 +285,7 @@ router.post("/events/supplement-depth", blockCarrierFromLayer1, async (req: Auth
 
     const created = [];
     for (const event of eventData) {
-      const result = await storage.createIntelligenceEvent(event as any);
+      const result = await storage.createIntelligenceEvent(event as Parameters<typeof storage.createIntelligenceEvent>[0]);
       created.push(result);
     }
 
