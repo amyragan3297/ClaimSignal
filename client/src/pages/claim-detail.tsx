@@ -586,11 +586,15 @@ export default function ClaimDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {claim.lifecycleVelocityScore !== null && claim.lifecycleVelocityScore !== undefined && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Lifecycle Velocity</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-col">
+                  <span className="text-sm text-muted-foreground">Lifecycle Velocity</span>
+                  <span className="text-[10px] text-muted-foreground/60">Higher = slower progression</span>
+                </div>
                 <span
-                  className={`text-sm font-medium ${getScoreColor(claim.lifecycleVelocityScore, { good: 30, warn: 60 }, true)}`}
+                  className={`text-sm font-medium shrink-0 ${getScoreColor(claim.lifecycleVelocityScore, { good: 50, warn: 80 }, true)}`}
                   data-testid="detail-velocity-score"
+                  title={`Lifecycle Velocity Score: ${claim.lifecycleVelocityScore.toFixed(1)} — measures time elapsed across lifecycle phases. Higher values indicate slower or stalled claim progression.`}
                 >
                   {claim.lifecycleVelocityScore.toFixed(1)}
                 </span>
@@ -1420,9 +1424,15 @@ export default function ClaimDetailPage() {
 
 function InfoRow({ label, value, testId }: { label: string; value: string; testId: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium" data-testid={testId}>{value}</span>
+    <div className="flex items-start justify-between gap-3 min-w-0">
+      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+      <span
+        className="text-sm font-medium text-right min-w-0 break-all"
+        data-testid={testId}
+        title={value}
+      >
+        {value}
+      </span>
     </div>
   );
 }

@@ -30,6 +30,13 @@ import { getClaimWeather, geocodeZip, geocodeCity } from "./weather";
 import express from "express";
 import { createHash } from "crypto";
 import { isDemoSeedingAllowed, resolveSeedMasterCredentials } from "./config";
+import { db } from "./db";
+import { eq, inArray } from "drizzle-orm";
+import {
+  organizations, users, userSessions, billingAccounts, founderAgreements,
+  claims as claimsTable, adjusters as adjustersTable, claimAdjusters,
+  evidenceFiles, timelineEvents, supplements, aiInsights, auditLogs as auditLogsTable,
+} from "@shared/schema";
 import {
   type AuthRequest,
   requireAuth,
@@ -2118,6 +2125,91 @@ export async function registerRoutes(
     }
   });
 
+  // ── Clear Demo Data (Master only) ──────────────────────────────────────────
+  // Hard-deletes all records belonging to demo/test organizations
+  // (any org whose users have @claimsignal.test emails or test@example.com),
+  // excluding the master's own organization. Irreversible — requires explicit
+  // confirmation from the caller. Gated behind requirePlatformOwner.
+  app.post("/api/admin/clear-demo-data", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const masterOrgId = req.auth!.organizationId;
+
+      // 1. Identify demo organizations by their users' email domains
+      const allUsers = await storage.getAllUsers();
+      const demoOrgIds = Array.from(
+        new Set(
+          allUsers
+            .filter(
+              (u) =>
+                (u.email.endsWith("@claimsignal.test") || u.email === "test@example.com") &&
+                u.organizationId !== masterOrgId,
+            )
+            .map((u) => u.organizationId),
+        ),
+      );
+
+      if (demoOrgIds.length === 0) {
+        return res.json({ deleted: 0, message: "No demo organizations found." });
+      }
+
+      let claimsDeleted = 0;
+      let adjustersDeleted = 0;
+      let orgsDeleted = 0;
+
+      for (const orgId of demoOrgIds) {
+        // 2a. Delete all claim-child records then claims
+        const orgClaims = await db.select({ id: claimsTable.id }).from(claimsTable).where(eq(claimsTable.organizationId, orgId));
+        for (const { id: claimId } of orgClaims) {
+          await db.delete(aiInsights).where(eq(aiInsights.claimId, claimId));
+          await db.delete(timelineEvents).where(eq(timelineEvents.claimId, claimId));
+          await db.delete(supplements).where(eq(supplements.claimId, claimId));
+          await db.delete(evidenceFiles).where(eq(evidenceFiles.claimId, claimId));
+          await db.delete(claimAdjusters).where(eq(claimAdjusters.claimId, claimId));
+          await db.delete(claimsTable).where(eq(claimsTable.id, claimId));
+        }
+        claimsDeleted += orgClaims.length;
+
+        // 2b. Delete adjusters scoped to this demo org
+        const deleted = await db.delete(adjustersTable).where(eq(adjustersTable.organizationId, orgId)).returning({ id: adjustersTable.id });
+        adjustersDeleted += deleted.length;
+
+        // 2c. Delete audit logs, billing, founder agreements, sessions, users, org
+        await db.delete(auditLogsTable).where(eq(auditLogsTable.organizationId, orgId));
+        await db.delete(founderAgreements).where(eq(founderAgreements.organizationId, orgId));
+        await db.delete(billingAccounts).where(eq(billingAccounts.organizationId, orgId));
+
+        const orgUserIds = allUsers.filter((u) => u.organizationId === orgId).map((u) => u.id);
+        if (orgUserIds.length > 0) {
+          await db.delete(userSessions).where(inArray(userSessions.userId, orgUserIds));
+          await db.delete(users).where(inArray(users.id, orgUserIds));
+        }
+
+        await db.delete(organizations).where(eq(organizations.id, orgId));
+        orgsDeleted++;
+      }
+
+      // Audit the clear-demo-data action on the master's own org
+      await storage.createAuditLog({
+        organizationId: masterOrgId,
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "DEMO_DATA_CLEARED",
+        entityType: "platform",
+        afterJson: { demoOrgsDeleted: orgsDeleted, claimsDeleted, adjustersDeleted },
+        ipAddress: getClientIp(req),
+      });
+
+      res.json({
+        deleted: orgsDeleted,
+        claimsDeleted,
+        adjustersDeleted,
+        message: `Cleared ${orgsDeleted} demo org${orgsDeleted === 1 ? "" : "s"}, ${claimsDeleted} claim${claimsDeleted === 1 ? "" : "s"}, ${adjustersDeleted} adjuster${adjustersDeleted === 1 ? "" : "s"}.`,
+      });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
   // Claims governance
   app.patch("/api/claims/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
@@ -2921,7 +3013,7 @@ async function seedPlatformOwner() {
     return;
   }
 
-  await ensureMasterUser(seed.email, seed.password, seed.isDemo ? "Platform Owner (DEMO)" : "Platform Owner");
+  await ensureMasterUser(seed.email, seed.password, process.env.MASTER_DISPLAY_NAME || "Platform Owner");
 
   // The hardcoded demo/test login is ONLY ever created outside production.
   if (!seed.isDemo) {

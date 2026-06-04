@@ -8,7 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Users, Building2, CreditCard, FileText, Shield, Loader2, Eye,
-  Archive, Trash2, RotateCcw, BarChart3,
+  Archive, Trash2, RotateCcw, BarChart3, AlertCircle,
 } from "lucide-react";
 import { Redirect } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -289,6 +289,7 @@ export default function AdminPage() {
   const { data: auth, refetch } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"overview" | "governance">("overview");
+  const [clearDemoConfirm, setClearDemoConfirm] = useState(false);
 
   const { data: overview, isLoading: overviewLoading } = useQuery<AdminOverview>({
     queryKey: ["/api/admin/overview"],
@@ -311,6 +312,25 @@ export default function AdminPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Impersonation failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const clearDemoMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/clear-demo-data");
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message ?? "Failed to clear demo data");
+      }
+      return res.json();
+    },
+    onSuccess: (data: { deleted: number; claimsDeleted: number; adjustersDeleted: number; message: string }) => {
+      toast({ title: "Demo data cleared", description: data.message });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to clear demo data", description: err.message, variant: "destructive" });
     },
   });
 
@@ -395,6 +415,35 @@ export default function AdminPage() {
                 <span className="text-sm text-muted-foreground">Canceled</span>
                 <Badge variant="destructive">{overview?.canceledCount ?? 0}</Badge>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Clear Demo Data */}
+          <Card className="border-destructive/40">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <CardTitle className="text-base font-semibold text-destructive">Clear Demo Data</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Permanently removes all organizations, claims, adjusters, and related records seeded for demo/test accounts
+                (<code className="text-xs bg-muted px-1 rounded">@claimsignal.test</code>). This action is irreversible.
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                data-testid="button-clear-demo-data"
+                disabled={clearDemoMutation.isPending}
+                onClick={() => setClearDemoConfirm(true)}
+              >
+                {clearDemoMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Clearing…</>
+                ) : (
+                  <><Trash2 className="h-4 w-4 mr-2" />Clear Demo Data</>
+                )}
+              </Button>
             </CardContent>
           </Card>
 
@@ -483,6 +532,21 @@ export default function AdminPage() {
           </Card>
         </>
       )}
+
+      <ConfirmDialog
+        open={clearDemoConfirm}
+        onOpenChange={(o) => { if (!o) setClearDemoConfirm(false); }}
+        title="Clear All Demo Data?"
+        description="This will permanently delete every demo organization (accounts with @claimsignal.test emails), including all their claims, adjusters, evidence, and billing records. This cannot be undone."
+        confirmLabel="Yes, Clear Demo Data"
+        variant="destructive"
+        isPending={clearDemoMutation.isPending}
+        onConfirm={() => {
+          clearDemoMutation.mutate(undefined, {
+            onSettled: () => setClearDemoConfirm(false),
+          });
+        }}
+      />
     </div>
   );
 }
