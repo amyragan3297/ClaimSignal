@@ -7,14 +7,24 @@ export interface ClaimWeather {
   longitude: number;
   tempMaxC: number | null;
   tempMinC: number | null;
+  tempMaxF: number | null;
+  tempMinF: number | null;
   precipitationMm: number | null;
+  precipitationIn: number | null;
   rainMm: number | null;
   snowfallCm: number | null;
+  snowfallIn: number | null;
   windGustMaxKmh: number | null;
+  windGustMaxMph: number | null;
   windSpeedMaxKmh: number | null;
+  windSpeedMaxMph: number | null;
   weatherCode: number | null;
+  isHail: boolean;
   summary: string;
 }
+
+// WMO weather codes that indicate hail events
+const HAIL_CODES = new Set([96, 99]);
 
 const WEATHER_CODE_LABELS: Record<number, string> = {
   0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -28,13 +38,19 @@ const WEATHER_CODE_LABELS: Record<number, string> = {
   95: "Thunderstorm", 96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail",
 };
 
+const cToF = (c: number) => Math.round((c * 9) / 5 + 32);
+const kmhToMph = (k: number) => Math.round(k * 0.621371);
+const mmToIn = (mm: number) => Math.round(mm * 0.0393701 * 100) / 100;
+const cmToIn = (cm: number) => Math.round(cm * 0.393701 * 100) / 100;
+
 function buildSummary(w: Omit<ClaimWeather, "summary">): string {
   const parts: string[] = [];
   if (w.weatherCode != null && WEATHER_CODE_LABELS[w.weatherCode]) parts.push(WEATHER_CODE_LABELS[w.weatherCode]);
-  if (w.windGustMaxKmh != null && w.windGustMaxKmh >= 60) parts.push(`damaging wind gusts to ${Math.round(w.windGustMaxKmh)} km/h`);
-  else if (w.windGustMaxKmh != null) parts.push(`peak gusts ${Math.round(w.windGustMaxKmh)} km/h`);
-  if (w.precipitationMm != null && w.precipitationMm > 0) parts.push(`${w.precipitationMm.toFixed(1)} mm precipitation`);
-  if (w.snowfallCm != null && w.snowfallCm > 0) parts.push(`${w.snowfallCm.toFixed(1)} cm snowfall`);
+  if (w.isHail) parts.push("hail recorded");
+  if (w.windGustMaxMph != null && w.windGustMaxMph >= 37) parts.push(`damaging wind gusts to ${w.windGustMaxMph} mph`);
+  else if (w.windGustMaxMph != null) parts.push(`peak gusts ${w.windGustMaxMph} mph`);
+  if (w.precipitationIn != null && w.precipitationIn > 0) parts.push(`${w.precipitationIn.toFixed(2)} in precipitation`);
+  if (w.snowfallIn != null && w.snowfallIn > 0) parts.push(`${w.snowfallIn.toFixed(1)} in snowfall`);
   if (parts.length === 0) return "No significant weather recorded for this date.";
   return parts.join(", ") + ".";
 }
@@ -53,10 +69,10 @@ const US_STATE_NAMES: Record<string, string> = {
   DC: "District of Columbia",
 };
 
-interface GeoResult { lat: number; lon: number; label: string; }
+export interface GeoResult { lat: number; lon: number; label: string; }
 
 // US ZIP code → coordinates via the keyless zippopotam.us API.
-async function geocodeZip(zip: string): Promise<GeoResult | null> {
+export async function geocodeZip(zip: string): Promise<GeoResult | null> {
   const clean = zip.trim().slice(0, 5);
   if (!/^\d{5}$/.test(clean)) return null;
   try {
@@ -76,7 +92,7 @@ async function geocodeZip(zip: string): Promise<GeoResult | null> {
 
 // Open-Meteo geocoder needs a bare place name; pass the city only and prefer a
 // result whose region matches the claim's state.
-async function geocodeCity(city: string, state?: string | null): Promise<GeoResult | null> {
+export async function geocodeCity(city: string, state?: string | null): Promise<GeoResult | null> {
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city.trim())}&count=10&language=en&format=json`;
   interface GeoItem { name?: string; latitude?: number; longitude?: number; admin1?: string; admin1_code?: string; country_code?: string; }
   interface GeoData { results?: GeoItem[]; }
@@ -133,19 +149,34 @@ export async function getClaimWeather(claim: Claim): Promise<ClaimWeather | null
 
   const pick = (arr: (number | null)[] | undefined): number | null => (Array.isArray(arr) && arr[0] != null ? Number(arr[0]) : null);
 
-  const base = {
+  const tempMaxC = pick(d.temperature_2m_max);
+  const tempMinC = pick(d.temperature_2m_min);
+  const precipitationMm = pick(d.precipitation_sum);
+  const snowfallCm = pick(d.snowfall_sum);
+  const windGustMaxKmh = pick(d.wind_gusts_10m_max);
+  const windSpeedMaxKmh = pick(d.wind_speed_10m_max);
+  const weatherCode = pick(d.weather_code);
+
+  const base: Omit<ClaimWeather, "summary"> = {
     location: geo.label,
     date: dateStr,
     latitude: geo.lat,
     longitude: geo.lon,
-    tempMaxC: pick(d.temperature_2m_max),
-    tempMinC: pick(d.temperature_2m_min),
-    precipitationMm: pick(d.precipitation_sum),
+    tempMaxC,
+    tempMinC,
+    tempMaxF: tempMaxC != null ? cToF(tempMaxC) : null,
+    tempMinF: tempMinC != null ? cToF(tempMinC) : null,
+    precipitationMm,
+    precipitationIn: precipitationMm != null ? mmToIn(precipitationMm) : null,
     rainMm: pick(d.rain_sum),
-    snowfallCm: pick(d.snowfall_sum),
-    windGustMaxKmh: pick(d.wind_gusts_10m_max),
-    windSpeedMaxKmh: pick(d.wind_speed_10m_max),
-    weatherCode: pick(d.weather_code),
+    snowfallCm,
+    snowfallIn: snowfallCm != null ? cmToIn(snowfallCm) : null,
+    windGustMaxKmh,
+    windGustMaxMph: windGustMaxKmh != null ? kmhToMph(windGustMaxKmh) : null,
+    windSpeedMaxKmh,
+    windSpeedMaxMph: windSpeedMaxKmh != null ? kmhToMph(windSpeedMaxKmh) : null,
+    weatherCode,
+    isHail: weatherCode != null && HAIL_CODES.has(weatherCode),
   };
   return { ...base, summary: buildSummary(base) };
 }

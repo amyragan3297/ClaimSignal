@@ -26,7 +26,7 @@ import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
 import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus, generatePlaybookEntry } from "./ai-services";
-import { getClaimWeather } from "./weather";
+import { getClaimWeather, geocodeZip, geocodeCity } from "./weather";
 import express from "express";
 import { createHash } from "crypto";
 import { isDemoSeedingAllowed, resolveSeedMasterCredentials } from "./config";
@@ -357,6 +357,63 @@ export async function registerRoutes(
       }
 
       res.json(sanitizeSharedClaimList(allClaims, role));
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // ── Risk Map — geocoded claim locations (literal path, must precede /:id) ──
+  app.get("/api/claims/map-points", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      const orgId = req.auth!.organizationId;
+
+      const claims = role === "super_admin"
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
+
+      // Geocode each claim that has a ZIP or city; skip those without location data.
+      // Run concurrently (small batches) to avoid long serial waits.
+      const CONCURRENCY = 8;
+      const results: Array<{
+        id: string; lat: number; lon: number;
+        frictionScore: number | null; status: string;
+        lossType: string | null; carrier: string | null;
+        claimIdentifier: string;
+      }> = [];
+
+      for (let i = 0; i < claims.length; i += CONCURRENCY) {
+        const batch = claims.slice(i, i + CONCURRENCY);
+        const settled = await Promise.allSettled(
+          batch.map(async (c) => {
+            let geo: { lat: number; lon: number } | null = null;
+            if (c.zipCode?.trim()) {
+              geo = await geocodeZip(c.zipCode);
+            }
+            if (!geo && c.city) {
+              geo = await geocodeCity(c.city, c.state);
+            }
+            if (!geo) return null;
+            return {
+              id: c.id,
+              lat: geo.lat,
+              lon: geo.lon,
+              frictionScore: c.frictionScore ?? null,
+              status: c.status,
+              lossType: c.lossType ?? null,
+              carrier: c.carrier ?? null,
+              claimIdentifier: c.claimNumber
+                ? (role === "super_admin" ? c.claimNumber : "CLM-" + c.id.slice(0, 6).toUpperCase())
+                : "CLM-" + c.id.slice(0, 6).toUpperCase(),
+            };
+          })
+        );
+        for (const s of settled) {
+          if (s.status === "fulfilled" && s.value) results.push(s.value);
+        }
+      }
+
+      res.json(results);
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
     }

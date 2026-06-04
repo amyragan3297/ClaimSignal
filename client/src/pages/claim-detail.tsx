@@ -253,9 +253,15 @@ export default function ClaimDetailPage() {
     date: string;
     tempMinC: number | null;
     tempMaxC: number | null;
+    tempMinF: number | null;
+    tempMaxF: number | null;
     windGustMaxKmh: number | null;
+    windGustMaxMph: number | null;
     precipitationMm: number | null;
+    precipitationIn: number | null;
     snowfallCm: number | null;
+    snowfallIn: number | null;
+    isHail: boolean;
   }
 
   const { data: weatherData, isLoading: weatherLoading } = useQuery<{ available: boolean; weather?: WeatherSnapshot; reason?: string }>({
@@ -729,33 +735,39 @@ export default function ClaimDetailPage() {
             ) : weatherData.weather ? (
               <div className="space-y-3" data-testid="weather-content">
                 <p className="text-sm" data-testid="weather-summary">{weatherData.weather.summary}</p>
+                {weatherData.weather.isHail && (
+                  <div className="flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5" data-testid="weather-hail-flag">
+                    <span className="text-xs font-semibold text-amber-400">⚠ HAIL RECORDED</span>
+                    <span className="text-xs text-muted-foreground">— WMO hail weather code on date of loss</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span data-testid="weather-location">{weatherData.weather.location}</span>
                   <span data-testid="weather-date">{weatherData.weather.date}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {weatherData.weather.tempMaxC != null && (
+                  {weatherData.weather.tempMaxF != null && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-temp">
                       <Thermometer className="w-4 h-4 text-orange-400" />
-                      <span className="text-sm">{Math.round(weatherData.weather.tempMinC ?? 0)}° / {Math.round(weatherData.weather.tempMaxC)}°C</span>
+                      <span className="text-sm">{weatherData.weather.tempMinF ?? "—"}° / {weatherData.weather.tempMaxF}°F</span>
                     </div>
                   )}
-                  {weatherData.weather.windGustMaxKmh != null && (
+                  {weatherData.weather.windGustMaxMph != null && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-wind">
                       <Wind className="w-4 h-4 text-sky-400" />
-                      <span className="text-sm">{Math.round(weatherData.weather.windGustMaxKmh)} km/h gust</span>
+                      <span className="text-sm">{weatherData.weather.windGustMaxMph} mph gust</span>
                     </div>
                   )}
-                  {weatherData.weather.precipitationMm != null && weatherData.weather.precipitationMm > 0 && (
+                  {weatherData.weather.precipitationIn != null && weatherData.weather.precipitationIn > 0 && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-precip">
                       <Droplets className="w-4 h-4 text-blue-400" />
-                      <span className="text-sm">{weatherData.weather.precipitationMm.toFixed(1)} mm</span>
+                      <span className="text-sm">{weatherData.weather.precipitationIn.toFixed(2)} in</span>
                     </div>
                   )}
-                  {weatherData.weather.snowfallCm != null && weatherData.weather.snowfallCm > 0 && (
+                  {weatherData.weather.snowfallIn != null && weatherData.weather.snowfallIn > 0 && (
                     <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2" data-testid="weather-snow">
                       <Snowflake className="w-4 h-4 text-cyan-300" />
-                      <span className="text-sm">{weatherData.weather.snowfallCm.toFixed(1)} cm</span>
+                      <span className="text-sm">{weatherData.weather.snowfallIn.toFixed(1)} in</span>
                     </div>
                   )}
                 </div>

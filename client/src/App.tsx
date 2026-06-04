@@ -23,6 +23,7 @@ import CommunicationsPage from "@/pages/communications";
 import IntelligencePage from "@/pages/intelligence";
 import CarrierIntelligencePage from "@/pages/carrier-intelligence";
 import PlaybooksPage from "@/pages/playbooks";
+import RiskMapPage from "@/pages/risk-map";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -38,6 +39,7 @@ function AppRoutes() {
         <Route path="/intelligence" component={IntelligencePage} />
         <Route path="/carrier-intelligence" component={CarrierIntelligencePage} />
         <Route path="/playbooks" component={PlaybooksPage} />
+        <Route path="/risk-map" component={RiskMapPage} />
         <Route path="/signal-engine" component={SignalEnginePage} />
         <Route path="/audio" component={AudioPage} />
         <Route path="/communications" component={CommunicationsPage} />

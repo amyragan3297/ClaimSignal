@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import { BookOpen, Plus, Loader2, Trash2, CheckCircle2, TrendingUp, Building2, FileText, Search, Sparkles } from "lucide-react";
+import { BookOpen, Plus, Loader2, Trash2, CheckCircle2, TrendingUp, Building2, FileText, Search, Sparkles, X, Filter } from "lucide-react";
 
 interface PlaybookEntry {
   id: string;
@@ -55,6 +55,7 @@ interface SearchResult {
     path: string[];
     reusableStrategy: string[];
     confidence: "high" | "medium" | "low";
+    keyEvidence?: string[];
   };
 }
 
@@ -67,6 +68,12 @@ interface SearchResponse {
   executiveAggregateOnly?: boolean;
 }
 
+const CONFIDENCE_COLOR: Record<string, string> = {
+  high: "text-emerald-400 border-emerald-500/40",
+  medium: "text-amber-400 border-amber-500/40",
+  low: "text-muted-foreground",
+};
+
 export default function PlaybooksPage() {
   const { data: auth } = useAuth();
   const isMaster = auth?.user.role === "super_admin" || !!auth?.isPlatformOwner;
@@ -76,8 +83,32 @@ export default function PlaybooksPage() {
   const [detail, setDetail] = useState<PlaybookEntry | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResponse | null>(null);
+  const [filterCarrier, setFilterCarrier] = useState<string | null>(null);
+  const [filterScenario, setFilterScenario] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<PlaybookEntry[]>({ queryKey: ["/api/playbooks"] });
+
+  // Derive unique carriers and scenario types from loaded playbooks
+  const carriers = useMemo(() => {
+    if (!data) return [];
+    return Array.from(new Set(data.map((p) => p.carrier).filter(Boolean) as string[])).sort();
+  }, [data]);
+
+  const scenarios = useMemo(() => {
+    if (!data) return [];
+    return Array.from(new Set(data.map((p) => p.scenarioType).filter(Boolean) as string[])).sort();
+  }, [data]);
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    return data.filter((p) => {
+      if (filterCarrier && p.carrier !== filterCarrier) return false;
+      if (filterScenario && p.scenarioType !== filterScenario) return false;
+      return true;
+    });
+  }, [data, filterCarrier, filterScenario]);
+
+  const hasFilters = !!filterCarrier || !!filterScenario;
 
   const searchMutation = useMutation({
     mutationFn: async (q: string) => {
@@ -157,8 +188,7 @@ export default function PlaybooksPage() {
             Playbook Engine
           </h1>
           <p className="text-sm text-muted-foreground">
-            Historical patterns of what worked before — by carrier, claim type, and outcome.
-            <span className="ml-1 text-xs">(MVP)</span>
+            Historical patterns of what worked — by carrier, claim type, and outcome.
           </p>
         </div>
         {isMaster && (
@@ -172,7 +202,6 @@ export default function PlaybooksPage() {
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Create Playbook Entry</DialogTitle></DialogHeader>
               <div className="space-y-3">
-                {/* Seed fields — used as AI context */}
                 <div className="rounded-md border border-border bg-muted/30 p-3 space-y-3">
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Seed inputs — provide any you know, then generate</p>
                   <div className="grid grid-cols-2 gap-3">
@@ -195,7 +224,6 @@ export default function PlaybooksPage() {
                   </Button>
                 </div>
 
-                {/* AI-generated / editable fields */}
                 {aiGenerated && (
                   <div className="flex items-center gap-1.5 text-xs text-primary">
                     <Sparkles className="w-3 h-3" />
@@ -220,7 +248,7 @@ export default function PlaybooksPage() {
         )}
       </div>
 
-      {/* AI-powered historical search */}
+      {/* Historical search */}
       <div className="flex gap-2" data-testid="section-playbook-search">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
@@ -274,7 +302,7 @@ export default function PlaybooksPage() {
           ) : (
             searchResults.results?.map((r) => (
               <Card key={r.claimId} className="border-primary/20" data-testid={`card-search-result-${r.claimId}`}>
-                <CardContent className="pt-4 pb-3 space-y-2">
+                <CardContent className="pt-4 pb-3 space-y-2.5">
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="flex flex-wrap gap-1.5">
                       {r.carrier && <Badge variant="secondary"><Building2 className="w-3 h-3 mr-1" />{r.carrier}</Badge>}
@@ -284,16 +312,43 @@ export default function PlaybooksPage() {
                       {r.escalationUsed && <Badge variant="outline" className="text-yellow-400 border-yellow-500/50">Escalated</Badge>}
                       {r.reinspectionRequested && <Badge variant="outline">Reinspected</Badge>}
                     </div>
-                    <Badge variant="secondary" className="text-[10px] shrink-0">{r.claimIdentifier}</Badge>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {r.strategySummary?.confidence && (
+                        <Badge variant="outline" className={`text-[10px] ${CONFIDENCE_COLOR[r.strategySummary.confidence]}`}>
+                          {r.strategySummary.confidence} confidence
+                        </Badge>
+                      )}
+                      <Badge variant="secondary" className="text-[10px]">{r.claimIdentifier}</Badge>
+                    </div>
                   </div>
                   {r.strategySummary?.path?.length > 0 && (
-                    <p className="text-xs text-muted-foreground">{r.strategySummary.path.join(" → ")}</p>
+                    <div className="flex items-center gap-1 flex-wrap text-xs text-muted-foreground">
+                      {r.strategySummary.path.map((step, i) => (
+                        <span key={i} className="flex items-center gap-1">
+                          {i > 0 && <span className="opacity-40">→</span>}
+                          <span className="bg-muted/60 rounded px-1.5 py-0.5">{step}</span>
+                        </span>
+                      ))}
+                    </div>
                   )}
                   {r.strategySummary?.reusableStrategy?.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {r.strategySummary.reusableStrategy.map((s, i) => (
-                        <Badge key={i} variant="outline" className="text-[10px]">{s}</Badge>
-                      ))}
+                    <div>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-1">Reusable Strategy</p>
+                      <div className="flex flex-wrap gap-1">
+                        {r.strategySummary.reusableStrategy.map((s, i) => (
+                          <Badge key={i} variant="outline" className="text-[10px]">{s}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {r.strategySummary?.keyEvidence && r.strategySummary.keyEvidence.length > 0 && (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-1">Evidence Used</p>
+                      <div className="flex flex-wrap gap-1">
+                        {r.strategySummary.keyEvidence.map((e, i) => (
+                          <Badge key={i} variant="secondary" className="text-[10px]">{e}</Badge>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -309,6 +364,52 @@ export default function PlaybooksPage() {
         </p>
       )}
 
+      {/* Filter chips */}
+      {!isLoading && data && data.length > 0 && (carriers.length > 0 || scenarios.length > 0) && (
+        <div className="flex items-center gap-2 flex-wrap" data-testid="section-playbook-filters">
+          <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          {carriers.map((c) => (
+            <button
+              key={c}
+              onClick={() => setFilterCarrier(filterCarrier === c ? null : c)}
+              data-testid={`filter-carrier-${c}`}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                filterCarrier === c
+                  ? "border-primary bg-primary/15 text-primary font-medium"
+                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              }`}
+            >
+              <Building2 className="w-2.5 h-2.5" />{c}
+              {filterCarrier === c && <X className="w-2.5 h-2.5" />}
+            </button>
+          ))}
+          {scenarios.map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilterScenario(filterScenario === s ? null : s)}
+              data-testid={`filter-scenario-${s}`}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                filterScenario === s
+                  ? "border-primary bg-primary/15 text-primary font-medium"
+                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              }`}
+            >
+              {s}
+              {filterScenario === s && <X className="w-2.5 h-2.5" />}
+            </button>
+          ))}
+          {hasFilters && (
+            <button
+              onClick={() => { setFilterCarrier(null); setFilterScenario(null); }}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+              data-testid="button-clear-filters"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-48 w-full" />)}
@@ -317,9 +418,19 @@ export default function PlaybooksPage() {
         <Card><CardContent className="py-16 text-center text-muted-foreground" data-testid="text-playbooks-empty">
           <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-40" />No playbook entries yet.
         </CardContent></Card>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="py-10 text-center text-muted-foreground" data-testid="text-playbooks-filtered-empty">
+          <p className="text-sm">No playbooks match the active filters.</p>
+          <button
+            onClick={() => { setFilterCarrier(null); setFilterScenario(null); }}
+            className="mt-2 text-xs text-primary hover:underline"
+          >
+            Clear filters
+          </button>
+        </CardContent></Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {data.map((p) => (
+          {filtered.map((p) => (
             <Card
               key={p.id}
               className="cursor-pointer hover-elevate active-elevate-2"
@@ -329,21 +440,29 @@ export default function PlaybooksPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                   <CardTitle className="text-base leading-snug" data-testid={`text-playbook-title-${p.id}`}>{p.title}</CardTitle>
-                  {p.isSample && <Badge variant="outline" className="shrink-0">Sample</Badge>}
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {p.isSample && <Badge variant="outline" className="text-[10px]">Sample</Badge>}
+                    {p.confidenceScore != null && (
+                      <Badge variant="outline" className={`text-[10px] ${p.confidenceScore >= 0.7 ? "text-emerald-400 border-emerald-500/40" : p.confidenceScore >= 0.4 ? "text-amber-400 border-amber-500/40" : ""}`}>
+                        {Math.round(p.confidenceScore * 100)}% conf
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div className="flex flex-wrap gap-1.5">
                   {p.carrier && <Badge variant="secondary"><Building2 className="w-3 h-3 mr-1" />{p.carrier}</Badge>}
                   {p.claimType && <Badge variant="outline">{p.claimType}</Badge>}
+                  {p.scenarioType && <Badge variant="outline" className="text-muted-foreground text-[10px]">{p.scenarioType}</Badge>}
                   {p.outcome && <Badge variant="default"><CheckCircle2 className="w-3 h-3 mr-1" />{p.outcome}</Badge>}
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
                   <span className="flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Suppl Δ {money(p.supplementDelta)}</span>
-                  {p.confidenceScore != null && <span>Conf {Math.round(p.confidenceScore * 100)}%</span>}
+                  {p.sourceClaimCount != null && <span>{p.sourceClaimCount} claim{p.sourceClaimCount === 1 ? "" : "s"}</span>}
                 </div>
                 {p.recommendedNextStep && !isExecutive && (
-                  <p className="text-xs text-muted-foreground line-clamp-2 pt-1">{p.recommendedNextStep}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-2 pt-1 border-t border-border/50">{p.recommendedNextStep}</p>
                 )}
               </CardContent>
             </Card>
@@ -356,33 +475,59 @@ export default function PlaybooksPage() {
           {detail && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2" data-testid="text-playbook-detail-title">
-                  <FileText className="w-5 h-5" />{detail.title}
+                <DialogTitle className="flex items-center gap-2 pr-8" data-testid="text-playbook-detail-title">
+                  <FileText className="w-5 h-5 shrink-0" />{detail.title}
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 text-sm">
+                {/* Metadata badges */}
                 <div className="flex flex-wrap gap-1.5">
-                  {detail.carrier && <Badge variant="secondary">{detail.carrier}</Badge>}
+                  {detail.carrier && <Badge variant="secondary"><Building2 className="w-3 h-3 mr-1" />{detail.carrier}</Badge>}
                   {detail.claimType && <Badge variant="outline">{detail.claimType}</Badge>}
                   {detail.adjuster && <Badge variant="outline">{detail.adjuster}</Badge>}
                   {detail.iaFirm && <Badge variant="outline">{detail.iaFirm}</Badge>}
                   {detail.vendor && <Badge variant="outline">{detail.vendor}</Badge>}
                   {detail.outcome && <Badge variant="default">{detail.outcome}</Badge>}
+                  {detail.escalationUsed && <Badge variant="outline" className="text-yellow-400 border-yellow-500/50">Escalation Used</Badge>}
                 </div>
+
+                {/* Confidence bar */}
+                {detail.confidenceScore != null && (
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span>Confidence</span>
+                      <span className="font-medium text-foreground">{Math.round(detail.confidenceScore * 100)}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${detail.confidenceScore >= 0.7 ? "bg-emerald-500" : detail.confidenceScore >= 0.4 ? "bg-amber-500" : "bg-muted-foreground"}`}
+                        style={{ width: `${Math.round(detail.confidenceScore * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Key metrics */}
+                <div className="grid grid-cols-3 gap-3 rounded-md border border-border bg-muted/30 p-3">
+                  <div><div className="text-xs text-muted-foreground">Supplement Δ</div><div className="font-semibold">{money(detail.supplementDelta)}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Source Claims</div><div className="font-semibold">{detail.sourceClaimCount ?? "—"}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Region</div><div className="font-semibold">{detail.region || "—"}</div></div>
+                </div>
+
                 <DetailRow label="Scenario" value={detail.scenarioType} />
                 <DetailRow label="Denial Reason" value={detail.denialReason} />
-                <DetailList label="Missing Scope Items" items={detail.missingScopeItems} />
                 <DetailList label="Documentation Used" items={detail.documentationUsed} />
+                <DetailList label="Missing Scope Items" items={detail.missingScopeItems} />
                 <DetailRow label="Action Taken" value={detail.actionTaken} />
                 <DetailRow label="What Worked" value={detail.whatWorked} />
                 <DetailRow label="What Didn't Work" value={detail.whatDidNotWork} />
                 <DetailRow label="Timeline" value={detail.timelineSummary} />
-                <DetailRow label="Recommended Next Step" value={detail.recommendedNextStep} />
-                <div className="grid grid-cols-3 gap-3 pt-2">
-                  <div><div className="text-xs text-muted-foreground">Supplement Δ</div><div className="font-medium">{money(detail.supplementDelta)}</div></div>
-                  <div><div className="text-xs text-muted-foreground">Confidence</div><div className="font-medium">{detail.confidenceScore != null ? `${Math.round(detail.confidenceScore * 100)}%` : "—"}</div></div>
-                  <div><div className="text-xs text-muted-foreground">Source Claims</div><div className="font-medium">{detail.sourceClaimCount ?? "—"}</div></div>
-                </div>
+                {detail.recommendedNextStep && (
+                  <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                    <div className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">Recommended Next Step</div>
+                    <p>{detail.recommendedNextStep}</p>
+                  </div>
+                )}
               </div>
               {isMaster && (
                 <DialogFooter>
