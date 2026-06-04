@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import express, { type Express, type Request, type Response } from "express";
 import { chatStorage } from "../chat/storage";
 import { openai, speechToText, ensureCompatibleFormat } from "./client";

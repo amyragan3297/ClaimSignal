@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import OpenAI, { toFile } from "openai";
 import { Buffer } from "node:buffer";
 import { spawn } from "child_process";

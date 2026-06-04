@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 /**
  * Auth startup security verification.
  * Run with:  npx tsx server/auth.test.ts
