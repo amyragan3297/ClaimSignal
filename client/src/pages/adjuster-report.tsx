@@ -133,10 +133,30 @@ export default function AdjusterReportPage() {
       </div>
 
       {scorecard.insufficient ? (
-        <div className="rounded-lg border border-border p-6 text-center text-muted-foreground">
-          <p className="font-medium">Insufficient Data</p>
-          <p className="text-sm mt-1">Fewer than 3 linked claims — behavioral metrics are not yet available for this adjuster.</p>
-        </div>
+        <>
+          {/* Partial data notice */}
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="font-medium text-amber-400 text-sm">Partial Data — Rates Unavailable</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {scorecard.linkedClaimCount === 0
+                ? "No linked claims yet. Attach this adjuster to claims to build behavioral history."
+                : `${scorecard.linkedClaimCount} claim${scorecard.linkedClaimCount === 1 ? "" : "s"} linked — ${3 - scorecard.linkedClaimCount} more needed for rate metrics.`}
+            </p>
+          </div>
+
+          {/* Volume counts even when insufficient */}
+          {scorecard.linkedClaimCount > 0 && (
+            <section>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">Volume Summary</h2>
+              <div className="grid grid-cols-4 gap-3 text-center">
+                <VolumeBox label="Initial Denials" value={scorecard.counts.initialDenials} />
+                <VolumeBox label="Final Approvals" value={scorecard.counts.finalApprovals} />
+                <VolumeBox label="Denials Overturned" value={scorecard.counts.denialsOverturned} />
+                <VolumeBox label="Reinspections" value={scorecard.counts.reinspectionsRequested} />
+              </div>
+            </section>
+          )}
+        </>
       ) : (
         <>
           {/* Key Metrics */}
@@ -213,9 +233,11 @@ export default function AdjusterReportPage() {
               </div>
             </section>
           )}
+        </>
+      )}
 
-          {/* Linked Claims */}
-          {linkedClaims.length > 0 && (
+      {/* Linked Claims — always shown when available */}
+      {linkedClaims.length > 0 && (
             <section>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">Linked Claims History</h2>
               <table className="w-full text-sm">
@@ -243,8 +265,6 @@ export default function AdjusterReportPage() {
                 </tbody>
               </table>
             </section>
-          )}
-        </>
       )}
 
       {/* Footer */}

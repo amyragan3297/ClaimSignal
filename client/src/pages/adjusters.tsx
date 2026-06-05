@@ -187,7 +187,7 @@ function LinkedClaimsCard({ adjusterId }: { adjusterId: string }) {
                 <div key={l.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-card/50 px-3 py-2" data-testid={`row-linked-claim-${l.id}`}>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{l.claimNumber ?? "Claim"}</span>
+                      <span className="text-sm font-medium">{l.claimNumber ? `Claim ${l.claimNumber}` : "Claim #[masked]"}</span>
                       <Badge variant={l.roleOnClaim === "unknown" ? "outline" : "secondary"} className={l.roleOnClaim === "unknown" ? "text-amber-500 border-amber-500/40" : ""}>
                         {ROLE_LABELS[l.roleOnClaim] ?? "Role pending review"}
                       </Badge>
@@ -207,7 +207,7 @@ function LinkedClaimsCard({ adjusterId }: { adjusterId: string }) {
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-muted-foreground">MVP rule-based aggregation from linked claim evidence; not yet a learned model.</p>
+            <p className="text-[11px] text-muted-foreground">Behavioral patterns are derived from linked claim history.</p>
           </>
         )}
       </CardContent>
@@ -228,15 +228,56 @@ function ScorecardCards({ adjusterId }: { adjusterId: string }) {
     return <Skeleton className="h-40 w-full" />;
   }
 
-  if (!data || data.insufficient) {
+  if (!data) {
     return (
       <Card data-testid="card-scorecard-insufficient">
         <CardContent className="py-6 text-center">
           <Zap className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
           <p className="text-sm text-muted-foreground font-medium">Behavioral scoring unavailable</p>
           <p className="text-xs text-muted-foreground/70 mt-1">
-            Link {Math.max(0, 3 - (data?.linkedClaimCount ?? 0))} more claims to unlock pattern-derived negotiation signals and rate metrics.
+            Link 3 or more claims to unlock pattern-derived negotiation signals and rate metrics.
           </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (data.insufficient) {
+    const needed = Math.max(0, 3 - (data.linkedClaimCount ?? 0));
+    return (
+      <Card data-testid="card-scorecard-insufficient">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <BarChart3 className="w-4 h-4 text-muted-foreground" />
+          <CardTitle className="text-base">Outcome Counts</CardTitle>
+          <Badge variant="outline" className="ml-auto text-[10px] text-amber-500 border-amber-500/40">Partial data</Badge>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {data.linkedClaimCount > 0 && data.counts && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold">{data.counts.initialDenials}</p>
+                <p className="text-xs text-muted-foreground">Initial Denials</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-emerald-400">{data.counts.finalApprovals}</p>
+                <p className="text-xs text-muted-foreground">Final Approvals</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold">{data.counts.denialsOverturned}</p>
+                <p className="text-xs text-muted-foreground">Overturned</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold">{data.counts.reinspectionsRequested}</p>
+                <p className="text-xs text-muted-foreground">Reinspections</p>
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+            <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <p className="text-xs text-amber-500">
+              Rate metrics require {needed} more linked claim{needed === 1 ? "" : "s"} to compute statistically meaningful patterns.
+            </p>
+          </div>
         </CardContent>
       </Card>
     );

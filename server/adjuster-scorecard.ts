@@ -68,12 +68,24 @@ export function computeAdjusterScorecard(links: ClaimAdjuster[], claims: Claim[]
   const n = uniqueClaims.length;
 
   if (n < MIN_CLAIMS) {
+    // Still compute real counts — just skip rate derivations which need ≥3 claims.
+    let initialDenials = 0, finalApprovals = 0, partialApprovals = 0, denialsOverturned = 0;
+    let reinspectionsRequested = 0, escalationsUsed = 0, paymentsReceived = 0;
+    for (const c of uniqueClaims) {
+      if (isDenied(c.initialOutcome)) initialDenials++;
+      if (isApproved(c.finalOutcome)) finalApprovals++;
+      if (isPartial(c.initialOutcome) || isPartial(c.finalOutcome)) partialApprovals++;
+      if (c.denialOverturned === true) denialsOverturned++;
+      if (c.reinspectionRequested === true) reinspectionsRequested++;
+      if (c.escalationUsed === true) escalationsUsed++;
+      if (c.paymentReceived === true) paymentsReceived++;
+    }
     return {
       linkedClaimCount: n,
       insufficient: true,
-      message: "Not enough linked claim evidence yet.",
+      message: n === 0 ? "No linked claims yet." : `${n} claim${n === 1 ? "" : "s"} linked — rates require ${MIN_CLAIMS - n} more to compute.`,
       dataConfidence: "low",
-      counts: { initialDenials: 0, finalApprovals: 0, partialApprovals: 0, denialsOverturned: 0, reinspectionsRequested: 0, escalationsUsed: 0, paymentsReceived: 0 },
+      counts: { initialDenials, finalApprovals, partialApprovals, denialsOverturned, reinspectionsRequested, escalationsUsed, paymentsReceived },
       rates: { denialRate: null, overturnRate: null, reinspectionRate: null, escalationRate: null, approvalRate: null },
       avgResolutionDays: null,
       avgResponseDays: null,

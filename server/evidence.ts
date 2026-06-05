@@ -799,6 +799,57 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       }
     }
 
+    // ── Adjuster extraction + AI-staleness clear for existing-claim uploads ──
+    // Runs whenever a document is attached to an existing claim, regardless of
+    // whether LLM extraction succeeded. Adjuster linkage is best-effort; the
+    // AI analysis clear always runs so the next claim-detail load reruns the
+    // suggestion rather than serving a suggestion that predates the new evidence.
+    if (claimId && matchedClaim) {
+      // Adjuster auto-link (only when extraction produced a name)
+      if (llmExtraction) {
+        const adjName = (llmExtraction as unknown as Record<string, unknown>)["adjusterName"];
+        if (adjName && typeof adjName === "string" && adjName.trim()) {
+          const adjNameStr = adjName.trim();
+          try {
+            const existingAdjs = await storage.getAdjusters(matchedClaim.organizationId);
+            let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjNameStr.toLowerCase());
+            if (!adj) {
+              const adjEmail = (llmExtraction as unknown as Record<string, unknown>)["adjusterEmail"];
+              const adjPhone = (llmExtraction as unknown as Record<string, unknown>)["adjusterPhone"];
+              const carrierName = (llmExtraction as unknown as Record<string, unknown>)["carrier"];
+              adj = await storage.createAdjuster({
+                organizationId: matchedClaim.organizationId,
+                adjusterName: adjNameStr,
+                adjusterEmail: typeof adjEmail === "string" && adjEmail.trim() ? adjEmail.trim() : undefined,
+                adjusterPhone: typeof adjPhone === "string" && adjPhone.trim() ? adjPhone.trim() : undefined,
+                carrierName: typeof carrierName === "string" && carrierName.trim() ? carrierName.trim() : (matchedClaim.carrier ?? "Unknown"),
+              });
+              console.log(`[adjuster-extract] created adjuster "${adjNameStr}" from upload on existing claim ${claimId}`);
+            }
+            await storage.linkAdjusterToClaim({
+              claimId,
+              adjusterId: adj.id,
+              organizationId: matchedClaim.organizationId,
+              roleOnClaim: "primary_adjuster",
+              sourceType: "document",
+              sourceDocumentId: evidenceFile.id,
+            });
+            console.log(`[adjuster-extract] linked adjuster "${adjNameStr}" to existing claim ${claimId}`);
+          } catch (adjErr: unknown) {
+            console.error("[adjuster-extract] non-fatal:", (adjErr as Error)?.message);
+          }
+        }
+      }
+
+      // Clear stale AI analysis — runs unconditionally so any new upload invalidates
+      // the cached suggestion, even when extraction is unavailable or fails.
+      try {
+        await storage.updateClaim(claimId, matchedClaim.organizationId, { aiAnalysisJson: null } as Partial<import("@shared/schema").InsertClaim>);
+      } catch (clearErr: unknown) {
+        console.error("[ai-analysis-clear] non-fatal:", (clearErr as Error)?.message);
+      }
+    }
+
     // When the upload doesn't match an existing claim but the document contains
     // real claim indicators, create a fully-populated claim directly from the
     // extracted data (no intermediate draft step). The new claim is linked to

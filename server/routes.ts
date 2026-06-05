@@ -846,13 +846,48 @@ export async function registerRoutes(
         ? await storage.getAdjusterClaims(adjusterId)
         : await storage.getAdjusterClaims(adjusterId, orgId);
 
-      const claimIds = Array.from(new Set(links.map((l) => l.claimId)));
       const allClaims = role === "super_admin"
         ? await storage.getAllClaimsAcrossTenants()
         : await storage.getClaims(orgId);
       const claimMap = new Map(allClaims.map((c) => [c.id, c]));
 
-      const enriched = links.map((link) => {
+      // Collect the claim IDs already covered by the claimAdjusters join table.
+      const linkedClaimIds = new Set(links.map((l) => l.claimId));
+
+      // Legacy fallback: claims linked via the direct claims.adjusterId column
+      // are not in the claimAdjusters table. Include them as synthetic link rows
+      // so the profile correctly reflects all known cross-claim history.
+      const legacyLinks: typeof links = [];
+      for (const claim of allClaims) {
+        if (claim.adjusterId === adjusterId && !linkedClaimIds.has(claim.id)) {
+          legacyLinks.push({
+            id: `legacy-${claim.id}`,
+            organizationId: claim.organizationId,
+            claimId: claim.id,
+            adjusterId,
+            carrierId: null,
+            roleOnClaim: "primary_adjuster",
+            involvementType: "unknown",
+            firstSeenDate: null,
+            lastSeenDate: null,
+            sourceDocumentId: null,
+            sourceAudioId: null,
+            sourceTranscriptId: null,
+            sourceCommunicationId: null,
+            sourceType: "legacy_backfill",
+            confidenceScore: 1,
+            needsReview: false,
+            notes: null,
+            createdAt: claim.createdAt ?? null,
+            updatedAt: claim.updatedAt ?? null,
+          } as unknown as (typeof links)[0]);
+        }
+      }
+
+      const allLinks = [...links, ...legacyLinks];
+      const claimIds = Array.from(new Set(allLinks.map((l) => l.claimId)));
+
+      const enriched = allLinks.map((link) => {
         const c = claimMap.get(link.claimId);
         return {
           ...link,
@@ -950,7 +985,7 @@ export async function registerRoutes(
         ipAddress: getClientIp(req),
       });
 
-      res.json({ method: "MVP rule-based", ...scorecard });
+      res.json({ method: "behavioral-pattern-aggregation", ...scorecard });
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
     }
