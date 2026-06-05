@@ -3,7 +3,7 @@ import multer from "multer";
 import crypto from "crypto";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
-import { isMaster, canViewUnmasked, applyPiiMasking } from "./masking";
+import { isMaster, canViewUnmasked, applyPiiMasking, maskExtractionData } from "./masking";
 import { extractClaimFieldsFromText, extractClaimFieldsFromImages, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
 import { renderPdfToImages } from "./pdf-render";
 
@@ -946,11 +946,20 @@ router.get("/files", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
     const claimId = req.query.claimId as string | undefined;
+    const role = req.auth.role;
+    const master = isMaster(role);
     // Master sees all evidence files across tenants; others scoped to their org.
-    const files = isMaster(req.auth.role) && !claimId
+    const files = master && !claimId
       ? await storage.getAllEvidenceFilesAcrossTenants()
       : await storage.getEvidenceFiles(req.auth.organizationId, claimId);
-    res.json(files);
+    // Mask extraction data for non-Master users
+    const maskedFiles = files.map((f) => {
+      const extracted = (f as { extractedJson?: Record<string, unknown> }).extractedJson;
+      if (!extracted) return f;
+      const masked = maskExtractionData(extracted, role);
+      return { ...f, extractedJson: masked };
+    });
+    res.json(maskedFiles);
   } catch (err) {
     return res.status(500).json({ message: (err as Error).message });
   }

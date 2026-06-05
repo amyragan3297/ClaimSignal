@@ -77,6 +77,38 @@ export function applyPiiMaskingToList<T extends Record<string, unknown>>(rows: T
 }
 
 /**
+ * Mask AI extraction data inside evidence files.
+ * Non-Master users see adjuster/carrier intelligence but not homeowner,
+ * contractor, or vendor identity pulled from documents.
+ */
+export function maskExtractionData(extraction: Record<string, unknown> | null | undefined, role: Role): Record<string, unknown> | null {
+  if (!extraction || PII_UNMASK_ROLES.includes(role)) return extraction || null;
+  const out: Record<string, unknown> = { ...extraction };
+  const MASKED_FIELDS = new Set([
+    "homeownerName", "insuredName", "propertyAddress", "zipCode",
+    "claimNumber", "policyNumber", "vendor",
+  ]);
+  for (const key of Object.keys(out)) {
+    if (MASKED_FIELDS.has(key)) {
+      const val = out[key];
+      if (val === null || val === undefined || val === "") continue;
+      if (key === "homeownerName" || key === "insuredName") {
+        out[key] = maskName(String(val));
+      } else if (key === "propertyAddress") {
+        out[key] = maskAddress(String(val));
+      } else if (key === "claimNumber") {
+        out[key] = maskClaimNumber(String(val));
+      } else if (key === "policyNumber") {
+        out[key] = maskString(String(val));
+      } else if (key === "vendor" || key === "zipCode") {
+        out[key] = null;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * For cross-tenant shared library views.
  *
  * Beyond homeowner PII masking, this also strips CONTRACTOR-SIDE IDENTITY so
