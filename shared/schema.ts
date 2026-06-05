@@ -241,6 +241,9 @@ export const supplements = pgTable("supplements", {
   dateSubmitted: timestamp("date_submitted"),
   dateResolved: timestamp("date_resolved"),
   status: text("status").notNull().default("pending"),
+  category: text("category"),
+  description: text("description"),
+  lineItems: json("line_items"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });

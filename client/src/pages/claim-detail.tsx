@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAccessToken } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { Claim, Supplement, TimelineEvent } from "@shared/schema";
+import type { Claim, Supplement, TimelineEvent, EvidenceFile } from "@shared/schema";
 import {
   ArrowLeft,
   FileText,
@@ -43,6 +43,18 @@ import {
   BookOpen,
   ArrowRight,
   Pencil,
+  Upload,
+  Paperclip,
+  File as FileIcon,
+  ShieldAlert,
+  Code,
+  ChevronDown,
+  ChevronUp,
+  Minus,
+  Image as ImageIcon,
+  Mail,
+  AudioLines,
+  Receipt,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -51,6 +63,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -96,9 +109,18 @@ function getScoreColor(value: number, thresholds: { good: number; warn: number }
   return "text-red-500";
 }
 
+const supplementLineItemSchema = z.object({
+  description: z.string().min(1, "Description required"),
+  quantity: z.coerce.number().min(0),
+  unitCost: z.coerce.number().min(0),
+});
+
 const createSupplementSchema = z.object({
   amountRequested: z.coerce.number().min(0, "Amount required"),
+  category: z.string().optional(),
+  description: z.string().optional(),
   notes: z.string().optional(),
+  lineItems: z.array(supplementLineItemSchema).optional(),
 });
 
 export default function ClaimDetailPage() {
@@ -144,6 +166,15 @@ export default function ClaimDetailPage() {
     enabled: !!claimId,
   });
 
+  const { data: evidenceFiles, isLoading: evidenceLoading } = useQuery<EvidenceFile[]>({
+    queryKey: ["/api/evidence/files", claimId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/evidence/files?claimId=${claimId}`);
+      return res.json();
+    },
+    enabled: !!claimId,
+  });
+
   const { data: timelineEvents, isLoading: timelineLoading } = useQuery<TimelineEvent[]>({
     queryKey: ["/api/evidence/timeline", claimId],
     queryFn: async () => {
@@ -154,11 +185,64 @@ export default function ClaimDetailPage() {
   });
 
   const [suppDialogOpen, setSuppDialogOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: ircScreening } = useQuery({
+    queryKey: ["/api/claims", claimId, "irc-screening"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/claims/${claimId}/irc-screening`);
+      return res.json();
+    },
+    enabled: !!claimId,
+  });
 
   const suppForm = useForm<z.infer<typeof createSupplementSchema>>({
     resolver: zodResolver(createSupplementSchema),
-    defaultValues: { amountRequested: 0, notes: "" },
+    defaultValues: { amountRequested: 0, category: "materials", description: "", notes: "", lineItems: [] },
   });
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("claimId", claimId!);
+      const token = getAccessToken();
+      const res = await fetch("/api/evidence/upload", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Upload failed" }));
+        throw new Error(err.message || "Upload failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files", claimId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/timeline", claimId] });
+      toast({ title: "Document uploaded" });
+      setUploadingFiles(false);
+      setUploadOpen(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+      setUploadingFiles(false);
+    },
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploadingFiles(true);
+    for (const file of Array.from(files)) {
+      await uploadMutation.mutateAsync(file);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const createSuppMutation = useMutation({
     mutationFn: async (data: z.infer<typeof createSupplementSchema>) => {
@@ -901,6 +985,129 @@ export default function ClaimDetailPage() {
 
       <ClaimAdjustersCard claimId={claim.id} canEdit={userRole !== "carrier_analyst"} />
 
+      {/* ── Documents & Evidence ── */}
+      <Card data-testid="card-evidence">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Paperclip className="w-4 h-4 text-primary" />
+            Documents & Evidence
+            {evidenceFiles && evidenceFiles.length > 0 && (
+              <Badge variant="secondary" className="text-[10px]">{evidenceFiles.length}</Badge>
+            )}
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" data-testid="button-upload-evidence">
+                  <Upload className="w-3 h-3" /> Upload
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Upload Documents</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">Upload denial letters, estimates, email threads, photos, or audio files. They will be auto-classified and linked to this claim.</p>
+                  <div className="rounded-md border border-dashed border-border p-6 text-center space-y-3">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="evidence-upload"
+                      data-testid="input-evidence-file"
+                    />
+                    <label htmlFor="evidence-upload" className="cursor-pointer block">
+                      <FileUp className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm font-medium">Click to select files</p>
+                      <p className="text-xs text-muted-foreground mt-1">PDF, images, DOCX, TXT, EML, audio</p>
+                    </label>
+                  </div>
+                  {uploadingFiles && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Uploading...
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {evidenceLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : !evidenceFiles?.length ? (
+            <div className="text-center py-6 space-y-2">
+              <FileText className="w-8 h-8 mx-auto text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">No documents attached yet</p>
+              <p className="text-xs text-muted-foreground/70">Upload denial letters, estimates, photos, or email threads to build your claim file.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {evidenceFiles.map((file) => {
+                const categoryLabel = file.docCategory?.replace(/_/g, " ") || "unknown";
+                const categoryColors: Record<string, string> = {
+                  denial_letter: "text-red-400 border-red-500/40",
+                  estimate: "text-blue-400 border-blue-500/40",
+                  scope: "text-emerald-400 border-emerald-500/40",
+                  payment_letter: "text-green-400 border-green-500/40",
+                  supplement: "text-amber-400 border-amber-500/40",
+                  invoice: "text-purple-400 border-purple-500/40",
+                  photo_report: "text-pink-400 border-pink-500/40",
+                  policy: "text-sky-400 border-sky-500/40",
+                  email_thread: "text-orange-400 border-orange-500/40",
+                  unknown: "text-muted-foreground border-muted",
+                };
+                const iconFor = (cat: string) => {
+                  if (cat === "email_thread") return Mail;
+                  if (cat === "photo_report") return ImageIcon;
+                  if (cat === "audio") return AudioLines;
+                  return FileText;
+                };
+                const FileIconComp = iconFor(file.docCategory || "unknown");
+                return (
+                  <div key={file.id} className="flex items-center gap-3 rounded-md border border-border p-3" data-testid={`evidence-file-${file.id}`}>
+                    <div className="flex items-center justify-center w-9 h-9 rounded-md bg-muted shrink-0">
+                      <FileIconComp className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate" data-testid={`evidence-name-${file.id}`}>{file.fileName}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className={`text-[10px] capitalize ${categoryColors[file.docCategory || "unknown"] || categoryColors.unknown}`}>
+                          {categoryLabel}
+                        </Badge>
+                        {file.confidence && file.confidence > 0 && (
+                          <span className="text-[10px] text-muted-foreground">AI confidence {Math.round(file.confidence * 100)}%</span>
+                        )}
+                        {file.extractionStatus === "complete" && (
+                          <span className="text-[10px] text-emerald-400">Extracted</span>
+                        )}
+                        {file.fileSize && (
+                          <span className="text-[10px] text-muted-foreground">{(file.fileSize / 1024).toFixed(0)} KB</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1">
+                      {file.storageUrl && (
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" asChild>
+                          <a href={file.storageUrl} target="_blank" rel="noreferrer" data-testid={`evidence-download-${file.id}`}>
+                            <Download className="w-3.5 h-3.5" />
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {(claim.initialOutcome || claim.finalOutcome || claim.denialOverturned) && (
         <Card data-testid="card-outcome-path">
           <CardHeader className="pb-2">
@@ -943,6 +1150,52 @@ export default function ClaimDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card data-testid="card-code-permit">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Code className="w-4 h-4 text-primary" />
+            Code & Permit Screening
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {ircScreening === undefined ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          ) : !ircScreening?.available ? (
+            <p className="text-sm text-muted-foreground" data-testid="irc-empty">No IRC codes matched for this claim type. Screening data will appear when applicable.</p>
+          ) : (
+            <div className="space-y-3" data-testid="irc-content">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="outline">{ircScreening.state || "—"}</Badge>
+                <Badge variant="outline">{ircScreening.claimType || "—"}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{ircScreening.permitNote}</p>
+              <div className="space-y-2">
+                {ircScreening.codes?.map((code: { id: string; codeReference: string; title: string; description: string; severityWeight: number; supplementTriggerKeywords: string[] }) => (
+                  <div key={code.id} className="rounded-md border border-muted p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">{code.codeReference}</span>
+                      <Badge variant="outline" className="text-[10px]">Severity: {code.severityWeight}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{code.title}</p>
+                    <p className="text-xs text-muted-foreground">{code.description}</p>
+                    {code.supplementTriggerKeywords && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {code.supplementTriggerKeywords.map((k, i) => (
+                          <Badge key={i} variant="secondary" className="text-[10px]">{k}</Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {(() => {
         const def = computeDefensibility(claim);
@@ -1164,18 +1417,76 @@ export default function ClaimDetailPage() {
                 Add
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add Supplement</DialogTitle>
               </DialogHeader>
               <form onSubmit={suppForm.handleSubmit((d) => createSuppMutation.mutate(d))} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select value={suppForm.watch("category") || "materials"} onValueChange={(v) => suppForm.setValue("category", v)}>
+                    <SelectTrigger data-testid="select-supp-category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="materials">Materials</SelectItem>
+                      <SelectItem value="labor">Labor</SelectItem>
+                      <SelectItem value="overhead">Overhead & Profit</SelectItem>
+                      <SelectItem value="code_upgrade">Code Upgrade</SelectItem>
+                      <SelectItem value="permit">Permit / Fees</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea data-testid="input-supp-description" placeholder="Brief description of the supplement" {...suppForm.register("description")} />
+                </div>
                 <div className="space-y-2">
                   <Label>Amount Requested ($)</Label>
                   <Input type="number" step="0.01" data-testid="input-supp-amount" {...suppForm.register("amountRequested")} />
                 </div>
                 <div className="space-y-2">
                   <Label>Notes</Label>
-                  <Input data-testid="input-supp-notes" {...suppForm.register("notes")} />
+                  <Textarea data-testid="input-supp-notes" placeholder="Additional notes" {...suppForm.register("notes")} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center justify-between">
+                    Line Items
+                    <Button type="button" size="sm" variant="ghost" onClick={() => {
+                      const current = suppForm.getValues("lineItems") || [];
+                      suppForm.setValue("lineItems", [...current, { description: "", quantity: 1, unitCost: 0 }]);
+                    }} data-testid="button-add-line-item">
+                      <Plus className="w-3 h-3" /> Add Line
+                    </Button>
+                  </Label>
+                  <div className="space-y-2">
+                    {(suppForm.watch("lineItems") || []).map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Input placeholder="Description" className="flex-1" data-testid={`input-line-desc-${idx}`} value={item.description} onChange={(e) => {
+                          const current = suppForm.getValues("lineItems") || [];
+                          current[idx] = { ...current[idx], description: e.target.value };
+                          suppForm.setValue("lineItems", current);
+                        }} />
+                        <Input type="number" placeholder="Qty" className="w-20" data-testid={`input-line-qty-${idx}`} value={item.quantity} onChange={(e) => {
+                          const current = suppForm.getValues("lineItems") || [];
+                          current[idx] = { ...current[idx], quantity: Number(e.target.value) };
+                          suppForm.setValue("lineItems", current);
+                        }} />
+                        <Input type="number" step="0.01" placeholder="Cost" className="w-24" data-testid={`input-line-cost-${idx}`} value={item.unitCost} onChange={(e) => {
+                          const current = suppForm.getValues("lineItems") || [];
+                          current[idx] = { ...current[idx], unitCost: Number(e.target.value) };
+                          suppForm.setValue("lineItems", current);
+                        }} />
+                        <Button type="button" size="sm" variant="ghost" onClick={() => {
+                          const current = suppForm.getValues("lineItems") || [];
+                          suppForm.setValue("lineItems", current.filter((_, i) => i !== idx));
+                        }} data-testid={`button-remove-line-${idx}`}>
+                          <Trash2 className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <Button type="submit" className="w-full" disabled={createSuppMutation.isPending} data-testid="button-submit-supplement">
                   {createSuppMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Submit Supplement"}
@@ -1191,6 +1502,8 @@ export default function ClaimDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Description</TableHead>
                   <TableHead>Requested</TableHead>
                   <TableHead>Approved</TableHead>
                   <TableHead>Denied</TableHead>
@@ -1201,6 +1514,10 @@ export default function ClaimDetailPage() {
               <TableBody>
                 {supplementsList.map((s) => (
                   <TableRow key={s.id} data-testid={`row-supplement-${s.id}`}>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize text-[10px]">{s.category || "\u2014"}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm max-w-[200px] truncate" title={s.description || ""}>{s.description || "\u2014"}</TableCell>
                     <TableCell>${s.amountRequested?.toLocaleString() ?? "0"}</TableCell>
                     <TableCell>${s.amountApproved?.toLocaleString() ?? "0"}</TableCell>
                     <TableCell>${s.amountDenied?.toLocaleString() ?? "0"}</TableCell>

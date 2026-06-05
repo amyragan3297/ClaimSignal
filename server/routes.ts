@@ -1640,6 +1640,60 @@ export async function registerRoutes(
   app.use("/api/evidence", requireAuth, requireActiveSubscription, evidenceRouter);
   app.use("/api/intelligence", requireAuth, requireActiveSubscription, intelligenceRouter);
 
+  // IRC / Building Codes lookup
+  app.get("/api/irc-codes", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const codes = await storage.getIrcCodes();
+      res.json(codes);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.get("/api/claims/:id/irc-screening", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const role = req.auth!.role;
+      let claim = await storage.getClaim(req.params.id as string, orgId);
+      if (!claim && role === "super_admin") {
+        const all = await storage.getAllClaimsAcrossTenants();
+        claim = all.find((c) => c.id === req.params.id) || undefined;
+      }
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+      const allCodes = await storage.getIrcCodes();
+      const claimType = (claim.claimType || claim.lossType || "").toLowerCase();
+      const state = (claim.state || "").toUpperCase();
+      const city = claim.city || "";
+
+      // Match codes by claim type keywords
+      const matched = allCodes.filter((code) => {
+        const kw = code.supplementTriggerKeywords as string[] | null;
+        if (!kw || !Array.isArray(kw)) return false;
+        return kw.some((k) => claimType.includes(k.toLowerCase()));
+      });
+
+      // Also include common roofing/building codes for all claims
+      const commonCodes = allCodes.filter((code) => {
+        const ref = code.codeReference?.toLowerCase() || "";
+        return ref.includes("r905") || ref.includes("r907") || ref.includes("r806");
+      });
+
+      const screening = Array.from(new Map([...matched, ...commonCodes].map((c) => [c.id, c])).values());
+
+      res.json({
+        available: screening.length > 0,
+        state,
+        city,
+        claimType: claim.claimType || claim.lossType || "unknown",
+        codes: screening,
+        permitNote: `Permit requirements vary by jurisdiction. Contact ${city || "your local"} building department for exact permit rules.`,
+      });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
   // Audio recordings
   app.get("/api/audio", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
