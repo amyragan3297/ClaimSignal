@@ -474,22 +474,46 @@ function QueueItemRow({
   );
 }
 
+const STRONG_MATCH_THRESHOLD = 0.7;
+
 // ─── File Card ────────────────────────────────────────────────────────────────
 function FileCard({
   file,
   claimsById,
   onMatch,
+  onDirectMatch,
   onReviewExtraction,
   onCreateClaim,
 }: {
   file: EvidenceFile;
   claimsById: Map<string, Claim>;
   onMatch: (fileId: string, extraction?: ExtractionData | null) => void;
+  onDirectMatch: (fileId: string, claimId: string) => void;
   onReviewExtraction: (fileId: string, claimId?: string | null) => void;
   onCreateClaim: (fileId: string) => void;
 }) {
   const extraction = getExtraction(file);
   const matchedClaim = file.claimId ? claimsById.get(file.claimId) : undefined;
+
+  const { data: cardSuggestions } = useQuery<MatchSuggestionsResponse>({
+    queryKey: ["/api/evidence/files", file.id, "match-suggestions"],
+    queryFn: async () => {
+      const res = await fetch(`/api/evidence/files/${file.id}/match-suggestions`, {
+        headers: getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {},
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !file.claimId,
+    staleTime: 60_000,
+  });
+
+  const strongSuggestion =
+    !file.claimId &&
+    (cardSuggestions?.candidates?.[0]?.score ?? 0) >= STRONG_MATCH_THRESHOLD
+      ? cardSuggestions!.candidates[0]
+      : null;
 
   const inlineFields: { label: string; value: string }[] = [];
   if (extraction) {
@@ -534,6 +558,35 @@ function FileCard({
           </div>
         )}
 
+        {/* Strong-match banner — shown only when score ≥ 0.7, no dialog needed */}
+        {strongSuggestion && (
+          <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 space-y-1.5" data-testid={`panel-strong-match-${file.id}`}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Sparkles className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                <span className="text-xs font-medium text-primary truncate" data-testid={`text-strong-match-claim-${file.id}`}>
+                  {strongSuggestion.claimNumber ?? strongSuggestion.claimId.slice(0, 8) + "…"}
+                </span>
+              </div>
+              <Badge variant="outline" className="text-[10px] border-primary/30 text-primary flex-shrink-0">
+                {Math.round(strongSuggestion.score * 100)}% match
+              </Badge>
+            </div>
+            {strongSuggestion.carrier && (
+              <p className="text-xs text-muted-foreground truncate">{strongSuggestion.carrier}</p>
+            )}
+            <Button
+              size="sm"
+              className="h-7 text-xs w-full"
+              onClick={() => onDirectMatch(file.id, strongSuggestion.claimId)}
+              data-testid={`button-confirm-match-${file.id}`}
+            >
+              <CheckCircle className="w-3 h-3" />
+              Confirm Match
+            </Button>
+          </div>
+        )}
+
         <div className="mt-auto pt-1 flex items-center justify-between gap-2 flex-wrap">
           {file.claimId ? (
             <Link href={`/claims/${file.claimId}`} className="inline-flex items-center gap-1 text-xs text-green-400 hover:underline font-medium" data-testid={`link-claim-${file.id}`}>
@@ -561,26 +614,29 @@ function FileCard({
             )}
             {!file.claimId && (
               <>
+                {/* If a strong suggestion is showing, demote "Match" to a ghost "Other…" fallback */}
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant={strongSuggestion ? "ghost" : "outline"}
                   className="h-7 text-xs px-2"
                   onClick={() => onMatch(file.id, extraction)}
                   data-testid={`button-match-${file.id}`}
                 >
                   <LinkIcon className="w-3 h-3" />
-                  Match
+                  {strongSuggestion ? "Other…" : "Match"}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 text-xs px-2"
-                  onClick={() => onCreateClaim(file.id)}
-                  data-testid={`button-create-${file.id}`}
-                >
-                  <PlusCircle className="w-3 h-3" />
-                  Create
-                </Button>
+                {!strongSuggestion && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs px-2"
+                    onClick={() => onCreateClaim(file.id)}
+                    data-testid={`button-create-${file.id}`}
+                  >
+                    <PlusCircle className="w-3 h-3" />
+                    Create
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -1014,6 +1070,7 @@ export default function EvidencePage() {
               file={file}
               claimsById={claimsById}
               onMatch={openMatchDialog}
+              onDirectMatch={(fileId, claimId) => matchMutation.mutate({ fileId, claimId })}
               onReviewExtraction={openExtractionReview}
               onCreateClaim={id => createClaimMutation.mutate(id)}
             />
