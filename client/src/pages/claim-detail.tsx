@@ -185,7 +185,7 @@ export default function ClaimDetailPage() {
   });
 
   interface PlaybookRecommendation {
-    playbook: { id: string; title: string; recommendedNextStep?: string | null };
+    playbook: { id: string; title: string; recommendedNextStep?: string | null; source?: string };
     matchScore: number;
     matchReasons?: string[];
   }
@@ -1284,36 +1284,51 @@ export default function ClaimDetailPage() {
             {playbookRecs.recommendations.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground" data-testid="playbook-recs-empty">
                 <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No similar historical claims found yet.</p>
-                <p className="text-xs mt-1 opacity-70">Recommendations appear as your playbook library grows.</p>
+                <p className="text-sm">No matching playbook entries yet.</p>
+                <p className="text-xs mt-1 opacity-70">
+                  Add carrier, loss type, and outcome data to this claim to unlock recommendations.
+                  Entries grow as your playbook library is populated.
+                </p>
               </div>
             ) : (
-              playbookRecs.recommendations.map((rec) => (
-                <div key={rec.playbook.id} className="rounded-md border border-border p-3 space-y-2" data-testid={`playbook-rec-${rec.playbook.id}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium">{rec.playbook.title}</p>
-                    <div className="flex items-center gap-2 shrink-0" data-testid={`rec-match-score-${rec.playbook.id}`}>
-                      <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-primary transition-all"
-                          style={{ width: `${Math.min(rec.matchScore, 100)}%` }}
-                        />
+              playbookRecs.recommendations.map((rec) => {
+                const isAi = rec.playbook.source === "ai_generated";
+                return (
+                  <div key={rec.playbook.id} className={`rounded-md border p-3 space-y-2 ${isAi ? "border-primary/30 bg-primary/5" : "border-border"}`} data-testid={`playbook-rec-${rec.playbook.id}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        {isAi && (
+                          <Badge className="shrink-0 text-[10px] bg-primary/20 text-primary border border-primary/30 mt-0.5" variant="outline" data-testid={`badge-ai-generated-${rec.playbook.id}`}>
+                            AI
+                          </Badge>
+                        )}
+                        <p className="text-sm font-medium">{rec.playbook.title}</p>
                       </div>
-                      <span className="text-xs text-muted-foreground">{rec.matchScore}%</span>
+                      {!isAi && (
+                        <div className="flex items-center gap-2 shrink-0" data-testid={`rec-match-score-${rec.playbook.id}`}>
+                          <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-primary transition-all"
+                              style={{ width: `${Math.min(rec.matchScore, 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground">{rec.matchScore}%</span>
+                        </div>
+                      )}
                     </div>
+                    {rec.playbook.recommendedNextStep && (
+                      <p className="text-xs text-muted-foreground">{rec.playbook.recommendedNextStep}</p>
+                    )}
+                    {(rec.matchReasons?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {rec.matchReasons?.map((r: string, i: number) => (
+                          <Badge key={i} variant="outline" className="text-[10px]">{r}</Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {rec.playbook.recommendedNextStep && (
-                    <p className="text-xs text-muted-foreground">{rec.playbook.recommendedNextStep}</p>
-                  )}
-                  {(rec.matchReasons?.length ?? 0) > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {rec.matchReasons?.map((r: string, i: number) => (
-                        <Badge key={i} variant="outline" className="text-[10px]">{r}</Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>

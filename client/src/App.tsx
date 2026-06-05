@@ -15,6 +15,7 @@ import BillingPage from "@/pages/billing";
 import FounderLegalPage from "@/pages/founder-legal";
 import AdminPage from "@/pages/admin";
 import AdjustersPage from "@/pages/adjusters";
+import AdjusterReportPage from "@/pages/adjuster-report";
 import EvidencePage from "@/pages/evidence";
 import StormEventsPage from "@/pages/storm-events";
 import SignalEnginePage from "@/pages/signal-engine";
@@ -44,6 +45,7 @@ function AppRoutes() {
         <Route path="/audio" component={AudioPage} />
         <Route path="/communications" component={CommunicationsPage} />
         <Route path="/clients" component={ClientsPage} />
+        <Route path="/adjusters/:id/report" component={AdjusterReportPage} />
         <Route path="/adjusters" component={AdjustersPage} />
         <Route path="/billing" component={BillingPage} />
         <Route path="/legal/founder" component={FounderLegalPage} />

@@ -16,8 +16,9 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import type { Adjuster } from "@shared/schema";
-import { Plus, Users, Loader2, Search, X, ChevronLeft, Activity, BarChart3, Target, MoreHorizontal, Archive, Trash2 } from "lucide-react";
+import { Plus, Users, Loader2, Search, X, ChevronLeft, Activity, BarChart3, Target, MoreHorizontal, Archive, Trash2, Download, MessageSquare, Zap } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Link } from "wouter";
 
 const createAdjusterSchema = z.object({
   carrierName: z.string().min(1, "Carrier name required"),
@@ -72,12 +73,55 @@ type LinkedClaim = {
   denialOverturned: boolean | null;
 };
 
+interface AdjusterScorecard {
+  linkedClaimCount: number;
+  insufficient: boolean;
+  message: string | null;
+  dataConfidence: "low" | "medium" | "high";
+  counts: {
+    initialDenials: number;
+    finalApprovals: number;
+    partialApprovals: number;
+    denialsOverturned: number;
+    reinspectionsRequested: number;
+    escalationsUsed: number;
+    paymentsReceived: number;
+  };
+  rates: {
+    denialRate: number | null;
+    overturnRate: number | null;
+    reinspectionRate: number | null;
+    escalationRate: number | null;
+    approvalRate: number | null;
+  };
+  avgResolutionDays: number | null;
+  avgResponseDays: number | null;
+  behaviorSignals: string[];
+  negotiationSignals: string[];
+}
+
 const ROLE_LABELS: Record<string, string> = {
   primary_adjuster: "Primary Adjuster", field_adjuster: "Field Adjuster", desk_adjuster: "Desk Adjuster",
   catastrophe_adjuster: "Catastrophe Adjuster", supervisor: "Supervisor", team_lead: "Team Lead",
   reinspection_adjuster: "Reinspection Adjuster", supplement_adjuster: "Supplement Adjuster",
   appraisal_contact: "Appraisal Contact", carrier_representative: "Carrier Representative", unknown: "Role pending review",
 };
+
+function ResponseVelocityBadge({ days }: { days: number | null | undefined }) {
+  if (days == null) return <span className="text-sm font-semibold text-muted-foreground">\u2014</span>;
+  const color = days <= 14
+    ? "bg-emerald-500/15 text-emerald-400"
+    : days <= 30
+    ? "bg-amber-500/15 text-amber-400"
+    : "bg-red-500/15 text-red-400";
+  const label = days <= 14 ? "Fast" : days <= 30 ? "Moderate" : "Slow";
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-semibold" data-testid="text-response-velocity-days">{days}d</span>
+      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`} data-testid="text-response-velocity-label">{label}</span>
+    </div>
+  );
+}
 
 function LinkedClaimsCard({ adjusterId }: { adjusterId: string }) {
   const { data, isLoading } = useQuery<{ linkedClaimCount: number; links: LinkedClaim[] }>({
@@ -113,9 +157,13 @@ function LinkedClaimsCard({ adjusterId }: { adjusterId: string }) {
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading linked claims…</p>
         ) : links.length === 0 ? (
-          <p className="text-sm text-muted-foreground" data-testid="text-no-linked-claims">
-            Not enough linked claim evidence. Profile exists. Linked claim evidence pending.
-          </p>
+          <div className="text-center py-4" data-testid="text-no-linked-claims">
+            <Activity className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground font-medium">No linked claims yet</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              Link this adjuster to claims to unlock cross-claim behavioral history and pattern analysis.
+            </p>
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
@@ -167,6 +215,136 @@ function LinkedClaimsCard({ adjusterId }: { adjusterId: string }) {
   );
 }
 
+function ScorecardCards({ adjusterId }: { adjusterId: string }) {
+  const { data, isLoading } = useQuery<{ method: string } & AdjusterScorecard>({
+    queryKey: ["/api/adjusters", adjusterId, "scorecard"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/adjusters/${adjusterId}/scorecard`);
+      return res.json();
+    },
+  });
+
+  if (isLoading) {
+    return <Skeleton className="h-40 w-full" />;
+  }
+
+  if (!data || data.insufficient) {
+    return (
+      <Card data-testid="card-scorecard-insufficient">
+        <CardContent className="py-6 text-center">
+          <Zap className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground font-medium">Behavioral scoring unavailable</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            Link {Math.max(0, 3 - (data?.linkedClaimCount ?? 0))} more claims to unlock pattern-derived negotiation signals and rate metrics.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      {/* Response Velocity */}
+      <Card data-testid="card-response-velocity">
+        <CardHeader className="flex flex-row items-center gap-2 pb-3">
+          <Zap className="w-4 h-4 text-muted-foreground" />
+          <CardTitle className="text-base">Response Velocity</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <ResponseVelocityBadge days={data.avgResponseDays} />
+              <p className="text-xs text-muted-foreground mt-1">Avg days from loss date to first inspection</p>
+            </div>
+            {data.avgResolutionDays !== null && (
+              <div className="text-right">
+                <p className="text-sm font-semibold" data-testid="text-avg-resolution-days">{data.avgResolutionDays}d</p>
+                <p className="text-xs text-muted-foreground">Avg resolution</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Outcome Rates from Scorecard */}
+      {!data.insufficient && (
+        <Card data-testid="card-outcome-rates">
+          <CardHeader className="flex flex-row items-center gap-2 pb-3">
+            <BarChart3 className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-base">Outcome Rates</CardTitle>
+            <Badge variant="outline" className="ml-auto text-[10px]">{data.dataConfidence} confidence</Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Denial Rate</p>
+                <p className="text-sm font-semibold" data-testid="text-denial-rate-scorecard">{data.rates.denialRate != null ? `${data.rates.denialRate}%` : "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Overturn Rate</p>
+                <p className="text-sm font-semibold" data-testid="text-overturn-rate">{data.rates.overturnRate != null ? `${data.rates.overturnRate}%` : "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Approval Rate</p>
+                <p className="text-sm font-semibold">{data.rates.approvalRate != null ? `${data.rates.approvalRate}%` : "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Reinspection Rate</p>
+                <p className="text-sm font-semibold">{data.rates.reinspectionRate != null ? `${data.rates.reinspectionRate}%` : "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Escalation Rate</p>
+                <p className="text-sm font-semibold">{data.rates.escalationRate != null ? `${data.rates.escalationRate}%` : "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Claims Analyzed</p>
+                <p className="text-sm font-semibold">{data.linkedClaimCount}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Negotiation Signals */}
+      {data.negotiationSignals && data.negotiationSignals.length > 0 && (
+        <Card data-testid="card-negotiation-signals">
+          <CardHeader className="flex flex-row items-center gap-2 pb-3">
+            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-base">Negotiation Signals</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {data.negotiationSignals.map((signal, i) => (
+              <div key={i} className="flex items-start gap-2.5 rounded-md border border-border bg-muted/10 px-3 py-2.5 text-sm" data-testid={`text-negotiation-signal-${i}`}>
+                <MessageSquare className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+                <span>{signal}</span>
+              </div>
+            ))}
+            <p className="text-[10px] text-muted-foreground pt-1">Derived from behavioral patterns in linked claims. Not a guarantee of outcome.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Behavioral Signals */}
+      {data.behaviorSignals && data.behaviorSignals.length > 0 && (
+        <Card data-testid="card-behavior-signals">
+          <CardHeader className="flex flex-row items-center gap-2 pb-3">
+            <Activity className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-base">Behavioral Signals</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {data.behaviorSignals.map((s, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`text-behavior-signal-${i}`}>
+                <span className="text-primary">•</span>
+                <span>{s}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </>
+  );
+}
+
 function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () => void }) {
   const tracked = adjuster.totalClaimsTracked ?? 0;
   const basisNote =
@@ -188,6 +366,12 @@ function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () =
         <div className="flex items-center gap-2 ml-auto flex-wrap">
           {adjuster.isFieldAdjuster && <Badge variant="secondary" data-testid="badge-field-adjuster">Field</Badge>}
           {adjuster.isDeskAdjuster && <Badge variant="secondary" data-testid="badge-desk-adjuster">Desk</Badge>}
+          <Link href={`/adjusters/${adjuster.id}/report`}>
+            <Button variant="outline" size="sm" data-testid="button-download-intel-report">
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+              Intel Report
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -305,6 +489,9 @@ function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () =
           </div>
         </CardContent>
       </Card>
+
+      {/* Scorecard-derived cards: Response Velocity, Outcome Rates, Negotiation Signals */}
+      <ScorecardCards adjusterId={adjuster.id} />
 
       <LinkedClaimsCard adjusterId={adjuster.id} />
     </div>
@@ -487,16 +674,21 @@ export default function AdjustersPage() {
 
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-sm">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search adjusters..."
-            className="pl-9"
+            placeholder="Search adjusters…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 pr-8"
             data-testid="input-search-adjusters"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              data-testid="button-clear-search"
+            >
               <X className="w-4 h-4" />
             </button>
           )}
@@ -516,7 +708,7 @@ export default function AdjustersPage() {
               <Users className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
               <p className="text-muted-foreground font-medium">No adjusters found</p>
               <p className="text-sm text-muted-foreground/70 mb-4">
-                {searchQuery ? "Try adjusting your search" : "Add your first adjuster to start tracking"}
+                {searchQuery ? "Try adjusting your search" : "Add your first adjuster to start tracking behavioral patterns and negotiation signals."}
               </p>
               {!searchQuery && (
                 <Button variant="outline" onClick={() => setDialogOpen(true)} data-testid="button-empty-new-adjuster">

@@ -33,7 +33,9 @@ export interface AdjusterScorecard {
     approvalRate: number | null;
   };
   avgResolutionDays: number | null;
+  avgResponseDays: number | null;
   behaviorSignals: string[];
+  negotiationSignals: string[];
 }
 
 function resolutionDays(c: Claim): number | null {
@@ -41,6 +43,15 @@ function resolutionDays(c: Claim): number | null {
   const end = c.resolutionDate ? new Date(c.resolutionDate) : (c.determinationDate ? new Date(c.determinationDate) : null);
   if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) return null;
   const d = Math.round((end.getTime() - start.getTime()) / 86400000);
+  return d >= 0 ? d : null;
+}
+
+function responseDays(c: Claim): number | null {
+  // Days from date of loss to first inspection (first adjuster response)
+  const start = c.dateOfLoss ? new Date(c.dateOfLoss) : (c.lossDate ? new Date(c.lossDate) : null);
+  const firstResponse = c.inspectionDate ? new Date(c.inspectionDate) : null;
+  if (!start || !firstResponse || isNaN(start.getTime()) || isNaN(firstResponse.getTime())) return null;
+  const d = Math.round((firstResponse.getTime() - start.getTime()) / 86400000);
   return d >= 0 ? d : null;
 }
 
@@ -65,13 +76,16 @@ export function computeAdjusterScorecard(links: ClaimAdjuster[], claims: Claim[]
       counts: { initialDenials: 0, finalApprovals: 0, partialApprovals: 0, denialsOverturned: 0, reinspectionsRequested: 0, escalationsUsed: 0, paymentsReceived: 0 },
       rates: { denialRate: null, overturnRate: null, reinspectionRate: null, escalationRate: null, approvalRate: null },
       avgResolutionDays: null,
+      avgResponseDays: null,
       behaviorSignals: [],
+      negotiationSignals: [],
     };
   }
 
   let initialDenials = 0, finalApprovals = 0, partialApprovals = 0, denialsOverturned = 0;
   let reinspectionsRequested = 0, escalationsUsed = 0, paymentsReceived = 0;
   const resDays: number[] = [];
+  const respDays: number[] = [];
 
   for (const c of uniqueClaims) {
     if (isDenied(c.initialOutcome)) initialDenials++;
@@ -83,6 +97,8 @@ export function computeAdjusterScorecard(links: ClaimAdjuster[], claims: Claim[]
     if (c.paymentReceived === true) paymentsReceived++;
     const rd = resolutionDays(c);
     if (rd !== null) resDays.push(rd);
+    const rsp = responseDays(c);
+    if (rsp !== null) respDays.push(rsp);
   }
 
   const denialRate = pct(initialDenials, n);
@@ -91,6 +107,7 @@ export function computeAdjusterScorecard(links: ClaimAdjuster[], claims: Claim[]
   const escalationRate = pct(escalationsUsed, n);
   const approvalRate = pct(finalApprovals, n);
   const avgResolutionDays = resDays.length ? Math.round(resDays.reduce((s, d) => s + d, 0) / resDays.length) : null;
+  const avgResponseDays = respDays.length ? Math.round(respDays.reduce((s, d) => s + d, 0) / respDays.length) : null;
 
   const behaviorSignals: string[] = [];
   if (denialRate !== null && denialRate >= 50) behaviorSignals.push("High initial denial rate");
@@ -99,6 +116,38 @@ export function computeAdjusterScorecard(links: ClaimAdjuster[], claims: Claim[]
   if (escalationRate !== null && escalationRate >= 40) behaviorSignals.push("Escalation often required to resolve");
   if (approvalRate !== null && approvalRate >= 60) behaviorSignals.push("High eventual approval rate");
   if (avgResolutionDays !== null && avgResolutionDays >= 120) behaviorSignals.push("Long average resolution time");
+  if (avgResponseDays !== null && avgResponseDays > 30) behaviorSignals.push("Slow initial response — above 30-day threshold");
+
+  // ── Negotiation Signals ─ derived from behavioral patterns ─────────────
+  const negotiationSignals: string[] = [];
+
+  if (overturnRate !== null && overturnRate >= 50) {
+    negotiationSignals.push("Frequently reverses on reinspection — request reinspection early rather than supplementing first.");
+  }
+  if (reinspectionRate !== null && reinspectionRate >= 40) {
+    negotiationSignals.push("High reinspection rate — prepare complete documentation package before reinspection is scheduled.");
+  }
+  if (escalationRate !== null && escalationRate >= 40) {
+    negotiationSignals.push("Escalation commonly required — include escalation path (supervisor / DOI) in initial demand letter.");
+  }
+  if (denialRate !== null && denialRate >= 60 && (overturnRate === null || overturnRate < 30)) {
+    negotiationSignals.push("High denial rate with low overturn — prioritize code documentation and third-party expert opinions from the start.");
+  }
+  if (approvalRate !== null && approvalRate >= 70) {
+    negotiationSignals.push("Strong eventual approval rate — persistence and complete documentation packages yield results.");
+  }
+  if (avgResolutionDays !== null && avgResolutionDays >= 90) {
+    negotiationSignals.push("Long cycle times — set written deadlines in correspondence and reference state claims-handling statutes.");
+  }
+  if (avgResponseDays !== null && avgResponseDays > 14 && avgResponseDays <= 30) {
+    negotiationSignals.push("Moderate response velocity (14–30 days) — follow up with written confirmation after each contact.");
+  }
+  if (avgResponseDays !== null && avgResponseDays > 30) {
+    negotiationSignals.push("Slow response velocity (>30 days) — document each contact attempt and cite statutory response timeline in written follow-up.");
+  }
+  if (denialsOverturned >= 2 && initialDenials >= 3) {
+    negotiationSignals.push("Pattern of denial reversal — submit rebuttal package within 7 days of initial denial to minimize cycle time.");
+  }
 
   const dataConfidence: "low" | "medium" | "high" = n >= 10 ? "high" : n >= 5 ? "medium" : "low";
 
@@ -110,6 +159,8 @@ export function computeAdjusterScorecard(links: ClaimAdjuster[], claims: Claim[]
     counts: { initialDenials, finalApprovals, partialApprovals, denialsOverturned, reinspectionsRequested, escalationsUsed, paymentsReceived },
     rates: { denialRate, overturnRate, reinspectionRate, escalationRate, approvalRate },
     avgResolutionDays,
+    avgResponseDays,
     behaviorSignals,
+    negotiationSignals,
   };
 }

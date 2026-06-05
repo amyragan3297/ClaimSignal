@@ -1,4 +1,4 @@
-import type { Claim } from "@shared/schema";
+import type { Claim, EvidenceFile } from "@shared/schema";
 
 /**
  * Carrier Intelligence MVP
@@ -7,6 +7,13 @@ import type { Claim } from "@shared/schema";
  * Contains NO homeowner PII — only carrier-level behavioral patterns. Safe to
  * show to non-Master roles (and is the carrier-facing intelligence layer).
  */
+export interface LossTypeBreakdown {
+  lossType: string;
+  count: number;
+  approvalRate: number;
+  denialRate: number;
+}
+
 export interface CarrierIntelligence {
   carrierName: string;
   claimsCount: number;
@@ -26,6 +33,7 @@ export interface CarrierIntelligence {
   frictionIndex: number | null;
   regionPatterns: { region: string; count: number }[];
   behaviorNotes: string[];
+  byLossType: LossTypeBreakdown[];
   // Section 15 — Carrier Scorecard additions
   insufficient: boolean;
   dataConfidence: "low" | "medium" | "high";
@@ -35,6 +43,7 @@ export interface CarrierIntelligence {
   avgResolutionDays: number | null;
   deniedThenApprovedCount: number;
   commonSignals: string[];
+  dataSource: "your_claims" | "network";
 }
 
 function avg(nums: (number | null | undefined)[]): number | null {
@@ -70,7 +79,19 @@ function isDenied(c: Claim): boolean {
   return o.includes("deni") || !!c.denialReason;
 }
 
-export function computeCarrierIntelligence(claims: Claim[]): CarrierIntelligence[] {
+export function computeCarrierIntelligence(
+  claims: Claim[],
+  evidenceFiles: EvidenceFile[] = [],
+): CarrierIntelligence[] {
+  // Index evidence files by claimId for fast lookup (denial letters only)
+  const denialLettersByClaimId = new Map<string, EvidenceFile[]>();
+  for (const f of evidenceFiles) {
+    if (f.docCategory !== "denial_letter" || !f.claimId) continue;
+    const existing = denialLettersByClaimId.get(f.claimId) ?? [];
+    existing.push(f);
+    denialLettersByClaimId.set(f.claimId, existing);
+  }
+
   const byCarrier = new Map<string, Claim[]>();
   for (const c of claims) {
     const name = (c.carrier || "Unknown Carrier").trim();
@@ -97,12 +118,50 @@ export function computeCarrierIntelligence(claims: Claim[]): CarrierIntelligence
       return c.supplementAmountTotal ?? null;
     });
 
+    // ── Pull denial reasons from manual fields AND extracted documents ─────
+    const manualDenialReasons = group.map((c) => c.denialReason);
+    const documentDenialReasons: string[] = [];
+    for (const c of group) {
+      const letters = denialLettersByClaimId.get(c.id) ?? [];
+      for (const letter of letters) {
+        const extracted = letter.extractedJson as Record<string, unknown> | null;
+        if (!extracted) continue;
+        const reason = extracted.denialReason ?? extracted.denial_reason ?? extracted.reasonForDenial;
+        if (reason && typeof reason === "string" && reason.trim()) {
+          documentDenialReasons.push(reason.trim());
+        }
+      }
+    }
+    const allDenialReasons = [...manualDenialReasons, ...documentDenialReasons];
+    const commonDenialReasons = topCounts(allDenialReasons);
+
     const behaviorNotes: string[] = [];
     const denialRate = n ? denied / n : 0;
     if (denialRate >= 0.4) behaviorNotes.push("Elevated denial rate — front-load code & damage documentation.");
     if (supReq.length && supWon.length / supReq.length >= 0.5) behaviorNotes.push("Supplements succeed more often than not after documentation pressure.");
     if (escalated.length && escalationWon.length / escalated.length >= 0.5) behaviorNotes.push("Escalation/appraisal historically effective with this carrier.");
     if (n < 3) behaviorNotes.push("Low sample size — treat metrics as directional only.");
+
+    // ── Loss-type breakdown ────────────────────────────────────────────────
+    const byLossTypeMap = new Map<string, Claim[]>();
+    for (const c of group) {
+      const lt = (c.lossType || c.claimType || "Unknown").trim();
+      if (!byLossTypeMap.has(lt)) byLossTypeMap.set(lt, []);
+      byLossTypeMap.get(lt)!.push(c);
+    }
+    const byLossType: LossTypeBreakdown[] = Array.from(byLossTypeMap.entries())
+      .map(([lossType, ltClaims]) => {
+        const ltN = ltClaims.length;
+        const ltApproved = ltClaims.filter(isApproved).length;
+        const ltDenied = ltClaims.filter(isDenied).length;
+        return {
+          lossType,
+          count: ltN,
+          approvalRate: ltN ? Math.round((ltApproved / ltN) * 100) : 0,
+          denialRate: ltN ? Math.round((ltDenied / ltN) * 100) : 0,
+        };
+      })
+      .sort((a, b) => b.count - a.count);
 
     // ── Section 15 — Carrier Scorecard metrics (real data only)
     const overturned = group.filter((c) => c.denialOverturned === true).length;
@@ -141,7 +200,7 @@ export function computeCarrierIntelligence(claims: Claim[]): CarrierIntelligence
       escalationSuccessRate: escalated.length ? Math.round((escalationWon.length / escalated.length) * 100) / 100 : 0,
       escalationSampleSize: escalated.length,
       avgResponseTimeDays: avg(group.map((c) => c.lifecycleVelocityScore)),
-      commonDenialReasons: topCounts(group.map((c) => c.denialReason)),
+      commonDenialReasons,
       commonMissingScopeItems: topCounts(group.map((c) => c.vendorFinding)).map((x) => ({ item: x.reason, count: x.count })),
       avgRcv: avg(group.map((c) => c.rcvAmount ?? c.rcvTotal)),
       avgAcv: avg(group.map((c) => c.acvAmount ?? c.acvTotal)),
@@ -149,6 +208,7 @@ export function computeCarrierIntelligence(claims: Claim[]): CarrierIntelligence
       frictionIndex: avg(group.map((c) => c.frictionScore)),
       regionPatterns: topCounts(group.map((c) => c.state || c.city)).map((x) => ({ region: x.reason, count: x.count })),
       behaviorNotes,
+      byLossType,
       insufficient: n < 3,
       dataConfidence,
       overturnRate,
@@ -157,6 +217,7 @@ export function computeCarrierIntelligence(claims: Claim[]): CarrierIntelligence
       avgResolutionDays,
       deniedThenApprovedCount: deniedThenApproved,
       commonSignals,
+      dataSource: "your_claims",
     });
   }
   result.sort((a, b) => b.claimsCount - a.claimsCount);

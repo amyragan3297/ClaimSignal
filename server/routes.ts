@@ -25,7 +25,7 @@ import evidenceRouter from "./evidence";
 import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
-import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus, generatePlaybookEntry } from "./ai-services";
+import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus, generatePlaybookEntry, generateAiFallbackPlaybookRecs } from "./ai-services";
 import { getClaimWeather, geocodeZip, geocodeCity } from "./weather";
 import express from "express";
 import { createHash } from "crypto";
@@ -873,6 +873,60 @@ export async function registerRoutes(
 
   // Adjuster Scorecard (Section 14) — behavioral metrics from REAL linked claims.
   // Separate from cross-claim history; never fabricates; < 3 claims => insufficient.
+  // ── Adjuster Intel Report (print-friendly data endpoint) ──────────────────
+  app.get("/api/adjusters/:id/report", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const role = req.auth!.role;
+      const orgId = req.auth!.organizationId;
+      const adjusterId = req.params.id as string;
+
+      const adjuster = isMaster(role)
+        ? (await storage.getAdjusters(orgId)).find((a) => a.id === adjusterId) ||
+          (await storage.getAllAdjustersAcrossTenants()).find((a) => a.id === adjusterId)
+        : (await storage.getAdjusters(orgId)).find((a) => a.id === adjusterId);
+
+      if (!adjuster) return res.status(404).json({ message: "Adjuster not found" });
+
+      const links = isMaster(role)
+        ? await storage.getAdjusterClaims(adjusterId)
+        : await storage.getAdjusterClaims(adjusterId, orgId);
+      const allClaims = isMaster(role)
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
+
+      const scorecard = computeAdjusterScorecard(links, allClaims);
+
+      // Linked claims summary (masked — no PII in report)
+      const claimMap = new Map(allClaims.map((c) => [c.id, c]));
+      const linkedClaimsummary = Array.from(new Set(links.map((l) => l.claimId)))
+        .map((id) => {
+          const c = claimMap.get(id);
+          if (!c) return null;
+          return {
+            id: c.id,
+            carrier: c.carrier ?? null,
+            lossType: c.lossType ?? null,
+            status: c.status,
+            initialOutcome: c.initialOutcome ?? null,
+            finalOutcome: c.finalOutcome ?? null,
+            denialOverturned: c.denialOverturned ?? false,
+          };
+        })
+        .filter(Boolean);
+
+      await storage.createAuditLog({
+        organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
+        isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "ADJUSTER_REPORT_DOWNLOADED", entityType: "adjuster", entityId: adjusterId,
+        afterJson: { linkedClaimCount: scorecard.linkedClaimCount }, ipAddress: getClientIp(req),
+      });
+
+      res.json({ adjuster, scorecard, linkedClaims: linkedClaimsummary, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
   app.get("/api/adjusters/:id/scorecard", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
@@ -950,6 +1004,9 @@ export async function registerRoutes(
       const claims = isMaster(role)
         ? await storage.getAllClaimsAcrossTenants()
         : await storage.getClaims(orgId);
+      const evidenceFiles = isMaster(role)
+        ? await storage.getAllEvidenceFilesAcrossTenants()
+        : await storage.getEvidenceFiles(orgId);
       await storage.createAuditLog({
         organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
         isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
@@ -957,7 +1014,7 @@ export async function registerRoutes(
         afterJson: { scope: isMaster(role) ? "cross_tenant" : "tenant", carrierCount: undefined },
         ipAddress: getClientIp(req),
       });
-      res.json(computeCarrierIntelligence(claims));
+      res.json(computeCarrierIntelligence(claims, evidenceFiles));
     } catch (err) {
       res.status(400).json({ message: (err as Error).message });
     }
@@ -1184,8 +1241,11 @@ export async function registerRoutes(
       }).filter((x) => x.matchScore > 0).sort((a, b) => b.matchScore - a.matchScore).slice(0, 5);
 
       // AI strategy synthesis — runs after rule-based matching when OpenAI is available.
+      // If no library matches exist, fall back to pure AI recommendations.
       let aiStrategy = null;
+      let aiFallbackRecs: Array<{ playbook: { id: string; title: string; recommendedNextStep?: string | null; source?: string }; matchScore: number; matchReasons: string[] }> = [];
       let method = "rule-based";
+
       if (scored.length > 0 && isOpenAIConfigured()) {
         try {
           aiStrategy = await generatePlaybookStrategy(claim, scored.map((s) => s.playbook));
@@ -1194,15 +1254,36 @@ export async function registerRoutes(
           recordAiError("generatePlaybookStrategy", aiErr);
           console.error("[playbook-ai] strategy generation failed (non-fatal):", (aiErr as Error)?.message);
         }
+      } else if (scored.length === 0 && isOpenAIConfigured()) {
+        // No library matches — generate pure AI fallback recommendations
+        try {
+          const fallback = await generateAiFallbackPlaybookRecs(claim);
+          aiFallbackRecs = fallback.map((rec, i) => ({
+            playbook: {
+              id: `ai-fallback-${i}`,
+              title: rec.title,
+              recommendedNextStep: rec.recommendedNextStep,
+              source: "ai_generated",
+            },
+            matchScore: 0,
+            matchReasons: [rec.rationale],
+          }));
+          method = "AI-generated";
+        } catch (aiErr) {
+          recordAiError("generateAiFallbackPlaybookRecs", aiErr);
+          console.error("[playbook-ai] fallback generation failed (non-fatal):", (aiErr as Error)?.message);
+        }
       }
+
+      const allRecommendations = scored.length > 0 ? scored : aiFallbackRecs;
 
       await storage.createAuditLog({
         organizationId: orgId, actorUserId: req.auth!.userId, actorRole: role,
         isImpersonation: req.auth!.isImpersonation, impersonatorUserId: req.auth!.impersonatorUserId,
         actionType: "PLAYBOOK_RECOMMENDATION_GENERATED", entityType: "claim", entityId: claim.id,
-        afterJson: { count: scored.length, aiStrategy: !!aiStrategy }, ipAddress: getClientIp(req),
+        afterJson: { count: allRecommendations.length, aiStrategy: !!aiStrategy, aiFallback: aiFallbackRecs.length > 0 }, ipAddress: getClientIp(req),
       });
-      res.json({ method, recommendations: scored, aiStrategy });
+      res.json({ method, recommendations: allRecommendations, aiStrategy });
     } catch (err) {
       res.status(400).json({ message: (err as Error).message });
     }

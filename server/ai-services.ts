@@ -518,6 +518,63 @@ ${playbookContext}`;
   };
 }
 
+// ── Playbook: AI fallback recommendations (no library matches) ────────────────
+
+export interface AiFallbackRecommendation {
+  title: string;
+  recommendedNextStep: string;
+  rationale: string;
+  source: "ai_generated";
+}
+
+export async function generateAiFallbackPlaybookRecs(claim: Claim): Promise<AiFallbackRecommendation[]> {
+  const client = getOpenAIClient();
+  const carrier = claim.carrier || "the carrier";
+  const lossType = claim.lossType || claim.claimType || "the loss type";
+  const denialReason = claim.denialReason || null;
+  const phase = claim.currentPhase || claim.status || null;
+
+  const userPrompt = `You are an expert property insurance claims consultant. Generate 2-3 specific, actionable strategy recommendations for a claim with the following context. Do not reference any PII, homeowner names, or policy numbers. Return JSON with this exact shape:
+{
+  "recommendations": [
+    {
+      "title": "Short action title (max 8 words)",
+      "recommendedNextStep": "Specific actionable instruction (1-2 sentences)",
+      "rationale": "Why this tactic works for this carrier/loss type (1 sentence)"
+    }
+  ]
+}
+
+Claim context:
+- Carrier: ${carrier}
+- Loss Type: ${lossType}
+${denialReason ? `- Denial Reason: ${denialReason}` : ""}
+${phase ? `- Current Phase: ${phase}` : ""}
+
+Base recommendations only on the data provided. Be specific to the carrier and loss type where possible.`;
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    messages: [
+      { role: "system", content: "You are an expert property insurance claims consultant who generates specific tactical recommendations. Return only valid JSON." },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  const recs = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
+  return recs
+    .filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null && typeof r.title === "string")
+    .map((r) => ({
+      title: String(r.title),
+      recommendedNextStep: typeof r.recommendedNextStep === "string" ? r.recommendedNextStep : "",
+      rationale: typeof r.rationale === "string" ? r.rationale : "",
+      source: "ai_generated" as const,
+    }));
+}
+
 // ── Playbook: AI entry generation from seed inputs ────────────────────────────
 
 export interface GeneratedPlaybookEntry {
