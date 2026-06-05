@@ -49,6 +49,8 @@ import {
   Image as ImageIcon,
   Mail,
   AudioLines,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -181,6 +183,7 @@ export default function ClaimDetailPage() {
   const [suppDialogOpen, setSuppDialogOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [expandedFileIds, setExpandedFileIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: ircScreening } = useQuery({
@@ -223,7 +226,12 @@ export default function ClaimDetailPage() {
       setUploadOpen(false);
     },
     onError: (err: Error) => {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+      const msg = err.message || "";
+      if (msg.includes("already exists")) {
+        toast({ title: "Document already uploaded", description: "This file was previously uploaded. Try a different file.", variant: "destructive" });
+      } else {
+        toast({ title: "Upload failed", description: msg, variant: "destructive" });
+      }
       setUploadingFiles(false);
     },
   });
@@ -260,6 +268,20 @@ export default function ClaimDetailPage() {
       return res.json();
     },
     enabled: !!claimId,
+  });
+
+  const applyExtractionMutation = useMutation({
+    mutationFn: async (fileId: string) => {
+      const res = await apiRequest("POST", `/api/evidence/files/${fileId}/apply-extraction`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId] });
+      toast({ title: "Extraction applied to claim" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to apply extraction", description: err.message, variant: "destructive" });
+    },
   });
 
   interface PlaybookRecommendation {
@@ -1063,37 +1085,88 @@ export default function ClaimDetailPage() {
                   return FileText;
                 };
                 const FileIconComp = iconFor(file.docCategory || "unknown");
+                const isExpanded = expandedFileIds.has(file.id);
+                const extracted = (file.extractedJson as { extraction?: Record<string, unknown> } | null)?.extraction;
+                const hasExtraction = !!extracted && Object.keys(extracted).length > 0;
                 return (
-                  <div key={file.id} className="flex items-center gap-3 rounded-md border border-border p-3" data-testid={`evidence-file-${file.id}`}>
-                    <div className="flex items-center justify-center w-9 h-9 rounded-md bg-muted shrink-0">
-                      <FileIconComp className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate" data-testid={`evidence-name-${file.id}`}>{file.fileName}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline" className={`text-[10px] capitalize ${categoryColors[file.docCategory || "unknown"] || categoryColors.unknown}`}>
-                          {categoryLabel}
-                        </Badge>
-                        {file.confidence && file.confidence > 0 && (
-                          <span className="text-[10px] text-muted-foreground">AI confidence {Math.round(file.confidence * 100)}%</span>
+                  <div key={file.id} className="rounded-md border border-border" data-testid={`evidence-file-${file.id}`}>
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="flex items-center justify-center w-9 h-9 rounded-md bg-muted shrink-0">
+                        <FileIconComp className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate" data-testid={`evidence-name-${file.id}`}>{file.fileName}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className={`text-[10px] capitalize ${categoryColors[file.docCategory || "unknown"] || categoryColors.unknown}`}>
+                            {categoryLabel}
+                          </Badge>
+                          {file.confidence && file.confidence > 0 && (
+                            <span className="text-[10px] text-muted-foreground">AI confidence {Math.round(file.confidence * 100)}%</span>
+                          )}
+                          {file.extractionStatus === "complete" && (
+                            <span className="text-[10px] text-emerald-400">Extracted</span>
+                          )}
+                          {file.fileSize && (
+                            <span className="text-[10px] text-muted-foreground">{(file.fileSize / 1024).toFixed(0)} KB</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1">
+                        {file.storageUrl && (
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" asChild>
+                            <a href={file.storageUrl} target="_blank" rel="noreferrer" data-testid={`evidence-download-${file.id}`}>
+                              <Download className="w-3.5 h-3.5" />
+                            </a>
+                          </Button>
                         )}
-                        {file.extractionStatus === "complete" && (
-                          <span className="text-[10px] text-emerald-400">Extracted</span>
-                        )}
-                        {file.fileSize && (
-                          <span className="text-[10px] text-muted-foreground">{(file.fileSize / 1024).toFixed(0)} KB</span>
+                        {hasExtraction && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={() => {
+                              setExpandedFileIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(file.id)) next.delete(file.id);
+                                else next.add(file.id);
+                                return next;
+                              });
+                            }}
+                            data-testid={`evidence-toggle-${file.id}`}
+                          >
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </Button>
                         )}
                       </div>
                     </div>
-                    <div className="shrink-0 flex items-center gap-1">
-                      {file.storageUrl && (
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" asChild>
-                          <a href={file.storageUrl} target="_blank" rel="noreferrer" data-testid={`evidence-download-${file.id}`}>
-                            <Download className="w-3.5 h-3.5" />
-                          </a>
-                        </Button>
-                      )}
-                    </div>
+                    {isExpanded && hasExtraction && (
+                      <div className="px-3 pb-3 border-t border-border/50">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-3">
+                          {Object.entries(extracted).map(([key, value]) => {
+                            if (value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) return null;
+                            return (
+                              <div key={key} className="rounded bg-muted px-2 py-1.5">
+                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{key.replace(/([A-Z])/g, " $1").trim()}</p>
+                                <p className="text-xs font-medium truncate">{Array.isArray(value) ? value.join(", ") : String(value)}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-2 mt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => applyExtractionMutation.mutate(file.id)}
+                            disabled={applyExtractionMutation.isPending}
+                            data-testid={`evidence-apply-${file.id}`}
+                          >
+                            <Sparkles className="w-3 h-3 mr-1" />
+                            {applyExtractionMutation.isPending ? "Applying..." : "Apply to Claim"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

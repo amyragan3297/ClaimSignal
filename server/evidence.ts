@@ -532,9 +532,9 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     const sha256 = computeSha256(buffer);
     
     const existing = await storage.getEvidenceFileBySha256(sha256, organizationId);
-    if (existing) {
+    if (existing && existing.claimId === req.body.claimId) {
       return res.status(409).json({
-        message: "This document already exists",
+        message: "This document already exists on this claim",
         existingFile: existing,
         duplicate: true,
       });
@@ -1197,9 +1197,17 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       return res.status(400).json({ message: "File must be matched to a claim before applying extraction" });
     }
 
-    const { fields } = req.body as { fields: Record<string, string> };
-    if (!fields || typeof fields !== "object") {
-      return res.status(400).json({ message: "fields object required" });
+    const bodyFields = req.body.fields as Record<string, string> | undefined;
+    const fileExtraction = (file.extractedJson as { extraction?: Record<string, unknown> } | null)?.extraction;
+    const fields: Record<string, string> = bodyFields && typeof bodyFields === "object" && Object.keys(bodyFields).length > 0
+      ? bodyFields
+      : (fileExtraction
+          ? Object.fromEntries(
+              Object.entries(fileExtraction).map(([k, v]) => [k, v === null || v === undefined ? "" : String(v)])
+            )
+          : {});
+    if (Object.keys(fields).length === 0) {
+      return res.status(400).json({ message: "No extraction fields available to apply" });
     }
 
     const claim = master
