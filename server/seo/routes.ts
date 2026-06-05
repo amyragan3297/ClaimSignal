@@ -1,8 +1,11 @@
 import type { Express } from "express";
 import { getTermIndexHtml, getTermHtml } from "./glossary";
-import { getCarrierIndexHtml, getCarrierHtml } from "./carriers";
+import { getCarrierIndexHtml, getCarrierHtml, getCarrierBySlug } from "./carriers";
 import { getClaimPatternsIndexHtml, getCarrierClaimsIndexHtml, getCarrierLossTypeHtml } from "./claim-patterns";
 import { generateSitemap } from "./sitemap";
+import { computeCarrierIntelligence } from "../carrier-intelligence";
+import { storage } from "../storage";
+import type { CarrierProfile } from "./carriers";
 
 const HTML = "text/html; charset=utf-8";
 const XML = "application/xml; charset=utf-8";
@@ -44,8 +47,15 @@ export function registerSeoRoutes(app: Express): void {
     res.send(getCarrierIndexHtml());
   });
 
-  app.get("/carriers/:slug", (req, res) => {
-    const html = getCarrierHtml(req.params.slug as string);
+  app.get("/carriers/:slug", async (req, res) => {
+    const slug = req.params.slug as string;
+    // Look up live intelligence from the anonymized aggregate dataset
+    const allClaims = await storage.getAllClaimsAcrossTenants();
+    const allEvidence = await storage.getAllEvidenceFilesAcrossTenants();
+    const intelList = computeCarrierIntelligence(allClaims, allEvidence);
+    const profile = getCarrierBySlug(slug);
+    const intel = intelList.find((i) => fuzzyMatchCarrier(i.carrierName, profile));
+    const html = getCarrierHtml(slug, intel);
     if (!html) { res.status(404).end(); return; }
     res.setHeader("Content-Type", HTML);
     res.setHeader("Cache-Control", CACHE_STATIC);
@@ -74,4 +84,20 @@ export function registerSeoRoutes(app: Express): void {
     res.setHeader("Cache-Control", CACHE_STATIC);
     res.send(html);
   });
+}
+
+function normalizeCarrier(s: string): string {
+  return s.toLowerCase().replace(/[^a-z]+/g, "");
+}
+
+function fuzzyMatchCarrier(carrierName: string, profile?: CarrierProfile): boolean {
+  if (!profile) return false;
+  const dbNorm = normalizeCarrier(carrierName);
+  const nameNorm = normalizeCarrier(profile.name);
+  const shortNorm = normalizeCarrier(profile.shortName);
+  const slugNorm = normalizeCarrier(profile.slug);
+  // Substring match in either direction
+  return nameNorm.includes(dbNorm) || dbNorm.includes(nameNorm)
+    || shortNorm.includes(dbNorm) || dbNorm.includes(shortNorm)
+    || slugNorm.includes(dbNorm) || dbNorm.includes(slugNorm);
 }

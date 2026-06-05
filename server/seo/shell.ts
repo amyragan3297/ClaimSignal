@@ -207,11 +207,18 @@ a:hover { text-decoration: underline; }
 .section-title { font-size: 1.125rem; font-weight: 700; margin-bottom: 6px; }
 .section-sub { font-size: 14px; color: var(--fg2); margin-bottom: 24px; }
 
-/* Intelligence module placeholder */
+/* Intelligence module */
 .intel-module { background: var(--bg3); border: 1px dashed var(--border2); border-radius: var(--radius); padding: 20px; display: flex; align-items: center; gap: 14px; }
 .intel-module-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--primary); opacity: .15; flex-shrink: 0; }
 .intel-module-label { font-size: 13px; font-weight: 600; color: var(--fg2); }
 .intel-module-note { font-size: 12px; color: var(--fg2); opacity: .7; margin-top: 3px; }
+.intel-module.real { background: var(--bg2); border-style: solid; border-color: var(--border); }
+.intel-module-value { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg); min-width: 64px; text-align: right; }
+.intel-module-meta { flex: 1; }
+.intel-good { color: hsl(142,72%,55%) !important; }
+.intel-bad { color: hsl(0,72%,55%) !important; }
+.intel-warning { color: hsl(38,95%,65%) !important; }
+.intel-neutral { color: var(--fg2) !important; }
 
 /* Table */
 table { width: 100%; border-collapse: collapse; font-size: 14px; }

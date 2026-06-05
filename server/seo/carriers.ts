@@ -1,4 +1,5 @@
 import { ssrShell } from "./shell";
+import { type CarrierIntelligence } from "../carrier-intelligence";
 
 export interface CarrierProfile {
   slug: string;
@@ -385,6 +386,119 @@ function intelModulePlaceholder(label: string, description: string): string {
   </div>`;
 }
 
+function intelModuleCard(label: string, value: string, subtext: string, tone: "good" | "bad" | "neutral" | "warning" = "neutral"): string {
+  const toneMap = {
+    good: "intel-good",
+    bad: "intel-bad",
+    neutral: "intel-neutral",
+    warning: "intel-warning",
+  };
+  return `<div class="intel-module real">
+    <div class="intel-module-value">${value}</div>
+    <div class="intel-module-meta">
+      <div class="intel-module-label ${toneMap[tone]}">${label}</div>
+      <div class="intel-module-note">${subtext}</div>
+    </div>
+  </div>`;
+}
+
+export function buildIntelModules(intel: CarrierIntelligence | undefined): string {
+  if (!intel || intel.claimsCount === 0) {
+    return `<div style="display:flex;flex-direction:column;gap:12px;">
+      ${intelModulePlaceholder("Friction Score", "Average friction score across claims")}
+      ${intelModulePlaceholder("Approval Trend", "Supplement approval rate trend")}
+      ${intelModulePlaceholder("Escalation Success", "Escalation success rate")}
+      ${intelModulePlaceholder("Reinspection Frequency", "Reinspection rate")}
+      ${intelModulePlaceholder("Outcome Trend", "Claim outcome trend")}
+    </div>`;
+  }
+
+  const cards: string[] = [];
+
+  const frictionVal = intel.frictionIndex !== null ? intel.frictionIndex.toFixed(1) : null;
+  const frictionTone = frictionVal === null ? "neutral" : parseFloat(frictionVal) <= 4 ? "good" : parseFloat(frictionVal) <= 7 ? "warning" : "bad";
+  cards.push(intelModuleCard(
+    "Friction Score",
+    frictionVal ?? "—",
+    `Average across ${intel.claimsCount} ${intel.carrierName} claims` + (frictionVal ? ` · Lower = smoother` : ""),
+    frictionTone
+  ));
+
+  const approvalRate = intel.approvalRate !== undefined ? Math.round(intel.approvalRate * 100) : null;
+  const approvalTone = approvalRate === null ? "neutral" : approvalRate >= 60 ? "good" : approvalRate >= 40 ? "warning" : "bad";
+  cards.push(intelModuleCard(
+    "Approval Rate",
+    approvalRate !== null ? `${approvalRate}%` : "—",
+    `Initial claim approval rate across ${intel.claimsCount} claims`,
+    approvalTone
+  ));
+
+  const denialRate = intel.denialRate !== undefined ? Math.round(intel.denialRate * 100) : null;
+  const denialTone = denialRate === null ? "neutral" : denialRate <= 20 ? "good" : denialRate <= 40 ? "warning" : "bad";
+  cards.push(intelModuleCard(
+    "Denial Rate",
+    denialRate !== null ? `${denialRate}%` : "—",
+    `${intel.deniedThenApprovedCount} denials later overturned`,
+    denialTone
+  ));
+
+  const supRate = intel.supplementSuccessRate !== undefined ? Math.round(intel.supplementSuccessRate * 100) : null;
+  const supTone = supRate === null ? "neutral" : supRate >= 60 ? "good" : supRate >= 40 ? "warning" : "bad";
+  cards.push(intelModuleCard(
+    "Supplement Success",
+    supRate !== null && intel.supplementSampleSize > 0 ? `${supRate}%` : "—",
+    intel.supplementSampleSize > 0 ? `${intel.supplementSampleSize} supplement requests tracked` : "No supplement data yet",
+    supTone
+  ));
+
+  const escRate = intel.escalationSuccessRate !== undefined ? Math.round(intel.escalationSuccessRate * 100) : null;
+  const escTone = escRate === null ? "neutral" : escRate >= 50 ? "good" : escRate >= 30 ? "warning" : "bad";
+  cards.push(intelModuleCard(
+    "Escalation Success",
+    escRate !== null && intel.escalationSampleSize > 0 ? `${escRate}%` : "—",
+    intel.escalationSampleSize > 0 ? `${intel.escalationSampleSize} escalations tracked` : "No escalation data yet",
+    escTone
+  ));
+
+  const overturnRate = intel.overturnRate;
+  const overturnTone = overturnRate === null ? "neutral" : overturnRate >= 50 ? "good" : overturnRate >= 30 ? "warning" : "bad";
+  cards.push(intelModuleCard(
+    "Overturn Rate",
+    overturnRate !== null ? `${overturnRate}%` : "—",
+    `Denials overturned on challenge or escalation`,
+    overturnTone
+  ));
+
+  const reinspection = intel.reinspectionRate;
+  const reinspectionTone = reinspection === null ? "neutral" : reinspection >= 40 ? "warning" : "neutral";
+  cards.push(intelModuleCard(
+    "Reinspection Rate",
+    reinspection !== null ? `${reinspection}%` : "—",
+    `Claims requiring reinspection`,
+    reinspectionTone
+  ));
+
+  const resDays = intel.avgResolutionDays;
+  const resTone = resDays === null ? "neutral" : resDays <= 45 ? "good" : resDays <= 90 ? "warning" : "bad";
+  cards.push(intelModuleCard(
+    "Avg Resolution",
+    resDays !== null ? `${resDays} days` : "—",
+    `From date of loss to final outcome`,
+    resTone
+  ));
+
+  if (intel.commonSignals.length > 0) {
+    cards.push(`<div class="card" style="margin-top:8px;">
+      <div style="font-size:12px;font-weight:600;color:var(--fg2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Behavioral Signals</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${intel.commonSignals.map((s) => `<span class="badge badge-amber">${s}</span>`).join(" ")}
+      </div>
+    </div>`);
+  }
+
+  return `<div style="display:flex;flex-direction:column;gap:12px;">${cards.join("")}</div>`;
+}
+
 export function getCarrierIndexHtml(): string {
   const cards = CARRIERS.map(
     (c) => `<a href="/carriers/${c.slug}" class="card card-sm carrier-card">
@@ -451,9 +565,15 @@ export function getCarrierIndexHtml(): string {
   });
 }
 
-export function getCarrierHtml(slug: string): string | null {
+export function getCarrierHtml(slug: string, intel?: CarrierIntelligence): string | null {
   const carrier = getCarrierBySlug(slug);
   if (!carrier) return null;
+
+  const intelHtml = buildIntelModules(intel);
+
+  const dataConfidenceBadge = intel
+    ? `<span class="badge ${intel.dataConfidence === 'high' ? 'badge-green' : intel.dataConfidence === 'medium' ? 'badge-amber' : 'badge-muted'}">${intel.dataConfidence.charAt(0).toUpperCase() + intel.dataConfidence.slice(1)} confidence · ${intel.claimsCount} claims</span>`
+    : `<span class="badge badge-muted">No live data yet</span>`;
 
   const denialList = carrier.commonDenialReasons
     .map((r) => `<li>${r}</li>`)
@@ -491,7 +611,8 @@ export function getCarrierHtml(slug: string): string | null {
     </div>
 
     <div class="disclaimer">
-      This profile is <strong>educational and informational only</strong>, based on publicly available information. It is not legal advice. Individual outcomes vary by policy, region, and loss circumstances. Intelligence module metrics will populate as ClaimSignal accumulates sufficient anonymized aggregate data for this carrier.
+      This profile is <strong>educational and informational only</strong>, based on publicly available information and anonymized platform data where indicated. It is not legal advice. Individual outcomes vary by policy, region, and loss circumstances.
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${dataConfidenceBadge}</div>
     </div>
 
     <div class="grid-2" style="margin-bottom:40px;">
@@ -528,14 +649,8 @@ export function getCarrierHtml(slug: string): string | null {
 
     <div class="section" style="margin-bottom:40px;">
       <h2 class="section-title">Intelligence Modules</h2>
-      <p class="section-sub">Platform-derived behavioral intelligence for ${carrier.shortName}. Metrics populate as anonymized aggregate claim data accumulates.</p>
-      <div style="display:flex;flex-direction:column;gap:12px;">
-        ${intelModulePlaceholder("Friction Score", "Average friction score across " + carrier.shortName + " claims processed through ClaimSignal")}
-        ${intelModulePlaceholder("Approval Trend Score", "Supplement approval rate trend — rising, stable, or declining — over the past 12 months")}
-        ${intelModulePlaceholder("Escalation Success Rate", "Percentage of escalated " + carrier.shortName + " claims that produced a positive scope migration")}
-        ${intelModulePlaceholder("Reinspection Frequency", "How often reinspection requests are filed on " + carrier.shortName + " claims and the resulting outcome distribution")}
-        ${intelModulePlaceholder("Outcome Trend Analysis", "Directional trend in " + carrier.shortName + " claim outcomes — approval rates, denial overturn rates, average scope delta resolution")}
-      </div>
+      <p class="section-sub">Platform-derived behavioral intelligence for ${carrier.shortName}. ${intel ? `Sourced from ${intel.claimsCount} anonymized claims across the ClaimSignal network.` : "Metrics populate as anonymized aggregate claim data accumulates."}</p>
+      ${intelHtml}
     </div>
 
     ${
