@@ -45,16 +45,10 @@ import {
   Pencil,
   Upload,
   Paperclip,
-  File as FileIcon,
-  ShieldAlert,
   Code,
-  ChevronDown,
-  ChevronUp,
-  Minus,
   Image as ImageIcon,
   Mail,
   AudioLines,
-  Receipt,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
