@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking, maskExtractionData } from "./masking";
-import { extractClaimFieldsFromText, extractClaimFieldsFromImages, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
+import { extractClaimFieldsFromText, extractClaimFieldsFromImages, transcribeAudio, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
 import { renderPdfToImages } from "./pdf-render";
 
 interface AuthRequest extends Request {
@@ -87,7 +87,9 @@ function detectFileType(fileName: string): string {
   const ext = fileName.toLowerCase().split(".").pop();
   const map: Record<string, string> = {
     pdf: "pdf", jpg: "image", jpeg: "image", png: "image", gif: "image",
-    doc: "docx", docx: "docx", eml: "eml", msg: "msg", txt: "txt"
+    doc: "docx", docx: "docx", eml: "eml", msg: "msg", txt: "txt",
+    mp3: "audio", m4a: "audio", wav: "audio", webm: "audio",
+    ogg: "audio", aac: "audio", flac: "audio", mp4: "audio",
   };
   return map[ext || ""] || "other";
 }
@@ -558,6 +560,17 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       } catch (pdfErr: unknown) {
         console.error("[pdf-parse] failed to extract text:", (pdfErr as Error)?.message);
       }
+    } else if (fileType === "audio") {
+      if (isOpenAIConfigured()) {
+        try {
+          textContent = await transcribeAudio(buffer);
+          console.log(`[audio-transcribe] file="${req.file!.originalname}" transcript_length=${textContent.length}`);
+        } catch (audioErr: unknown) {
+          console.error("[audio-transcribe] non-fatal:", (audioErr as Error)?.message);
+        }
+      } else {
+        console.log(`[audio-transcribe] skipped — OpenAI not configured`);
+      }
     }
     
     const classification = classifyDocument(textContent);
@@ -671,7 +684,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       claimId: claimId || undefined,
       sourceType: "upload",
       fileName: req.file.originalname,
-      fileType: fileType as "pdf" | "image" | "docx" | "eml" | "msg" | "txt" | "other",
+      fileType: (fileType === "audio" ? "other" : fileType) as "pdf" | "image" | "docx" | "eml" | "msg" | "txt" | "other",
       sha256,
       fileSize: buffer.length,
       docCategory: effectiveCategory as "denial_letter" | "estimate" | "scope" | "supplement" | "payment_letter" | "invoice" | "photo_report" | "policy" | "email_thread" | "unknown",
@@ -740,6 +753,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         supplementRequested:      "supplementRequested",
         supplementApproved:       "supplementApproved",
         recoverableDepreciation:  "recoverableDepreciation",
+        approvedAmount:           "approvedAmount",
         denialReason:             "denialReason",
         initialOutcome:           "initialOutcome",
         finalOutcome:             "finalOutcome",
@@ -751,7 +765,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       const DATE_APPLY_KEYS = new Set(["dateOfLoss", "inspectionDate"]);
       const NUMERIC_APPLY_KEYS = new Set([
         "rcv", "acv", "deductible", "supplementRequested",
-        "supplementApproved", "recoverableDepreciation",
+        "supplementApproved", "recoverableDepreciation", "approvedAmount",
       ]);
 
       const claimUpdate: Record<string, string | number | Date> = {};
@@ -1267,6 +1281,7 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       supplementRequested: "supplementRequested",
       supplementApproved: "supplementApproved",
       recoverableDepreciation: "recoverableDepreciation",
+      approvedAmount: "approvedAmount",
       denialReason: "denialReason",
       initialOutcome: "initialOutcome",
       finalOutcome: "finalOutcome",
@@ -1275,7 +1290,7 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       adjusterPhone: "adjusterPhone",
     };
     const DATE_KEYS = new Set(["dateOfLoss", "inspectionDate"]);
-    const NUMERIC_KEYS = new Set(["rcv", "acv", "deductible", "supplementRequested", "supplementApproved", "recoverableDepreciation"]);
+    const NUMERIC_KEYS = new Set(["rcv", "acv", "deductible", "supplementRequested", "supplementApproved", "recoverableDepreciation", "approvedAmount"]);
 
     const claimUpdate: Record<string, unknown> = {};
     for (const [exKey, claimKey] of Object.entries(FIELD_MAP)) {

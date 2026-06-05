@@ -236,6 +236,7 @@ export interface ExtractionResult {
   recoverableDepreciation?: string;
   supplementRequested?: string;
   supplementApproved?: string;
+  approvedAmount?: string;
   denialReason?: string;
   initialOutcome?: string;
   finalOutcome?: string;
@@ -286,6 +287,7 @@ const EXTRACTION_SCHEMA = `{
   "recoverableDepreciation": "recoverable depreciation as decimal string",
   "supplementRequested": "supplement amount requested as decimal string",
   "supplementApproved": "supplement amount approved as decimal string",
+  "approvedAmount": "total approved or settled payment amount as decimal string e.g. '5000.00'",
   "denialReason": "reason for denial or coverage exclusion",
   "initialOutcome": "one of: approved | denied | partial | pending",
   "finalOutcome": "one of: approved | denied | partial | pending",
@@ -321,6 +323,7 @@ function parseExtractionResponse(raw: string): ExtractionResult {
     "propertyAddress", "city", "state", "zipCode",
     "dateOfLoss", "inspectionDate", "estimateDate", "denialDate", "approvalDate", "paymentDate",
     "rcv", "acv", "deductible", "recoverableDepreciation", "supplementRequested", "supplementApproved",
+    "approvedAmount",
     "denialReason", "initialOutcome", "finalOutcome", "documentType",
   ];
   for (const key of textFields) {
