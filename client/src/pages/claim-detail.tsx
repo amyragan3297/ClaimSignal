@@ -240,7 +240,12 @@ export default function ClaimDetailPage() {
     if (!files || files.length === 0) return;
     setUploadingFiles(true);
     for (const file of Array.from(files)) {
-      await uploadMutation.mutateAsync(file);
+      try {
+        await uploadMutation.mutateAsync(file);
+      } catch {
+        // onError in the mutation already shows the toast — just prevent the
+        // unhandled rejection from surfacing in Vite's runtime error overlay
+      }
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
