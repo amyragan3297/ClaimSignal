@@ -183,10 +183,6 @@ export default function ClaimDetailPage() {
   const [suppDialogOpen, setSuppDialogOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [expandedFileIds, setExpandedFileIds] = useState<Set<string>>(new Set());
-  const [editingFileId, setEditingFileId] = useState<string | null>(null);
-  const [editFileName, setEditFileName] = useState("");
-  const [dragOver, setDragOver] = useState(false);
-  const [patternDialogOpen, setPatternDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: ircScreening } = useQuery({
@@ -286,14 +282,13 @@ export default function ClaimDetailPage() {
     },
   });
 
-  const renameFileMutation = useMutation({
+  const _renameFileMutation = useMutation({
     mutationFn: async ({ fileId, fileName }: { fileId: string; fileName: string }) => {
       const res = await apiRequest("PATCH", `/api/evidence/files/${fileId}`, { fileName });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files", claimId] });
-      setEditingFileId(null);
       toast({ title: "File renamed" });
     },
     onError: (err: Error) => {
@@ -301,7 +296,7 @@ export default function ClaimDetailPage() {
     },
   });
 
-  const deleteFileMutation = useMutation({
+  const _deleteFileMutation = useMutation({
     mutationFn: async (fileId: string) => {
       await apiRequest("DELETE", `/api/evidence/files/${fileId}/permanent`);
     },

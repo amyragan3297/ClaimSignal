@@ -8,8 +8,6 @@ import type { Claim } from "@shared/schema";
 
 export { isOpenAIConfigured };
 
-export type { ClaimAnalysis };
-export type { GeneratedPlaybookEntry };
 
 // the newest OpenAI model is "gpt-5.4" — do not change unless explicitly requested.
 const ANALYSIS_MODEL = "gpt-5.4";
@@ -764,7 +762,7 @@ Return JSON with this exact shape:
   "confidence": 0.0-1.0 (how confident the analysis is based on data quality)
 }
 
-Keep patterns to 3-5 items. Top strategies to 3-5. Common documentation to 3-5. Base everything ONLY on the data provided. Do not invent.";
+Keep patterns to 3-5 items. Top strategies to 3-5. Common documentation to 3-5. Base everything ONLY on the data provided. Do not invent.`;
 
   const completion = await client.chat.completions.create({
     model: ANALYSIS_MODEL,

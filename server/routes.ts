@@ -1624,7 +1624,7 @@ export async function registerRoutes(
 
       const allFiles = isMaster(role)
         ? await storage.getAllEvidenceFilesAcrossTenants()
-        : await storage.getEvidenceFilesByOrgId(orgId);
+        : await storage.getEvidenceFiles(orgId);
 
       const allEvents = isMaster(role)
         ? await storage.getAllTimelineEvents()
@@ -1641,10 +1641,10 @@ export async function registerRoutes(
         deniedThenApproved.slice(0, 20).map(async (c) => {
           const links = await storage.getClaimAdjusters(c.id, isMaster(role) ? undefined : orgId);
           const adjusterNames = links.map((l) => adjById.get(l.adjusterId)).filter(Boolean) as string[];
-          const claimFiles = allFiles.filter((f) => f.claimId === c.id);
-          const evidenceCategories = [...new Set(claimFiles.map((f) => f.docCategory).filter(Boolean))];
-          const claimEvents = allEvents.filter((e) => e.claimId === c.id);
-          const timelinePhases = [...new Set(claimEvents.map((e) => e.eventType).filter(Boolean))];
+          const claimFiles = allFiles.filter((f: { claimId: string | null }) => f.claimId === c.id);
+          const evidenceCategories = Array.from(new Set(claimFiles.map((f: { docCategory: string | null }) => f.docCategory).filter((v): v is string => v !== null)));
+          const claimEvents = allEvents.filter((e: { claimId: string | null }) => e.claimId === c.id);
+          const timelinePhases = Array.from(new Set(claimEvents.map((e: { eventType: string }) => e.eventType).filter(Boolean)));
           return {
             carrier: c.carrier || "Unknown",
             lossType: c.lossType || undefined,
