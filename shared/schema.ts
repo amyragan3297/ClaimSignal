@@ -223,6 +223,9 @@ export const claims = pgTable("claims", {
   transcriptStatus: text("transcript_status"),
   stormReportStatus: text("storm_report_status"),
 
+  // IICRC S500 documentation checklist
+  documentationChecklist: json("documentation_checklist"),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   archivedAt: timestamp("archived_at"),

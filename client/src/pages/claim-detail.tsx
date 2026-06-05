@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, getAccessToken } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -470,6 +471,19 @@ export default function ClaimDetailPage() {
       playbookForm.reset();
     },
     onError: (err: Error) => toast({ title: "Failed to capture playbook", description: err.message, variant: "destructive" }),
+  });
+
+  // ── Documentation Checklist (IICRC S500) ──
+  const checklistMutation = useMutation({
+    mutationFn: async (data: Record<string, boolean>) => {
+      const res = await apiRequest("PATCH", `/api/claims/${claimId}/checklist`, { checklist: data });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId] });
+      toast({ title: "Checklist updated" });
+    },
+    onError: (err: Error) => toast({ title: "Checklist update failed", description: err.message, variant: "destructive" }),
   });
 
   const handleExport = async (type: string, format: string) => {
@@ -1044,6 +1058,73 @@ export default function ClaimDetailPage() {
       </div>
 
       <ClaimAdjustersCard claimId={claim.id} canEdit={userRole !== "carrier_analyst"} />
+
+      {/* ── Documentation Checklist (IICRC S500) ── */}
+      {(() => {
+        const CHECKLIST_ITEMS = [
+          { key: "pre_damage_photos", label: "Pre-damage photos & videos", tooltip: "Before any cleanup or mitigation begins" },
+          { key: "moisture_map", label: "Moisture mapping / psychrometric readings", tooltip: "IICRC S500 standard: daily moisture logs and dehumidifier readings" },
+          { key: "scope_of_work", label: "Scope of work / estimate (Xactimate)", tooltip: "Line-by-line estimate with local market pricing" },
+          { key: "equipment_logs", label: "Equipment placement logs & timestamps", tooltip: "Document every piece of drying equipment, placement date, and removal date" },
+          { key: "post_damage_photos", label: "Post-damage photos & after photos", tooltip: "Show pre-loss condition vs. post-mitigation result" },
+          { key: "insurance_correspondence", label: "Insurance correspondence (emails / letters)", tooltip: "Timestamped proof of every communication with the carrier" },
+          { key: "third_party_reports", label: "Third-party reports (indoor air quality, mold, structural)", tooltip: "Independent lab or engineering reports when applicable" },
+          { key: "materials_invoice", label: "Materials invoices & receipts", tooltip: "Proof of materials purchased and used on the job" },
+          { key: "permits", label: "Permits & code compliance documentation", tooltip: "Required permits and any code-upgrade documentation" },
+          { key: "certification", label: "Contractor certification (IICRC / OSHA)", tooltip: "Proof of certified firm status for credibility with insurers" },
+        ];
+        const saved = (claim.documentationChecklist as Record<string, boolean> | null) || {};
+        const completed = CHECKLIST_ITEMS.filter((i) => saved[i.key]).length;
+        const pct = Math.round((completed / CHECKLIST_ITEMS.length) * 100);
+        return (
+          <Card data-testid="card-documentation-checklist">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <ListChecks className="w-4 h-4 text-primary" />
+                Documentation Checklist
+                <Badge variant={pct === 100 ? "default" : "secondary"} className="text-[10px]">
+                  {completed}/{CHECKLIST_ITEMS.length}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {CHECKLIST_ITEMS.map((item) => {
+                  const checked = !!saved[item.key];
+                  return (
+                    <label
+                      key={item.key}
+                      className="flex items-start gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                      data-testid={`checklist-item-${item.key}`}
+                      title={item.tooltip}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          checklistMutation.mutate({ [item.key]: v === true });
+                        }}
+                        data-testid={`checklist-checkbox-${item.key}`}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-sm ${checked ? "text-muted-foreground line-through" : "text-foreground"}`}>
+                          {item.label}
+                        </span>
+                        <p className="text-[11px] text-muted-foreground">{item.tooltip}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              {pct < 100 && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  Insufficient documentation is the #1 claim denial trigger. Every item checked is a step toward a bulletproof claim.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* ── Documents & Evidence ── */}
       <Card data-testid="card-evidence">

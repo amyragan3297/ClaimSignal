@@ -2814,6 +2814,21 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
+  // ─── Section 18b: Documentation Checklist ───────────────────────────────
+  app.patch("/api/claims/:id/checklist", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
+    try {
+      const { organizationId: orgId } = req.auth!;
+      const { id: claimId } = req.params as Record<string, string>;
+      const { checklist } = req.body as { checklist: Record<string, boolean> };
+      const claim = await storage.getClaim(claimId, orgId);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+      const existing = (claim.documentationChecklist as Record<string, boolean> | null) || {};
+      const merged = { ...existing, ...checklist };
+      await storage.updateClaim(claimId, orgId, { documentationChecklist: merged });
+      res.json({ updated: true, checklist: merged });
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
+  });
+
   // ─── Section 19: Escalation CRUD + Intelligence ───────────────────────────
   app.get("/api/claims/:id/escalations", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
     try {
