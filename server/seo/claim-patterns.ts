@@ -73,7 +73,7 @@ export function getClaimPatternsIndexHtml(): string {
     title: "Property Insurance Claim Patterns by Carrier | ClaimSignal",
     description:
       "Property insurance claim handling intelligence by carrier and loss type — hail, wind, water, fire, and more. Documentation strategies, denial patterns, and escalation approaches for major U.S. carriers.",
-    canonical: "https://claimsignal.com/claims",
+    canonical: "https://ClaimSignalOne.com/claims",
     breadcrumbs: [{ label: "Claim Patterns" }],
     body,
   });
@@ -118,7 +118,7 @@ export function getCarrierClaimsIndexHtml(carrierSlug: string): string | null {
   return ssrShell({
     title: `${carrier.name} Claim Patterns by Loss Type | ClaimSignal`,
     description: `Claim handling intelligence for ${carrier.name} by loss type — hail, wind, water, fire, and more. Documentation strategies and escalation approaches.`,
-    canonical: `https://claimsignal.com/claims/${carrier.slug}`,
+    canonical: `https://ClaimSignalOne.com/claims/${carrier.slug}`,
     breadcrumbs: [
       { label: "Claim Patterns", href: "/claims" },
       { label: carrier.name },
@@ -231,7 +231,7 @@ export function getCarrierLossTypeHtml(carrierSlug: string, lossSlug: string): s
   return ssrShell({
     title: `${carrier.name} ${lossLabel} Claims — Handling Patterns & Strategy | ClaimSignal`,
     description: `Claim handling patterns, documentation strategies, common denial reasons, and escalation guidance for ${lossLabel.toLowerCase()} claims with ${carrier.name}.`,
-    canonical: `https://claimsignal.com/claims/${carrier.slug}/${lossSlug}`,
+    canonical: `https://ClaimSignalOne.com/claims/${carrier.slug}/${lossSlug}`,
     breadcrumbs: [
       { label: "Claim Patterns", href: "/claims" },
       { label: carrier.name, href: `/claims/${carrier.slug}` },
@@ -242,7 +242,7 @@ export function getCarrierLossTypeHtml(carrierSlug: string, lossSlug: string): s
       "@type": "WebPage",
       name: `${carrier.name} ${lossLabel} Claims`,
       description: `Claim handling intelligence for ${lossLabel.toLowerCase()} claims with ${carrier.name}`,
-      url: `https://claimsignal.com/claims/${carrier.slug}/${lossSlug}`,
+      url: `https://ClaimSignalOne.com/claims/${carrier.slug}/${lossSlug}`,
       dateModified: new Date().toISOString().split("T")[0],
     },
     body,

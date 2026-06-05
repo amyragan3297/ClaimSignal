@@ -546,19 +546,19 @@ export function getCarrierIndexHtml(): string {
     title: "Property Insurance Carrier Profiles | ClaimSignal",
     description:
       "Educational profiles for major U.S. property insurance carriers — claim handling patterns, supplement strategies, escalation approaches, and documentation requirements for State Farm, Allstate, USAA, Travelers, Farmers, and more.",
-    canonical: "https://claimsignal.com/carriers",
+    canonical: "https://ClaimSignalOne.com/carriers",
     breadcrumbs: [{ label: "Carrier Intelligence" }],
     schemaJson: {
       "@context": "https://schema.org",
       "@type": "ItemList",
       name: "Property Insurance Carrier Profiles",
       description: "Educational profiles for major U.S. property insurance carriers",
-      url: "https://claimsignal.com/carriers",
+      url: "https://ClaimSignalOne.com/carriers",
       itemListElement: CARRIERS.map((c, i) => ({
         "@type": "ListItem",
         position: i + 1,
         name: c.name,
-        url: `https://claimsignal.com/carriers/${c.slug}`,
+        url: `https://ClaimSignalOne.com/carriers/${c.slug}`,
       })),
     },
     body,
@@ -674,7 +674,7 @@ export function getCarrierHtml(slug: string, intel?: CarrierIntelligence): strin
   return ssrShell({
     title: `${carrier.name} — Property Insurance Carrier Profile | ClaimSignal`,
     description: `Educational profile for ${carrier.name}: claim handling patterns, supplement strategies, common denial reasons, escalation approach, and documentation tips for property insurance claims.`,
-    canonical: `https://claimsignal.com/carriers/${carrier.slug}`,
+    canonical: `https://ClaimSignalOne.com/carriers/${carrier.slug}`,
     breadcrumbs: [
       { label: "Carrier Intelligence", href: "/carriers" },
       { label: carrier.name },
@@ -684,7 +684,7 @@ export function getCarrierHtml(slug: string, intel?: CarrierIntelligence): strin
       "@type": "WebPage",
       name: `${carrier.name} — Carrier Profile`,
       description: `Educational property insurance claim handling profile for ${carrier.name}`,
-      url: `https://claimsignal.com/carriers/${carrier.slug}`,
+      url: `https://ClaimSignalOne.com/carriers/${carrier.slug}`,
       dateModified: new Date().toISOString().split("T")[0],
     },
     body,

@@ -2,7 +2,7 @@ import { TERMS } from "./glossary";
 import { CARRIERS } from "./carriers";
 import { LOSS_TYPES } from "./claim-patterns";
 
-const BASE = "https://claimsignal.com";
+const BASE = "https://ClaimSignalOne.com";
 
 function url(loc: string, priority: string, changefreq: string): string {
   return `  <url>

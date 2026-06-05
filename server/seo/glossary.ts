@@ -388,20 +388,20 @@ export function getTermIndexHtml(): string {
     title: "Property Insurance Claims Intelligence Glossary | ClaimSignal",
     description:
       "Definitions and explanations of friction scoring, scope delta, escalation architecture, lifecycle velocity, and other key metrics used in property insurance claims intelligence.",
-    canonical: "https://claimsignal.com/learn",
+    canonical: "https://ClaimSignalOne.com/learn",
     breadcrumbs: [{ label: "Intelligence Glossary" }],
     schemaJson: {
       "@context": "https://schema.org",
       "@type": "DefinedTermSet",
       name: "ClaimSignal Property Insurance Claims Glossary",
       description: "Key terms and concepts in property insurance claims intelligence.",
-      url: "https://claimsignal.com/learn",
+      url: "https://ClaimSignalOne.com/learn",
       hasDefinedTerm: TERMS.map((t) => ({
         "@type": "DefinedTerm",
         name: t.term,
         description: t.shortDef,
-        url: `https://claimsignal.com/learn/${t.slug}`,
-        inDefinedTermSet: "https://claimsignal.com/learn",
+        url: `https://ClaimSignalOne.com/learn/${t.slug}`,
+        inDefinedTermSet: "https://ClaimSignalOne.com/learn",
       })),
     },
     body,
@@ -478,7 +478,7 @@ export function getTermHtml(slug: string): string | null {
   return ssrShell({
     title: `${term.term} — Property Insurance Claims Glossary | ClaimSignal`,
     description: term.shortDef,
-    canonical: `https://claimsignal.com/learn/${term.slug}`,
+    canonical: `https://ClaimSignalOne.com/learn/${term.slug}`,
     breadcrumbs: [
       { label: "Intelligence Glossary", href: "/learn" },
       { label: term.term },
@@ -488,11 +488,11 @@ export function getTermHtml(slug: string): string | null {
       "@type": "DefinedTerm",
       name: term.term,
       description: term.shortDef,
-      url: `https://claimsignal.com/learn/${term.slug}`,
+      url: `https://ClaimSignalOne.com/learn/${term.slug}`,
       inDefinedTermSet: {
         "@type": "DefinedTermSet",
         name: "ClaimSignal Property Insurance Claims Glossary",
-        url: "https://claimsignal.com/learn",
+        url: "https://ClaimSignalOne.com/learn",
       },
     },
     body,

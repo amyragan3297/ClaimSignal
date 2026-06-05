@@ -22,7 +22,7 @@ export function registerSeoRoutes(app: Express): void {
   app.get("/robots.txt", (_req, res) => {
     res.setHeader("Content-Type", "text/plain");
     res.setHeader("Cache-Control", CACHE_STATIC);
-    res.send(`User-agent: *\nAllow: /\nSitemap: https://claimsignal.com/sitemap.xml\n`);
+    res.send(`User-agent: *\nAllow: /\nSitemap: https://ClaimSignalOne.com/sitemap.xml\n`);
   });
 
   // ── Glossary ───────────────────────────────────────────────────────────────
