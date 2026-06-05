@@ -752,8 +752,11 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         deductible:               "deductible",
         supplementRequested:      "supplementRequested",
         supplementApproved:       "supplementApproved",
+        supplementTotal:          "supplementAmountTotal",
         recoverableDepreciation:  "recoverableDepreciation",
         approvedAmount:           "approvedAmount",
+        claimAmount:              "claimAmount",
+        finalPaid:                "finalPaidAmount",
         denialReason:             "denialReason",
         initialOutcome:           "initialOutcome",
         finalOutcome:             "finalOutcome",
@@ -765,7 +768,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       const DATE_APPLY_KEYS = new Set(["dateOfLoss", "inspectionDate"]);
       const NUMERIC_APPLY_KEYS = new Set([
         "rcv", "acv", "deductible", "supplementRequested",
-        "supplementApproved", "recoverableDepreciation", "approvedAmount",
+        "supplementApproved", "supplementTotal", "recoverableDepreciation",
+        "approvedAmount", "claimAmount", "finalPaid",
       ]);
 
       const claimUpdate: Record<string, string | number | Date> = {};
@@ -1280,8 +1284,11 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       deductible: "deductible",
       supplementRequested: "supplementRequested",
       supplementApproved: "supplementApproved",
+      supplementTotal: "supplementAmountTotal",
       recoverableDepreciation: "recoverableDepreciation",
       approvedAmount: "approvedAmount",
+      claimAmount: "claimAmount",
+      finalPaid: "finalPaidAmount",
       denialReason: "denialReason",
       initialOutcome: "initialOutcome",
       finalOutcome: "finalOutcome",
@@ -1290,7 +1297,7 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       adjusterPhone: "adjusterPhone",
     };
     const DATE_KEYS = new Set(["dateOfLoss", "inspectionDate"]);
-    const NUMERIC_KEYS = new Set(["rcv", "acv", "deductible", "supplementRequested", "supplementApproved", "recoverableDepreciation", "approvedAmount"]);
+    const NUMERIC_KEYS = new Set(["rcv", "acv", "deductible", "supplementRequested", "supplementApproved", "supplementTotal", "recoverableDepreciation", "approvedAmount", "claimAmount", "finalPaid"]);
 
     const claimUpdate: Record<string, unknown> = {};
     for (const [exKey, claimKey] of Object.entries(FIELD_MAP)) {
