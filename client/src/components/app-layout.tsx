@@ -29,7 +29,6 @@ import {
   Loader2,
   Lock,
   Users,
-  UserCircle,
   AlertTriangle,
   FileSearch,
   CloudLightning,
@@ -168,7 +167,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     {navItem("Audio / Transcripts", "/audio", Mic)}
                     {navItem("Communications", "/communications", MessageSquare)}
                     {navItem("Storm Events", "/storm-events", CloudLightning)}
-                    {navItem("Clients", "/clients", UserCircle)}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>

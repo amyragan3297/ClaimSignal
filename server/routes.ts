@@ -630,14 +630,19 @@ export async function registerRoutes(
   app.delete("/api/claims/:id", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
-      const existing = await storage.getClaim(req.params.id as string, orgId);
+      // Master can delete cross-tenant — try own org first, then any tenant
+      let existing = await storage.getClaim(req.params.id as string, orgId);
+      if (!existing) {
+        existing = await storage.getClaimAnyTenant(req.params.id as string);
+      }
       if (!existing) return res.status(404).json({ message: "Claim not found" });
 
-      const deleted = await storage.softDeleteClaim(req.params.id as string, orgId);
+      // Use the claim's actual orgId (not Master's) so the WHERE clause matches
+      const deleted = await storage.softDeleteClaim(req.params.id as string, existing.organizationId);
       if (!deleted) return res.status(404).json({ message: "Claim not found" });
 
       await storage.createAuditLog({
-        organizationId: orgId,
+        organizationId: existing.organizationId,
         actorUserId: req.auth!.userId,
         actorRole: req.auth!.role,
         actionType: "CLAIM_DELETED",

@@ -458,9 +458,13 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async softDeleteClaim(id: string, orgId: string): Promise<boolean> {
+  async softDeleteClaim(id: string, orgId: string | undefined): Promise<boolean> {
     const result = await db.update(claims).set({ deletedAt: new Date() }).where(
-      and(eq(claims.id, id), eq(claims.organizationId, orgId), isNull(claims.deletedAt))
+      and(
+        eq(claims.id, id),
+        orgId ? eq(claims.organizationId, orgId) : undefined,
+        isNull(claims.deletedAt)
+      )
     ).returning();
     return result.length > 0;
   }
