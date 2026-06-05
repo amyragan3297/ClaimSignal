@@ -804,6 +804,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     // whether LLM extraction succeeded. Adjuster linkage is best-effort; the
     // AI analysis clear always runs so the next claim-detail load reruns the
     // suggestion rather than serving a suggestion that predates the new evidence.
+    let adjusterAutoLinked = false;
+    let adjusterAutoLinkedName: string | null = null;
     if (claimId && matchedClaim) {
       // Adjuster auto-link (only when extraction produced a name)
       if (llmExtraction) {
@@ -834,6 +836,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
               sourceType: "document",
               sourceDocumentId: evidenceFile.id,
             });
+            adjusterAutoLinked = true;
+            adjusterAutoLinkedName = adjNameStr;
             console.log(`[adjuster-extract] linked adjuster "${adjNameStr}" to existing claim ${claimId}`);
           } catch (adjErr: unknown) {
             console.error("[adjuster-extract] non-fatal:", (adjErr as Error)?.message);
@@ -929,6 +933,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       matchReasons: ranked[0]?.reasons || [],
       createdClaim,
       autoAppliedFields,
+      adjusterAutoLinked,
+      adjusterName: adjusterAutoLinkedName,
     });
   } catch (err) {
     console.error("Evidence upload error:", err);
