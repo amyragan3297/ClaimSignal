@@ -648,6 +648,7 @@ export default function EvidencePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/adjusters"] });
       toast({ title: "File uploaded successfully" });
     } catch (err: unknown) {
       toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });

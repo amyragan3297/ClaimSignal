@@ -288,6 +288,7 @@ function CreateClaimDialog({
       populateFields(result.extraction);
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/adjusters"] });
       setMode("review");
     } catch (err: unknown) {
       toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
