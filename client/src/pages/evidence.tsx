@@ -1,19 +1,10 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -21,25 +12,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, getAccessToken } from "@/lib/queryClient";
-import type {
-  EvidenceFile,
-  ExtractedEntity,
-  Claim,
-} from "@shared/schema";
+import type { EvidenceFile, ExtractedEntity, Claim } from "@shared/schema";
 import {
   Upload,
   FileUp,
   FileText,
+  FileImage,
+  File,
   CheckCircle,
   AlertTriangle,
   X,
@@ -49,14 +31,13 @@ import {
   Sparkles,
   CheckCheck,
   Copy,
-  FolderOpen,
-  Archive,
   PlusCircle,
   AlertCircle,
+  Search,
+  Filter,
 } from "lucide-react";
 
-const ACCEPTED_TYPES =
-  ".pdf,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.docx,.txt,.eml";
+const ACCEPTED_TYPES = ".pdf,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.docx,.txt,.eml";
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
 
@@ -73,16 +54,13 @@ const categoryColors: Record<string, BadgeVariant> = {
   unknown: "outline",
 };
 
-function getExtraction(file: EvidenceFile): ExtractionData | null {
-  return (file.extractedJson as { extraction?: ExtractionData } | null)?.extraction ?? null;
-}
-
-interface ApplyExtractionResult {
-  fieldsApplied: string[];
-}
-
 function fmt(s: string) {
   return s.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+function fmtDate(d: string | Date | null | undefined): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString();
 }
 
 function fmtFileSize(bytes: number | null | undefined): string {
@@ -92,9 +70,14 @@ function fmtFileSize(bytes: number | null | undefined): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function fmtDate(d: string | Date | null | undefined): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString();
+function getExtraction(file: EvidenceFile): ExtractionData | null {
+  return (file.extractedJson as { extraction?: ExtractionData } | null)?.extraction ?? null;
+}
+
+function FileTypeIcon({ fileType }: { fileType: string | null | undefined }) {
+  if (fileType === "image") return <FileImage className="w-5 h-5 text-blue-400 flex-shrink-0" />;
+  if (fileType === "pdf") return <FileText className="w-5 h-5 text-red-400 flex-shrink-0" />;
+  return <File className="w-5 h-5 text-muted-foreground flex-shrink-0" />;
 }
 
 interface ExtractionData {
@@ -179,70 +162,38 @@ interface MatchSuggestionsResponse {
   masked: boolean;
 }
 
-// ─── Extraction field sections (for ExtractionReviewDialog) ─────────────────
-const EXTRACTION_SECTIONS = [
-  {
-    title: "Claim Identifiers",
-    fields: [
-      { key: "claimNumber", label: "Claim Number" },
-      { key: "policyNumber", label: "Policy Number" },
-    ],
-  },
-  {
-    title: "People & Organizations",
-    fields: [
-      { key: "homeownerName", label: "Homeowner Name" },
-      { key: "insuredName", label: "Insured Name" },
-      { key: "carrier", label: "Carrier" },
-      { key: "adjusterName", label: "Adjuster Name" },
-      { key: "adjusterEmail", label: "Adjuster Email" },
-      { key: "adjusterPhone", label: "Adjuster Phone" },
-      { key: "iaFirm", label: "IA Firm" },
-      { key: "vendor", label: "Vendor / Engineer" },
-    ],
-  },
-  {
-    title: "Property Location",
-    fields: [
-      { key: "propertyAddress", label: "Property Address" },
-      { key: "city", label: "City" },
-      { key: "state", label: "State" },
-      { key: "zipCode", label: "Zip Code" },
-    ],
-  },
-  {
-    title: "Key Dates",
-    fields: [
-      { key: "dateOfLoss", label: "Date of Loss" },
-      { key: "inspectionDate", label: "Inspection Date" },
-      { key: "estimateDate", label: "Estimate Date" },
-      { key: "denialDate", label: "Denial Date" },
-      { key: "approvalDate", label: "Approval Date" },
-      { key: "paymentDate", label: "Payment Date" },
-    ],
-  },
-  {
-    title: "Financials",
-    fields: [
-      { key: "rcv", label: "RCV ($)" },
-      { key: "acv", label: "ACV ($)" },
-      { key: "deductible", label: "Deductible ($)" },
-      { key: "recoverableDepreciation", label: "Recoverable Depreciation ($)" },
-      { key: "supplementRequested", label: "Supplement Requested ($)" },
-      { key: "supplementApproved", label: "Supplement Approved ($)" },
-    ],
-  },
-  {
-    title: "Outcomes",
-    fields: [
-      { key: "denialReason", label: "Denial Reason" },
-      { key: "initialOutcome", label: "Initial Outcome" },
-      { key: "finalOutcome", label: "Final Outcome" },
-    ],
-  },
+interface ApplyExtractionResult {
+  fieldsApplied: string[];
+}
+
+interface QueueItem {
+  queueId: string;
+  fileName: string;
+  status: "queued" | "uploading" | "matched" | "needs-review" | "duplicate" | "created-claim" | "error";
+  result?: UploadResult;
+  duplicate?: DuplicateResult;
+  errorMsg?: string;
+}
+
+// ─── Simplified Extraction Review Dialog ──────────────────────────────────────
+const KEY_INFO_FIELDS = [
+  { key: "claimNumber", label: "Claim Number" },
+  { key: "policyNumber", label: "Policy Number" },
+  { key: "homeownerName", label: "Homeowner Name" },
+  { key: "carrier", label: "Carrier" },
+  { key: "adjusterName", label: "Adjuster Name" },
+  { key: "propertyAddress", label: "Property Address" },
+  { key: "dateOfLoss", label: "Date of Loss" },
 ];
 
-// ─── ExtractionReviewDialog ──────────────────────────────────────────────────
+const FINANCIALS_FIELDS = [
+  { key: "rcv", label: "RCV" },
+  { key: "acv", label: "ACV" },
+  { key: "deductible", label: "Deductible" },
+  { key: "supplementRequested", label: "Supplement Requested" },
+  { key: "supplementApproved", label: "Supplement Approved" },
+];
+
 function ExtractionReviewDialog({
   fileId,
   claimId,
@@ -255,13 +206,14 @@ function ExtractionReviewDialog({
   onClose: () => void;
 }) {
   const { toast } = useToast();
-  const [fields, setFields] = useState<Record<string, string>>({});
+  const [checkedFields, setCheckedFields] = useState<Set<string>>(new Set());
+  const [editedValues, setEditedValues] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
 
   const { data: file, isLoading: fileLoading } = useQuery<EvidenceFile>({
     queryKey: ["/api/evidence/files", fileId],
     queryFn: async () => {
-      const token = (await import("@/lib/queryClient")).getAccessToken();
+      const token = getAccessToken();
       const res = await fetch(`/api/evidence/files/${fileId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: "include",
@@ -275,14 +227,18 @@ function ExtractionReviewDialog({
   const extraction: ExtractionData | null = file ? getExtraction(file) : null;
 
   if (extraction && !initialized) {
-    const init: Record<string, string> = {};
-    for (const section of EXTRACTION_SECTIONS) {
-      for (const f of section.fields) {
-        const v = extraction[f.key as keyof ExtractionData];
-        if (v != null && typeof v !== "boolean" && !Array.isArray(v)) init[f.key] = String(v);
+    const allFields = [...KEY_INFO_FIELDS, ...FINANCIALS_FIELDS];
+    const initChecked = new Set<string>();
+    const initEdited: Record<string, string> = {};
+    for (const f of allFields) {
+      const v = extraction[f.key as keyof ExtractionData];
+      if (v != null && typeof v !== "boolean" && !Array.isArray(v)) {
+        initChecked.add(f.key);
+        initEdited[f.key] = String(v);
       }
     }
-    setFields(init);
+    setCheckedFields(initChecked);
+    setEditedValues(initEdited);
     setInitialized(true);
   }
 
@@ -303,276 +259,387 @@ function ExtractionReviewDialog({
     },
   });
 
+  const handleClose = () => {
+    setInitialized(false);
+    setCheckedFields(new Set());
+    setEditedValues({});
+    onClose();
+  };
+
   const handleApply = () => {
-    const nonempty: Record<string, string> = {};
-    for (const [k, v] of Object.entries(fields)) {
-      if (v && v.trim()) nonempty[k] = v.trim();
-    }
-    applyMutation.mutate(nonempty);
+    const toApply: Record<string, string> = {};
+    Array.from(checkedFields).forEach(key => {
+      const v = editedValues[key];
+      if (v && v.trim()) toApply[key] = v.trim();
+    });
+    applyMutation.mutate(toApply);
+  };
+
+  const toggleField = (key: string) => {
+    setCheckedFields(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   };
 
   const confidence = extraction?.confidence ?? 0;
-  const confLabel = confidence >= 0.8 ? "High" : confidence >= 0.5 ? "Medium" : "Low";
   const confColor = confidence >= 0.8 ? "text-green-400" : confidence >= 0.5 ? "text-amber-400" : "text-red-400";
+  const confLabel = confidence >= 0.8 ? "High" : confidence >= 0.5 ? "Medium" : "Low";
+
+  const renderSection = (title: string, fields: typeof KEY_INFO_FIELDS) => {
+    if (!extraction) return null;
+    const visible = fields.filter(f => {
+      const v = extraction[f.key as keyof ExtractionData];
+      return v != null && typeof v !== "boolean" && !Array.isArray(v);
+    });
+    if (!visible.length) return null;
+
+    return (
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{title}</p>
+        <div className="space-y-2">
+          {visible.map(f => {
+            const isChecked = checkedFields.has(f.key);
+            return (
+              <div key={f.key} className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => toggleField(f.key)}
+                  className="w-4 h-4 rounded border-border accent-primary cursor-pointer flex-shrink-0"
+                  data-testid={`checkbox-extraction-${f.key}`}
+                />
+                <div className="flex-1 min-w-0 grid grid-cols-[120px_1fr] gap-2 items-center">
+                  <span className="text-xs text-muted-foreground truncate">{f.label}</span>
+                  <Input
+                    value={editedValues[f.key] ?? ""}
+                    onChange={e => setEditedValues(p => ({ ...p, [f.key]: e.target.value }))}
+                    disabled={!isChecked}
+                    className="h-7 text-xs disabled:opacity-40"
+                    data-testid={`input-extraction-${f.key}`}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const checkedCount = checkedFields.size;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { setInitialized(false); setFields({}); onClose(); } }}>
-      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2" data-testid="text-extraction-dialog-title">
             <Brain className="w-5 h-5 text-primary" />
             AI Extraction Review
           </DialogTitle>
           <DialogDescription>
-            Review and edit fields extracted by AI from your document. Clear any field you don't want applied, then click Apply to Claim.
+            Check the fields you want to apply. Uncheck any you want to skip.
           </DialogDescription>
         </DialogHeader>
 
         {fileLoading ? (
-          <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          <div className="space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
         ) : !extraction ? (
-          <div className="py-10 text-center space-y-2">
-            <Brain className="w-10 h-10 text-muted-foreground/30 mx-auto" />
-            <p className="text-muted-foreground">No AI extraction data available for this file.</p>
-            <p className="text-xs text-muted-foreground/70">AI extraction works for PDF, TXT, and EML documents with readable text content.</p>
+          <div className="py-8 text-center space-y-2">
+            <Brain className="w-8 h-8 text-muted-foreground/30 mx-auto" />
+            <p className="text-sm text-muted-foreground">No AI extraction data available for this file.</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3 rounded-md border border-border bg-muted/40 p-3">
-              <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">AI Confidence: <span className={confColor}>{(confidence * 100).toFixed(0)}% — {confLabel}</span></p>
-                <p className="text-xs text-muted-foreground">Edit any field before applying. Clear a field to exclude it.</p>
+          <div className="space-y-5">
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span className="text-sm">Confidence: <span className={confColor}>{(confidence * 100).toFixed(0)}% — {confLabel}</span></span>
               </div>
-              <div className="w-24 h-2 rounded-full bg-muted overflow-hidden flex-shrink-0">
-                <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${confidence * 100}%` }} />
-              </div>
+              <span className="text-xs text-muted-foreground">{checkedCount} field{checkedCount !== 1 ? "s" : ""} selected</span>
             </div>
 
-            {EXTRACTION_SECTIONS.map((section) => {
-              const visible = section.fields.filter(f => extraction[f.key as keyof ExtractionData] != null);
-              if (!visible.length) return null;
-              return (
-                <div key={section.title}>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">{section.title}</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {visible.map(f => (
-                      <div key={f.key} className="space-y-1">
-                        <label className="text-xs text-muted-foreground">{f.label}</label>
-                        <Input
-                          value={fields[f.key] ?? ""}
-                          onChange={e => setFields(p => ({ ...p, [f.key]: e.target.value }))}
-                          placeholder={String(extraction[f.key as keyof ExtractionData])}
-                          className="h-8 text-sm"
-                          data-testid={`input-extraction-${f.key}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+            {renderSection("Key Info", KEY_INFO_FIELDS)}
+            {renderSection("Financials", FINANCIALS_FIELDS)}
 
-            {!!extraction.missingScopeItems?.length && (
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Missing Scope Items (informational)</h4>
-                <ul className="space-y-1">
-                  {extraction.missingScopeItems.map((item, i) => (
-                    <li key={i} className="text-sm flex items-start gap-2 text-muted-foreground" data-testid={`text-scope-item-${i}`}>
-                      <span className="text-primary mt-0.5">•</span>{item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {!!extraction.escalationReferences?.length && (
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Escalation References (informational)</h4>
-                <ul className="space-y-1">
-                  {extraction.escalationReferences.map((item, i) => (
-                    <li key={i} className="text-sm flex items-start gap-2 text-amber-400/80" data-testid={`text-escalation-ref-${i}`}>
-                      <span className="mt-0.5">⚠</span>{item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {!claimId && (
+              <p className="text-xs text-amber-400 text-center">Match this file to a claim first before applying fields.</p>
             )}
           </div>
         )}
 
         <div className="flex justify-between gap-2 pt-4 border-t border-border">
-          <Button variant="ghost" onClick={onClose} data-testid="button-extraction-skip">Skip</Button>
+          <Button variant="ghost" size="sm" onClick={handleClose} data-testid="button-extraction-skip">Skip</Button>
           <Button
-            disabled={!extraction || !claimId || applyMutation.isPending || fileLoading}
+            disabled={!extraction || !claimId || checkedCount === 0 || applyMutation.isPending || fileLoading}
             onClick={handleApply}
             data-testid="button-extraction-apply"
           >
             {applyMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
-            Apply to Claim
+            Apply {checkedCount > 0 ? checkedCount : ""} Field{checkedCount !== 1 ? "s" : ""}
           </Button>
         </div>
-        {!claimId && extraction && (
-          <p className="text-xs text-amber-400 text-center">Match this file to a claim first before applying extraction fields.</p>
-        )}
       </DialogContent>
     </Dialog>
   );
 }
 
-// ─── DuplicateFileCard ───────────────────────────────────────────────────────
-function DuplicateFileCard({
-  result,
-  claims,
-  onOpenFile,
-  onMatchExisting,
-  onDismiss,
+// ─── Upload Queue Strip ────────────────────────────────────────────────────────
+function QueueItemRow({
+  item,
+  claimsById,
+  onMatch,
+  onViewDuplicate,
+  onReviewExtraction,
+  onCreateClaim,
 }: {
-  result: DuplicateResult;
-  claims: Claim[] | undefined;
-  onOpenFile: (file: EvidenceFile) => void;
-  onMatchExisting: (fileId: string) => void;
-  onDismiss: () => void;
+  item: QueueItem;
+  claimsById: Map<string, Claim>;
+  onMatch: (fileId: string, extraction?: ExtractionData | null) => void;
+  onViewDuplicate: (fileId: string) => void;
+  onReviewExtraction: (fileId: string, claimId?: string | null) => void;
+  onCreateClaim: (fileId: string) => void;
 }) {
-  const f = result.existingFile;
-  const matchedClaim = claims?.find(c => c.id === f.claimId);
-  const status = f.claimId ? "Matched to Claim" : f.extractionStatus === "complete" ? "Extraction Complete" : "Unmatched";
+  const r = item.result;
+  const matchedClaim = r?.matchedClaimId ? claimsById.get(r.matchedClaimId) : undefined;
+  const claimLabel = matchedClaim?.claimNumber || (r?.matchedClaimId ? r.matchedClaimId.slice(0, 8) + "…" : "");
 
   return (
-    <Card className="border-amber-500/40 bg-amber-500/5">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2 text-amber-400">
-          <Copy className="w-4 h-4" />
-          Duplicate Document Detected
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          This document already exists in your evidence library. The file shown below is the original.
-        </p>
-        <div className="rounded-md border border-border bg-muted/30 p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">File Name</p>
-            <p className="font-medium truncate" data-testid="text-dup-filename">{f.fileName}</p>
+    <div className="flex items-center gap-3 py-2 px-3 rounded-md bg-muted/30 border border-border/50" data-testid={`queue-item-${item.queueId}`}>
+      {item.status === "queued" && <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30 flex-shrink-0" />}
+      {item.status === "uploading" && <Loader2 className="w-4 h-4 animate-spin text-primary flex-shrink-0" />}
+      {item.status === "matched" && <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />}
+      {item.status === "created-claim" && <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+      {item.status === "needs-review" && <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+      {item.status === "duplicate" && <Copy className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+      {item.status === "error" && <X className="w-4 h-4 text-destructive flex-shrink-0" />}
+
+      <span className="text-sm truncate flex-1 min-w-0" data-testid={`queue-filename-${item.queueId}`}>{item.fileName}</span>
+
+      <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+        {item.status === "uploading" && (
+          <span className="text-xs text-muted-foreground">Analyzing…</span>
+        )}
+        {item.status === "matched" && (
+          <span className="text-xs text-green-400">
+            Matched to{" "}
+            {r?.matchedClaimId ? (
+              <Link href={`/claims/${r.matchedClaimId}`} className="font-medium hover:underline" data-testid={`queue-claim-link-${item.queueId}`}>
+                {claimLabel}
+              </Link>
+            ) : "claim"}
+          </span>
+        )}
+        {item.status === "created-claim" && r?.createdClaim && (
+          <span className="text-xs text-blue-400">
+            Claim created:{" "}
+            <Link href={`/claims/${r.createdClaim.id}`} className="font-medium hover:underline">
+              {r.createdClaim.claimNumber}
+            </Link>
+          </span>
+        )}
+        {item.status === "needs-review" && r && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-amber-400">No match found</span>
+            <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => onMatch(r.file.id, r.extraction)} data-testid={`queue-match-btn-${item.queueId}`}>
+              <LinkIcon className="w-3 h-3" />
+              Match
+            </Button>
+            <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => onCreateClaim(r.file.id)} data-testid={`queue-create-btn-${item.queueId}`}>
+              Create Claim
+            </Button>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Upload Date</p>
-            <p data-testid="text-dup-uploaded">{fmtDate(f.uploadedAt)}</p>
+        )}
+        {item.status === "duplicate" && item.duplicate && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-amber-400">Already uploaded</span>
+            <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => onViewDuplicate(item.duplicate!.existingFile.id)} data-testid={`queue-dup-view-${item.queueId}`}>
+              View file
+            </Button>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Matched Claim</p>
-            <p data-testid="text-dup-claim">
-              {matchedClaim ? (matchedClaim.claimNumber || "Matched") : <span className="text-muted-foreground">—</span>}
+        )}
+        {item.status === "error" && (
+          <span className="text-xs text-destructive">{item.errorMsg || "Upload failed"}</span>
+        )}
+        {(item.status === "matched" || item.status === "created-claim") && r?.extraction && !r.autoAppliedFields?.length && (
+          <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => onReviewExtraction(r.file.id, r.matchedClaimId ?? r.createdClaim?.id)} data-testid={`queue-review-btn-${item.queueId}`}>
+            <Brain className="w-3 h-3" />
+            Review AI
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── File Card ────────────────────────────────────────────────────────────────
+function FileCard({
+  file,
+  claimsById,
+  onMatch,
+  onReviewExtraction,
+  onCreateClaim,
+}: {
+  file: EvidenceFile;
+  claimsById: Map<string, Claim>;
+  onMatch: (fileId: string, extraction?: ExtractionData | null) => void;
+  onReviewExtraction: (fileId: string, claimId?: string | null) => void;
+  onCreateClaim: (fileId: string) => void;
+}) {
+  const extraction = getExtraction(file);
+  const matchedClaim = file.claimId ? claimsById.get(file.claimId) : undefined;
+
+  const inlineFields: { label: string; value: string }[] = [];
+  if (extraction) {
+    if (extraction.claimNumber) inlineFields.push({ label: "Claim #", value: extraction.claimNumber });
+    if (extraction.carrier) inlineFields.push({ label: "Carrier", value: extraction.carrier });
+    if (extraction.adjusterName) inlineFields.push({ label: "Adjuster", value: extraction.adjusterName });
+  }
+
+  return (
+    <Card className="flex flex-col hover:border-border/80 transition-colors" data-testid={`card-file-${file.id}`}>
+      <CardContent className="p-4 flex flex-col gap-3 flex-1">
+        <div className="flex items-start gap-3">
+          <FileTypeIcon fileType={file.fileType} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium leading-snug truncate" data-testid={`text-filename-${file.id}`} title={file.fileName}>
+              {file.fileName}
             </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Status</p>
-            <Badge variant="outline" className="text-xs" data-testid="badge-dup-status">{status}</Badge>
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              <Badge variant={categoryColors[file.docCategory || "unknown"] || "outline"} className="text-xs" data-testid={`badge-category-${file.id}`}>
+                {fmt(file.docCategory || "unknown")}
+              </Badge>
+              <span className="text-xs text-muted-foreground/60">·</span>
+              <span className="text-xs text-muted-foreground">{fmtDate(file.uploadedAt)}</span>
+              {file.fileSize && (
+                <>
+                  <span className="text-xs text-muted-foreground/60">·</span>
+                  <span className="text-xs text-muted-foreground">{fmtFileSize(file.fileSize)}</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button size="sm" variant="outline" onClick={() => onOpenFile(f)} data-testid="button-dup-open">
-            <FolderOpen className="w-4 h-4" />
-            Open Existing File
-          </Button>
-          {!f.claimId && (
-            <Button size="sm" variant="outline" onClick={() => onMatchExisting(f.id)} data-testid="button-dup-match">
-              <LinkIcon className="w-4 h-4" />
-              Match to Claim
-            </Button>
+
+        {inlineFields.length > 0 && (
+          <div className="rounded-md bg-muted/30 px-3 py-2 grid grid-cols-1 gap-1" data-testid={`panel-extraction-${file.id}`}>
+            {inlineFields.map(({ label, value }) => (
+              <div key={label} className="flex items-center gap-2 min-w-0">
+                <span className="text-xs text-muted-foreground flex-shrink-0">{label}:</span>
+                <span className="text-xs font-medium truncate">{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-auto pt-1 flex items-center justify-between gap-2 flex-wrap">
+          {file.claimId ? (
+            <Link href={`/claims/${file.claimId}`} className="inline-flex items-center gap-1 text-xs text-green-400 hover:underline font-medium" data-testid={`link-claim-${file.id}`}>
+              <CheckCircle className="w-3 h-3" />
+              {matchedClaim?.claimNumber || file.claimId.slice(0, 8) + "…"}
+            </Link>
+          ) : (
+            <Badge variant="outline" className="text-xs text-amber-400 border-amber-400/30" data-testid={`badge-unmatched-${file.id}`}>
+              Unmatched
+            </Badge>
           )}
-          <Button size="sm" variant="ghost" onClick={onDismiss} data-testid="button-dup-dismiss">
-            Dismiss
-          </Button>
+
+          <div className="flex items-center gap-1.5">
+            {extraction && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs px-2"
+                onClick={() => onReviewExtraction(file.id, file.claimId)}
+                data-testid={`button-review-${file.id}`}
+              >
+                <Brain className="w-3 h-3" />
+                AI
+              </Button>
+            )}
+            {!file.claimId && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs px-2"
+                  onClick={() => onMatch(file.id, extraction)}
+                  data-testid={`button-match-${file.id}`}
+                >
+                  <LinkIcon className="w-3 h-3" />
+                  Match
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs px-2"
+                  onClick={() => onCreateClaim(file.id)}
+                  data-testid={`button-create-${file.id}`}
+                >
+                  <PlusCircle className="w-3 h-3" />
+                  Create
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-// ─── FileStatusBadge ─────────────────────────────────────────────────────────
-function FileStatusBadge({ file }: { file: EvidenceFile }) {
-  if (file.claimId) {
-    return <Badge variant="default" className="text-xs">Matched</Badge>;
-  }
-  if (file.extractionStatus === "complete") {
-    return <Badge variant="secondary" className="text-xs">Extraction Complete</Badge>;
-  }
-  if (file.extractionStatus === "failed") {
-    return <Badge variant="destructive" className="text-xs">Extraction Failed</Badge>;
-  }
-  if (file.extractionStatus === "processing") {
-    return <Badge variant="outline" className="text-xs">Processing</Badge>;
-  }
-  return <Badge variant="outline" className="text-xs">Unmatched</Badge>;
-}
-
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function EvidencePage() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
-  const [duplicateResult, setDuplicateResult] = useState<DuplicateResult | null>(null);
-  const [activeTab, setActiveTab] = useState("files");
+  const [uploadQueue, setUploadQueue] = useState<QueueItem[]>([]);
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
 
-  // File detail panel
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"all" | "unmatched" | "extracted" | string>("all");
 
-  // Match dialog
   const [matchDialogOpen, setMatchDialogOpen] = useState(false);
   const [matchingFileId, setMatchingFileId] = useState<string | null>(null);
   const [matchingFileExtraction, setMatchingFileExtraction] = useState<ExtractionData | null>(null);
   const [selectedClaimId, setSelectedClaimId] = useState<string>("");
   const [claimSearch, setClaimSearch] = useState("");
 
-  // Pre-select claim
-  const [preSelectClaimId, setPreSelectClaimId] = useState<string>("");
-
-  // Extraction review
   const [extractionReviewFileId, setExtractionReviewFileId] = useState<string | null>(null);
   const [extractionReviewClaimId, setExtractionReviewClaimId] = useState<string | null>(null);
   const [extractionReviewOpen, setExtractionReviewOpen] = useState(false);
 
-  // ── Queries ────────────────────────────────────────────────────────────────
-  const { data: evidenceFiles, isLoading: filesLoading } = useQuery<
-    (EvidenceFile & { entities?: ExtractedEntity[] })[]
-  >({ queryKey: ["/api/evidence/files"] });
+  const { data: evidenceFiles, isLoading: filesLoading } = useQuery<EvidenceFile[]>({
+    queryKey: ["/api/evidence/files"],
+  });
 
   const { data: claims } = useQuery<Claim[]>({ queryKey: ["/api/claims"] });
 
-  const { data: unmatchedFiles, isLoading: unmatchedLoading } = useQuery<EvidenceFile[]>({
-    queryKey: ["/api/evidence/files-unmatched"],
+  const { data: matchSuggestions, isLoading: suggestionsLoading } = useQuery<MatchSuggestionsResponse>({
+    queryKey: ["/api/evidence/files", matchingFileId, "match-suggestions"],
+    queryFn: async () => {
+      const res = await fetch(`/api/evidence/files/${matchingFileId}/match-suggestions`, {
+        headers: getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {},
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load match suggestions");
+      return res.json();
+    },
+    enabled: !!matchingFileId && matchDialogOpen,
   });
 
-  const { data: matchSuggestions, isLoading: suggestionsLoading } =
-    useQuery<MatchSuggestionsResponse>({
-      queryKey: ["/api/evidence/files", matchingFileId, "match-suggestions"],
-      queryFn: async () => {
-        const res = await fetch(`/api/evidence/files/${matchingFileId}/match-suggestions`, {
-          headers: getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {},
-          credentials: "include",
-        });
-        if (!res.ok) throw new Error("Failed to load match suggestions");
-        return res.json();
-      },
-      enabled: !!matchingFileId && matchDialogOpen,
-    });
+  const claimsById = useMemo(() => new Map(claims?.map(c => [c.id, c]) ?? []), [claims]);
 
-  const selectedFile = evidenceFiles?.find(f => f.id === selectedFileId);
-  const claimsById = new Map(claims?.map(c => [c.id, c]) ?? []);
-
-  // ── Mutations ──────────────────────────────────────────────────────────────
   const matchMutation = useMutation({
     mutationFn: async ({ fileId, claimId }: { fileId: string; claimId: string }) => {
       await apiRequest("POST", `/api/evidence/files/${fileId}/match`, { claimId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
-      toast({ title: "File matched to claim successfully" });
+      toast({ title: "File matched to claim" });
       setMatchDialogOpen(false);
       setSelectedClaimId("");
       setMatchingFileId(null);
@@ -587,9 +654,8 @@ export default function EvidencePage() {
     mutationFn: async (fileId: string) => apiRequest("POST", `/api/evidence/files/${fileId}/create-claim`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
-      toast({ title: "New claim created from extracted data" });
+      toast({ title: "Claim created from extracted data" });
       setMatchDialogOpen(false);
     },
     onError: (err: Error) => {
@@ -601,26 +667,20 @@ export default function EvidencePage() {
     mutationFn: async (fileId: string) => apiRequest("POST", `/api/evidence/files/${fileId}/unmatch`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
       toast({ title: "Saved as unmatched evidence" });
       setMatchDialogOpen(false);
     },
-    onError: (err: Error) => {
-      toast({ title: "Action failed", description: err.message, variant: "destructive" });
-    },
   });
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
-  const handleUpload = useCallback(async (file: File) => {
-    setIsUploading(true);
-    setUploadResult(null);
-    setDuplicateResult(null);
+  const uploadSingleFile = useCallback(async (file: File, queueId: string): Promise<void> => {
+    setUploadQueue(prev => prev.map(item =>
+      item.queueId === queueId ? { ...item, status: "uploading" } : item
+    ));
+
     try {
       const formData = new FormData();
       formData.append("file", file);
-      if (preSelectClaimId && preSelectClaimId !== "none")
-        formData.append("claimId", preSelectClaimId);
 
       const token = getAccessToken();
       const res = await fetch("/api/evidence/upload", {
@@ -631,10 +691,13 @@ export default function EvidencePage() {
       });
 
       if (res.status === 409) {
-        // Duplicate file — handle gracefully, not as an error
         const body = await res.json();
         if (body.duplicate && body.existingFile) {
-          setDuplicateResult({ message: body.message, existingFile: body.existingFile });
+          setUploadQueue(prev => prev.map(item =>
+            item.queueId === queueId
+              ? { ...item, status: "duplicate", duplicate: { message: body.message, existingFile: body.existingFile } }
+              : item
+          ));
           queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
           return;
         }
@@ -646,38 +709,60 @@ export default function EvidencePage() {
       }
 
       const result: UploadResult = await res.json();
-      setUploadResult(result);
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files-unmatched"] });
       queryClient.invalidateQueries({ queryKey: ["/api/claims"] });
       queryClient.invalidateQueries({ queryKey: ["/api/adjusters"] });
+
+      let status: QueueItem["status"] = "needs-review";
+      if (result.matchedClaimId) status = "matched";
+      else if (result.createdClaim) status = "created-claim";
+
+      setUploadQueue(prev => prev.map(item =>
+        item.queueId === queueId ? { ...item, status, result } : item
+      ));
+
       if (result.adjusterAutoLinked && result.adjusterName) {
-        toast({
-          title: "File uploaded successfully",
-          description: `Adjuster ${result.adjusterName} auto-linked from document`,
-        });
-      } else {
-        toast({ title: "File uploaded successfully" });
+        toast({ title: `${file.name} uploaded`, description: `Adjuster ${result.adjusterName} auto-linked` });
       }
     } catch (err: unknown) {
+      setUploadQueue(prev => prev.map(item =>
+        item.queueId === queueId ? { ...item, status: "error", errorMsg: (err as Error).message } : item
+      ));
       toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" });
-    } finally {
-      setIsUploading(false);
     }
-  }, [preSelectClaimId, toast]);
+  }, [toast]);
+
+  const processFiles = useCallback(async (files: File[]) => {
+    if (!files.length) return;
+
+    const newItems: QueueItem[] = files.map(f => ({
+      queueId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      fileName: f.name,
+      status: "queued",
+    }));
+
+    setUploadQueue(prev => [...prev, ...newItems]);
+    setIsProcessingQueue(true);
+
+    for (let i = 0; i < files.length; i++) {
+      await uploadSingleFile(files[i], newItems[i].queueId);
+    }
+
+    setIsProcessingQueue(false);
+  }, [uploadSingleFile]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) handleUpload(files[0]);
-  }, [handleUpload]);
+    if (files.length > 0) processFiles(files);
+  }, [processFiles]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) handleUpload(files[0]);
+    const files = Array.from(e.target.files ?? []);
+    if (files.length > 0) processFiles(files);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [handleUpload]);
+  }, [processFiles]);
 
   const openMatchDialog = useCallback((fileId: string, extraction?: ExtractionData | null) => {
     setMatchingFileId(fileId);
@@ -693,530 +778,250 @@ export default function EvidencePage() {
     setExtractionReviewOpen(true);
   }, []);
 
-  const openFileDetail = useCallback((fileId: string) => {
-    setSelectedFileId(fileId);
-    setActiveTab("files");
+  const scrollToFile = useCallback((fileId: string) => {
+    const el = document.querySelector(`[data-testid="card-file-${fileId}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
 
-  // ── Match Dialog ───────────────────────────────────────────────────────────
   const top = matchSuggestions?.candidates?.[0];
   const bestScore = matchSuggestions?.bestScore ?? 0;
   const hasSuggestion = bestScore >= 0.4 && !!top;
   const noMatchFound = !suggestionsLoading && bestScore < 0.4;
 
-  // Extracted clues from the file's LLM extraction (for match modal display)
   const extractionClues: Array<{ label: string; value: string }> = [];
   if (matchingFileExtraction) {
     const e = matchingFileExtraction;
     if (e.claimNumber) extractionClues.push({ label: "Claim #", value: e.claimNumber });
-    if (e.homeownerName || e.insuredName) extractionClues.push({ label: "Homeowner", value: e.homeownerName || e.insuredName! });
+    if (e.homeownerName || e.insuredName) extractionClues.push({ label: "Homeowner", value: (e.homeownerName || e.insuredName)! });
     if (e.carrier) extractionClues.push({ label: "Carrier", value: e.carrier });
     if (e.propertyAddress) extractionClues.push({ label: "Address", value: e.propertyAddress });
     if (e.dateOfLoss) extractionClues.push({ label: "Date of Loss", value: e.dateOfLoss });
     if (e.adjusterName) extractionClues.push({ label: "Adjuster", value: e.adjusterName });
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const filteredClaims = useMemo(() =>
+    (claims ?? []).filter(c =>
+      !claimSearch ||
+      c.claimNumber?.toLowerCase().includes(claimSearch.toLowerCase()) ||
+      c.homeownerName?.toLowerCase().includes(claimSearch.toLowerCase()) ||
+      c.carrier?.toLowerCase().includes(claimSearch.toLowerCase())
+    ),
+    [claims, claimSearch]
+  );
+
+  const unmatchedCount = useMemo(() => evidenceFiles?.filter(f => !f.claimId).length ?? 0, [evidenceFiles]);
+  const extractedCount = useMemo(() => evidenceFiles?.filter(f => f.extractionStatus === "complete").length ?? 0, [evidenceFiles]);
+
+  const allCategories = useMemo(() => {
+    const cats = new Set<string>();
+    evidenceFiles?.forEach(f => { if (f.docCategory && f.docCategory !== "unknown") cats.add(f.docCategory); });
+    return Array.from(cats);
+  }, [evidenceFiles]);
+
+  const filteredFiles = useMemo(() => {
+    let files = evidenceFiles ?? [];
+
+    if (activeFilter === "unmatched") files = files.filter(f => !f.claimId);
+    else if (activeFilter === "extracted") files = files.filter(f => f.extractionStatus === "complete");
+    else if (activeFilter !== "all") files = files.filter(f => f.docCategory === activeFilter);
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      files = files.filter(f => {
+        if (f.fileName?.toLowerCase().includes(q)) return true;
+        if (f.docCategory?.toLowerCase().includes(q)) return true;
+        const ext = getExtraction(f);
+        if (ext?.claimNumber?.toLowerCase().includes(q)) return true;
+        if (ext?.carrier?.toLowerCase().includes(q)) return true;
+        if (ext?.adjusterName?.toLowerCase().includes(q)) return true;
+        return false;
+      });
+    }
+
+    return files;
+  }, [evidenceFiles, activeFilter, search]);
+
+  const queueHasItems = uploadQueue.length > 0;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-evidence-title">
-          Evidence Files
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Upload and manage source documents and unmatched evidence.
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-evidence-title">Evidence Files</h1>
+        <p className="text-sm text-muted-foreground">Upload and manage source documents for your claims.</p>
       </div>
 
-      {/* Pre-select + Upload */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-muted-foreground">Pre-select claim:</label>
-          <Select value={preSelectClaimId} onValueChange={setPreSelectClaimId}>
-            <SelectTrigger className="w-[200px]" data-testid="select-preselect-claim">
-              <SelectValue placeholder="None (auto-match)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None (auto-match)</SelectItem>
-              {claims?.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.claimNumber}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
+      {/* ── Drop Zone ─────────────────────────────────────────────────────── */}
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           <div
-            className={`border-2 border-dashed rounded-md p-12 text-center transition-colors ${
-              isDragOver ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+            className={`border-2 border-dashed rounded-md p-8 text-center transition-colors ${
+              isDragOver ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
             }`}
             onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
             onDragLeave={() => setIsDragOver(false)}
             onDrop={handleDrop}
             data-testid="dropzone-upload"
           >
-            {isUploading ? (
-              <div className="flex flex-col items-center gap-3">
-                <div className="relative">
-                  <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                  <Brain className="w-4 h-4 text-primary absolute -bottom-1 -right-1" />
-                </div>
-                <p className="text-sm font-medium">AI is analyzing your document...</p>
-                <p className="text-xs text-muted-foreground">Extracting claim fields, classifying document, matching claims</p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3">
-                <FileUp className="w-10 h-10 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Drag & drop files here</p>
-                  <p className="text-xs text-muted-foreground mt-1">PDF, Images, DOCX, TXT, EML</p>
-                </div>
-                <Button variant="outline" onClick={() => fileInputRef.current?.click()} data-testid="button-browse-files">
-                  <Upload className="w-4 h-4" />
-                  Browse Files
-                </Button>
-                <input ref={fileInputRef} type="file" accept={ACCEPTED_TYPES} onChange={handleFileSelect} className="hidden" data-testid="input-file-upload" />
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Duplicate Detection Card */}
-      {duplicateResult && (
-        <DuplicateFileCard
-          result={duplicateResult}
-          claims={claims}
-          onOpenFile={f => { openFileDetail(f.id); setDuplicateResult(null); }}
-          onMatchExisting={fileId => {
-            const f = evidenceFiles?.find(x => x.id === fileId);
-            const ext = f ? getExtraction(f) : null;
-            openMatchDialog(fileId, ext);
-            setDuplicateResult(null);
-          }}
-          onDismiss={() => setDuplicateResult(null)}
-        />
-      )}
-
-      {/* Upload Success Result */}
-      {uploadResult && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-500" />
-              Upload Complete
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Classification</p>
-                <div className="flex items-center gap-2">
-                  <Badge variant={categoryColors[uploadResult.file.docCategory || "unknown"] || "outline"} data-testid="badge-upload-category">
-                    {fmt(uploadResult.file.docCategory || "unknown")}
-                  </Badge>
-                  {uploadResult.file.confidence != null && (
-                    <span className="text-xs text-muted-foreground" data-testid="text-upload-confidence">
-                      {(uploadResult.file.confidence * 100).toFixed(0)}%
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Claim Match</p>
-                {uploadResult.matchedClaimId ? (
-                  <div className="space-y-1">
-                    <span className="text-sm font-mono block" data-testid="text-upload-claim-match">
-                      {claimsById.get(uploadResult.matchedClaimId)?.claimNumber || uploadResult.matchedClaimId.slice(0, 8) + "…"}
-                    </span>
-                    {uploadResult.matchConfidence != null && (
-                      <span className="text-xs text-muted-foreground" data-testid="text-upload-match-confidence">
-                        Auto-matched · {Math.round(uploadResult.matchConfidence * 100)}% confidence
-                      </span>
-                    )}
+            <div className="flex flex-col items-center gap-3">
+              {isProcessingQueue ? (
+                <>
+                  <div className="relative">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    <Brain className="w-3.5 h-3.5 text-primary absolute -bottom-1 -right-1" />
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" data-testid="badge-needs-review">
-                      <AlertTriangle className="w-3 h-3 mr-1" />
-                      {(uploadResult.matchConfidence ?? 0) >= 0.4 ? "Match needs review" : "No matching claim found"}
-                    </Badge>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openMatchDialog(uploadResult.file.id, uploadResult.extraction)}
-                      data-testid="button-upload-match"
-                    >
-                      <LinkIcon className="w-4 h-4" />
-                      Match to Claim
-                    </Button>
+                  <p className="text-sm font-medium">Analyzing documents…</p>
+                </>
+              ) : (
+                <>
+                  <FileUp className="w-8 h-8 text-muted-foreground/50" />
+                  <div>
+                    <p className="text-sm font-medium">Drag & drop files here</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">PDF, Images, DOCX, TXT, EML — multiple files at once</p>
                   </div>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  {uploadResult.createdClaim ? "Claim Created" : "Claim Status"}
-                </p>
-                {uploadResult.createdClaim ? (
-                  <Link href={`/claims/${uploadResult.createdClaim.id}`}>
-                    <Badge variant="default" className="text-xs cursor-pointer" data-testid="badge-claim-created">
-                      {uploadResult.createdClaim.claimNumber}
-                    </Badge>
-                  </Link>
-                ) : (
-                  <span className="text-xs text-muted-foreground">No claim indicators found — file saved as evidence</span>
-                )}
-              </div>
+                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} data-testid="button-browse-files">
+                    <Upload className="w-3.5 h-3.5" />
+                    Browse Files
+                  </Button>
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_TYPES}
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+                data-testid="input-file-upload"
+              />
             </div>
+          </div>
 
-            {uploadResult.autoAppliedFields && uploadResult.autoAppliedFields.length > 0 && (
-              <div className="flex items-center gap-3 rounded-md border border-green-500/30 bg-green-500/5 p-3" data-testid="banner-auto-applied">
-                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-green-400">
-                    {uploadResult.autoAppliedFields.length} field{uploadResult.autoAppliedFields.length !== 1 ? "s" : ""} auto-populated on the claim
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {uploadResult.autoAppliedFields.slice(0, 5).join(", ")}{uploadResult.autoAppliedFields.length > 5 ? ` + ${uploadResult.autoAppliedFields.length - 5} more` : ""}
-                  </p>
-                </div>
-                {uploadResult.extraction && (
+          {/* Upload Queue Strip */}
+          {queueHasItems && (
+            <div className="mt-3 space-y-1.5" data-testid="upload-queue">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Upload Queue</p>
+                {!isProcessingQueue && (
                   <Button
+                    variant="ghost"
                     size="sm"
-                    variant="outline"
-                    onClick={() => openExtractionReview(uploadResult.file.id, uploadResult.matchedClaimId)}
-                    data-testid="button-review-extraction-upload"
+                    className="h-5 text-xs px-1 text-muted-foreground"
+                    onClick={() => setUploadQueue([])}
+                    data-testid="button-clear-queue"
                   >
-                    <Brain className="w-4 h-4" />
-                    Review
+                    Clear
                   </Button>
                 )}
               </div>
-            )}
-
-            {!uploadResult.autoAppliedFields?.length && uploadResult.extraction && (
-              <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 p-3">
-                <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">
-                    AI extracted {Object.keys(uploadResult.extraction).filter(
-                      k => !["confidence","extractionMethod","documentType","missingScopeItems","codeItems","reinspectionReferences","escalationReferences","timelineEvents","denialOverturned"].includes(k) &&
-                        uploadResult.extraction![k as keyof ExtractionData] != null
-                    ).length} claim fields
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Confidence: {((uploadResult.extraction.confidence || 0) * 100).toFixed(0)}% — review before applying
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => openExtractionReview(uploadResult.file.id, uploadResult.matchedClaimId)}
-                  data-testid="button-review-extraction-upload"
-                >
-                  <Brain className="w-4 h-4" />
-                  Review & Apply
-                </Button>
-              </div>
-            )}
-
-            {uploadResult.extractionError && !uploadResult.extraction && (
-              <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3" data-testid="banner-extraction-error">
-                <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                <p className="text-sm text-amber-400">{uploadResult.extractionError}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Three-tab main content ─────────────────────────────────────────── */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="files" data-testid="tab-evidence-files">
-            Evidence Files
-            {!!evidenceFiles?.length && (
-              <Badge variant="secondary" className="ml-2 text-xs">{evidenceFiles.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="unmatched" data-testid="tab-unmatched">
-            Unmatched Evidence
-            {!!unmatchedFiles?.length && (
-              <Badge variant="outline" className="ml-2 text-xs">{unmatchedFiles.length}</Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ── Evidence Files Tab ──────────────────────────────────────────── */}
-        <TabsContent value="files" className="space-y-4 mt-4">
-          <p className="text-sm text-muted-foreground">Uploaded evidence and source documents.</p>
-
-          <Card>
-            <CardContent className="p-0">
-              {filesLoading ? (
-                <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-              ) : !evidenceFiles?.length ? (
-                <div className="p-12 text-center">
-                  <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                  <p className="text-muted-foreground font-medium">No evidence files yet</p>
-                  <p className="text-sm text-muted-foreground/70">Upload your first document above</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>File Name</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Matched Claim</TableHead>
-                        <TableHead>Uploaded</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {evidenceFiles.map(file => (
-                        <TableRow
-                          key={file.id}
-                          className="hover-elevate cursor-pointer"
-                          onClick={() => setSelectedFileId(selectedFileId === file.id ? null : file.id)}
-                          data-testid={`row-evidence-${file.id}`}
-                        >
-                          <TableCell className="font-medium text-sm max-w-[220px]" data-testid={`text-filename-${file.id}`}>
-                            <div className="flex items-center gap-2 truncate">
-                              <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                              <span className="truncate">{file.fileName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground uppercase" data-testid={`text-filetype-${file.id}`}>
-                            {file.fileType || "—"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={categoryColors[file.docCategory || "unknown"] || "outline"} className="text-xs" data-testid={`badge-category-${file.id}`}>
-                              {fmt(file.docCategory || "unknown")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <FileStatusBadge file={file} />
-                          </TableCell>
-                          <TableCell className="text-sm" data-testid={`text-claim-match-${file.id}`}>
-                            {file.claimId ? (
-                              <Link
-                                href={`/claims/${file.claimId}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="font-mono text-xs text-primary hover:underline"
-                                data-testid={`link-claim-${file.id}`}
-                              >
-                                {claimsById.get(file.claimId)?.claimNumber || file.claimId.slice(0, 8) + "…"}
-                              </Link>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground" data-testid={`text-uploaded-${file.id}`}>
-                            {fmtDate(file.uploadedAt)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* File Detail Panel */}
-          {selectedFile && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <CardTitle className="text-base">File Details</CardTitle>
-                <Button size="icon" variant="ghost" onClick={() => setSelectedFileId(null)} data-testid="button-close-detail">
-                  <X className="w-4 h-4" />
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Name</p>
-                    <p className="text-sm font-medium truncate" data-testid="text-detail-name">{selectedFile.fileName}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Type</p>
-                    <p className="text-sm uppercase" data-testid="text-detail-type">{selectedFile.fileType || "—"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Size</p>
-                    <p className="text-sm" data-testid="text-detail-size">{fmtFileSize(selectedFile.fileSize)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">SHA-256</p>
-                    <p className="text-xs font-mono truncate" title={selectedFile.sha256 || ""} data-testid="text-detail-sha256">
-                      {selectedFile.sha256 ? selectedFile.sha256.slice(0, 16) + "…" : "—"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Category</p>
-                    <Badge variant={categoryColors[selectedFile.docCategory || "unknown"] || "outline"} className="mt-1" data-testid="badge-detail-category">
-                      {fmt(selectedFile.docCategory || "unknown")}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Status</p>
-                    <div className="mt-1"><FileStatusBadge file={selectedFile} /></div>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Matched Claim</p>
-                    <p className="text-sm mt-1" data-testid="text-detail-claim">
-                      {selectedFile.claimId ? (
-                        <Link
-                          href={`/claims/${selectedFile.claimId}`}
-                          className="text-primary hover:underline font-medium"
-                          data-testid="link-detail-claim"
-                        >
-                          {claimsById.get(selectedFile.claimId)?.claimNumber || selectedFile.claimId.slice(0, 8) + "…"}
-                        </Link>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                {/* AI extraction banner */}
-                {(() => {
-                  const ext = getExtraction(selectedFile);
-                  return ext ? (
-                    <div className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 p-3">
-                      <Brain className="w-4 h-4 text-primary flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">AI extraction available</p>
-                        <p className="text-xs text-muted-foreground">
-                          {(ext.confidence * 100).toFixed(0)}% confidence
-                          {selectedFile.claimId ? " · Click to review and apply to claim" : " · Match to a claim first"}
-                        </p>
-                      </div>
-                      <Button size="sm" onClick={() => openExtractionReview(selectedFile.id, selectedFile.claimId)} data-testid="button-review-extraction-detail">
-                        <Brain className="w-3 h-3" />
-                        Review
-                      </Button>
-                    </div>
-                  ) : null;
-                })()}
-
-                {!selectedFile.claimId && (
-                  <div className="pt-2 flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const ext = getExtraction(selectedFile);
-                        openMatchDialog(selectedFile.id, ext);
-                      }}
-                      data-testid="button-match-claim"
-                    >
-                      <LinkIcon className="w-4 h-4" />
-                      Match to Claim
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={createClaimMutation.isPending}
-                      onClick={() => createClaimMutation.mutate(selectedFile.id)}
-                      data-testid="button-create-claim-from-file"
-                    >
-                      {createClaimMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Create Claim from File
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={unmatchMutation.isPending}
-                      onClick={() => unmatchMutation.mutate(selectedFile.id)}
-                      data-testid="button-leave-unmatched"
-                    >
-                      {unmatchMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Save as Unmatched
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-
-        {/* ── Unmatched Evidence Tab ──────────────────────────────────────── */}
-        <TabsContent value="unmatched" className="space-y-4 mt-4">
-          <p className="text-sm text-muted-foreground">
-            Uploaded files not yet linked to a claim. Match, create a claim, or keep as evidence.
-          </p>
-
-          {unmatchedLoading ? (
-            <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
-          ) : !unmatchedFiles?.length ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <CheckCircle className="w-12 h-12 text-green-500/30 mx-auto mb-4" />
-                <p className="text-muted-foreground font-medium">All files are matched</p>
-                <p className="text-sm text-muted-foreground/70 mt-1">Every uploaded document is linked to a claim.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {unmatchedFiles.map(f => {
-                const ext = getExtraction(f);
-                return (
-                  <Card key={f.id} data-testid={`card-unmatched-${f.id}`}>
-                    <CardContent className="p-3 flex items-start justify-between gap-3 flex-wrap">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate" data-testid={`text-unmatched-name-${f.id}`}>{f.fileName}</p>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="text-xs text-muted-foreground capitalize">
-                              {(f.docCategory || "unknown").replace(/_/g, " ")}
-                            </span>
-                            <span className="text-xs text-muted-foreground">·</span>
-                            <span className="text-xs text-muted-foreground">{fmtDate(f.uploadedAt)}</span>
-                            {f.extractionStatus === "complete" && (
-                              <Badge variant="secondary" className="text-xs">AI extracted</Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openMatchDialog(f.id, ext)}
-                          data-testid={`button-match-unmatched-${f.id}`}
-                        >
-                          <LinkIcon className="w-4 h-4" />
-                          Match to Claim
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={createClaimMutation.isPending}
-                          onClick={() => createClaimMutation.mutate(f.id)}
-                          data-testid={`button-create-from-unmatched-${f.id}`}
-                        >
-                          <PlusCircle className="w-4 h-4" />
-                          Create Claim
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+              {uploadQueue.map(item => (
+                <QueueItemRow
+                  key={item.queueId}
+                  item={item}
+                  claimsById={claimsById}
+                  onMatch={openMatchDialog}
+                  onViewDuplicate={scrollToFile}
+                  onReviewExtraction={openExtractionReview}
+                  onCreateClaim={id => createClaimMutation.mutate(id)}
+                />
+              ))}
             </div>
           )}
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
 
-      {/* ── Match to Claim Dialog ────────────────────────────────────────── */}
+      {/* ── Search + Filter ───────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search by filename, claim #, carrier, adjuster…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+            data-testid="input-search-files"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap" data-testid="filter-chips">
+        {([
+          { id: "all", label: "All", count: evidenceFiles?.length ?? 0 },
+          { id: "unmatched", label: "Needs Matching", count: unmatchedCount },
+          { id: "extracted", label: "Has Extraction", count: extractedCount },
+        ] as const).map(chip => (
+          <button
+            key={chip.id}
+            onClick={() => setActiveFilter(chip.id)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+              activeFilter === chip.id
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/50"
+            }`}
+            data-testid={`chip-filter-${chip.id}`}
+          >
+            {chip.label}
+            {chip.count > 0 && (
+              <span className={`rounded-full px-1.5 py-0 text-[10px] ${
+                activeFilter === chip.id ? "bg-primary-foreground/20" : "bg-muted"
+              }`}>{chip.count}</span>
+            )}
+          </button>
+        ))}
+        {allCategories.map(cat => (
+          <button
+            key={cat}
+            onClick={() => setActiveFilter(activeFilter === cat ? "all" : cat)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+              activeFilter === cat
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground/50"
+            }`}
+            data-testid={`chip-filter-${cat}`}
+          >
+            {fmt(cat)}
+          </button>
+        ))}
+      </div>
+
+      {/* ── File Card Grid ───────────────────────────────────────────────── */}
+      {filesLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-36 w-full rounded-xl" />)}
+        </div>
+      ) : !filteredFiles.length ? (
+        <div className="py-16 text-center">
+          {evidenceFiles?.length ? (
+            <>
+              <Filter className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-muted-foreground font-medium">No files match this filter</p>
+              <Button variant="ghost" size="sm" className="mt-2" onClick={() => { setActiveFilter("all"); setSearch(""); }}>
+                Clear filters
+              </Button>
+            </>
+          ) : (
+            <>
+              <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-muted-foreground font-medium">No evidence files yet</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">Drop files in the upload zone above to get started</p>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="file-grid">
+          {filteredFiles.map(file => (
+            <FileCard
+              key={file.id}
+              file={file}
+              claimsById={claimsById}
+              onMatch={openMatchDialog}
+              onReviewExtraction={openExtractionReview}
+              onCreateClaim={id => createClaimMutation.mutate(id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Match to Claim Dialog ─────────────────────────────────────────── */}
       <Dialog open={matchDialogOpen} onOpenChange={v => { if (!v) { setMatchDialogOpen(false); setMatchingFileId(null); setMatchingFileExtraction(null); } }}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1225,7 +1030,6 @@ export default function EvidencePage() {
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Extracted clues panel */}
             {extractionClues.length > 0 && (
               <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
                 <div className="flex items-center gap-2">
@@ -1243,21 +1047,18 @@ export default function EvidencePage() {
               </div>
             )}
 
-            {/* Match suggestions */}
             {suggestionsLoading ? (
               <Skeleton className="h-20 w-full" />
             ) : hasSuggestion && top ? (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2" data-testid="panel-match-summary">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-primary" data-testid="text-match-summary">Suggested match found</p>
+                  <p className="text-sm font-medium text-primary" data-testid="text-match-summary">Suggested match</p>
                   <Badge variant="outline" className="text-xs">{Math.round(top.score * 100)}% match</Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                   {top.claimNumber && <div><span className="text-muted-foreground">Claim #: </span><span className="font-medium" data-testid="text-suggested-claim-number">{top.claimNumber}</span></div>}
                   {top.carrier && <div><span className="text-muted-foreground">Carrier: </span><span className="font-medium">{top.carrier}</span></div>}
                   {top.homeownerName && <div><span className="text-muted-foreground">Homeowner: </span><span className="font-medium">{top.homeownerName}</span></div>}
-                  {top.propertyLocation && <div><span className="text-muted-foreground">Location: </span><span className="font-medium">{top.propertyLocation}</span></div>}
-                  {top.status && <div><span className="text-muted-foreground">Status: </span><span className="capitalize">{top.status.replace(/_/g, " ")}</span></div>}
                   {top.dateOfLoss && <div><span className="text-muted-foreground">DOL: </span><span>{fmtDate(top.dateOfLoss)}</span></div>}
                 </div>
                 {!!top.reasons?.length && (
@@ -1265,25 +1066,23 @@ export default function EvidencePage() {
                 )}
                 <Button
                   size="sm"
-                  variant="secondary"
-                  onClick={() => setSelectedClaimId(top.claimId)}
+                  onClick={() => matchingFileId && matchMutation.mutate({ fileId: matchingFileId, claimId: top.claimId })}
+                  disabled={matchMutation.isPending}
                   data-testid="button-use-suggested"
                 >
-                  Use this match
+                  {matchMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                  Confirm Match
                 </Button>
               </div>
             ) : noMatchFound ? (
               <div className="rounded-md border border-border bg-muted/30 p-3" data-testid="panel-no-match">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-muted-foreground">
-                    No matching claim found from extracted data. Create a new claim, save as unmatched evidence, or manually search existing claims below.
-                  </p>
+                  <p className="text-sm text-muted-foreground">No match found from extracted data. Search claims below or create a new one.</p>
                 </div>
               </div>
             ) : null}
 
-            {/* Quick action buttons when no match or to override */}
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -1293,84 +1092,66 @@ export default function EvidencePage() {
                 data-testid="button-match-create-claim"
               >
                 {createClaimMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <PlusCircle className="w-3 h-3" />}
-                Create New Claim From Extraction
+                Create New Claim
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
                 disabled={unmatchMutation.isPending || !matchingFileId}
                 onClick={() => matchingFileId && unmatchMutation.mutate(matchingFileId)}
-                data-testid="button-match-save-unmatched"
+                data-testid="button-save-unmatched"
               >
-                {unmatchMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Archive className="w-3 h-3" />}
-                Save as Unmatched Evidence
+                Save as Unmatched
               </Button>
             </div>
 
-            {/* Manual search */}
             <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Search Existing Claims</p>
+              <p className="text-sm font-medium">Or search and select manually</p>
               <Input
-                placeholder="Search by claim #, carrier, homeowner, location…"
+                placeholder="Search by claim #, homeowner, carrier…"
                 value={claimSearch}
                 onChange={e => setClaimSearch(e.target.value)}
                 data-testid="input-claim-search"
               />
-              <div className="max-h-52 overflow-y-auto rounded-md border border-border divide-y divide-border">
-                {(() => {
-                  const q = claimSearch.trim().toLowerCase();
-                  const filtered = (claims || []).filter(c => {
-                    if (!q) return true;
-                    return [c.claimNumber, c.carrier, c.homeownerName, c.insuredName, c.propertyAddress, c.city, c.state, c.status]
-                      .filter(Boolean).some(v => String(v).toLowerCase().includes(q));
-                  });
-                  if (!filtered.length) {
-                    return <p className="text-sm text-muted-foreground py-6 text-center">No claims match your search.</p>;
-                  }
-                  return filtered.map(c => {
-                    const loc = [c.city, c.state].filter(Boolean).join(", ");
-                    return (
-                      <button
-                        key={c.id}
-                        className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors ${
-                          selectedClaimId === c.id ? "bg-primary/10 border-l-2 border-primary" : ""
-                        }`}
-                        onClick={() => setSelectedClaimId(c.id)}
-                        data-testid={`button-select-claim-${c.id}`}
-                      >
-                        <div className="font-medium">{c.claimNumber || "—"}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {[c.carrier, c.homeownerName || c.insuredName, loc].filter(Boolean).join(" · ")}
-                        </div>
-                      </button>
-                    );
-                  });
-                })()}
+              <div className="max-h-48 overflow-y-auto space-y-1.5">
+                {filteredClaims.slice(0, 30).map(c => (
+                  <button
+                    key={c.id}
+                    className={`w-full text-left rounded-md border px-3 py-2 text-sm transition-colors ${
+                      selectedClaimId === c.id
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-muted-foreground/40 hover:bg-muted/30"
+                    }`}
+                    onClick={() => setSelectedClaimId(c.id)}
+                    data-testid={`row-claim-${c.id}`}
+                  >
+                    <span className="font-medium">{c.claimNumber}</span>
+                    {c.carrier && <span className="text-muted-foreground ml-2">· {c.carrier}</span>}
+                    {c.homeownerName && <span className="text-muted-foreground ml-2">· {c.homeownerName}</span>}
+                  </button>
+                ))}
+                {!filteredClaims.length && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No claims found</p>
+                )}
               </div>
             </div>
+          </div>
 
-            <div className="flex justify-between gap-2 pt-2 border-t border-border">
-              <Button
-                variant="ghost"
-                onClick={() => { setMatchDialogOpen(false); setMatchingFileId(null); setMatchingFileExtraction(null); }}
-                data-testid="button-match-cancel"
-              >
-                Cancel
-              </Button>
-              <Button
-                disabled={!selectedClaimId || matchMutation.isPending}
-                onClick={() => matchingFileId && matchMutation.mutate({ fileId: matchingFileId, claimId: selectedClaimId })}
-                data-testid="button-match-confirm"
-              >
-                {matchMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                Confirm Match
-              </Button>
-            </div>
+          <div className="flex justify-end gap-2 pt-3 border-t border-border">
+            <Button variant="ghost" onClick={() => setMatchDialogOpen(false)} data-testid="button-match-cancel">Cancel</Button>
+            <Button
+              disabled={!selectedClaimId || matchMutation.isPending || !matchingFileId}
+              onClick={() => matchingFileId && matchMutation.mutate({ fileId: matchingFileId, claimId: selectedClaimId })}
+              data-testid="button-match-confirm"
+            >
+              {matchMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <LinkIcon className="w-4 h-4" />}
+              Match to Selected Claim
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* ── Extraction Review Dialog ─────────────────────────────────────── */}
+      {/* ── Extraction Review Dialog ──────────────────────────────────────── */}
       <ExtractionReviewDialog
         fileId={extractionReviewFileId}
         claimId={extractionReviewClaimId}
