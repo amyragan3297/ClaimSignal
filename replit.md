@@ -48,9 +48,13 @@ ClaimSignal is a full-stack monorepo with a React frontend (`client/`), an Expre
 - **Master (`super_admin`)** has full platform access, impersonation, cross-tenant data visibility, and is the only role that receives unmasked PII (enforced server-side via `MASTER_ROLE` in `server/masking.ts`).
 
 ### Billing Model
-- **Tiers:** Founding Partner ($99/mo), Pro ($199/mo), Team ($399/mo), Enterprise (custom).
-- **Founding Partner:** 14-day trial (card required), $99/mo locked permanently, limited availability, requires legal agreement for unmasked data.
-- **Other Tiers:** No trial, immediate active status, data always masked by default.
+- **Tiers:** Founding Partner ($79/mo), Individual ($99/mo), Team ($299/mo, includes 5 users, +$25/user/month for additional seats), Enterprise (contact sales).
+- **Founding Partner:** 14-day trial (card required), $79/mo locked for life while subscription remains active; rate forfeited permanently upon cancellation. Limited availability, requires legal agreement for unmasked data.
+- **Individual:** Renamed from "Pro". No trial, immediate active status.
+- **Team:** $299/mo, includes 5 users, +$25/user/month for additional seats. No trial, immediate active status.
+- **Enterprise:** Contact sales. No Stripe checkout — handled manually.
+- **Stripe Env Vars:** `STRIPE_PRICE_FOUNDER`, `STRIPE_PRICE_INDIVIDUAL`, `STRIPE_PRICE_TEAM`, `STRIPE_PRICE_EXTRA_SEAT`. (`STRIPE_PRICE_PRO` and `STRIPE_PRICE_ENTERPRISE` are retired.)
+- **Shared Pricing Config:** All pricing constants live in `client/src/lib/pricing.ts`. No raw dollar strings in UI components.
 - **Stripe Integration:** Checkout sessions, webhook handling for subscription lifecycle.
 
 ### Intelligence Engines
@@ -104,3 +108,11 @@ ClaimSignal incorporates six core intelligence engines: Friction Scoring, Inspec
 - **Drizzle ORM:** TypeScript ORM for PostgreSQL.
 - **Zod:** Schema validation.
 - **Wouter:** Lightweight client-side router.
+
+## Production Deployment
+
+- **Production Domain:** `ClaimSignalOne.com` (purchased via Replit). To be attached to the production deployment with SSL enabled.
+- **Official Contact Email:** `claimsignal1@gmail.com` — used for all platform contact, support, billing, founder applications, and Stripe customer support.
+- **Stripe Webhook:** Must be configured to use the production domain after deployment.
+- **Domain Review Task:** Before final launch, confirm availability and trademark risk for `claimsignal.com` and potential domain upgrades.
+- **Brand Assets:** Official logos, colors, and usage guidelines are available at `/brand-assets`. Logo sharing permitted for approved co-branded use; ClaimSignal retains all ownership.

@@ -116,7 +116,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Email already registered" });
       }
 
-      const planType = data.planType || "pro";
+      const planType = data.planType === "pro" ? "individual" : (data.planType || "individual");
 
       if (planType === "founder") {
         const founderCount = await storage.getFounderSubscriptionCount();
@@ -1907,8 +1907,10 @@ export async function registerRoutes(
       const user = await storage.getUser(userId);
       if (!user) return res.status(401).json({ message: "User not found" });
 
-      const validPlans = ["founder", "pro", "team", "enterprise"];
-      const planType = validPlans.includes(req.body?.planType) ? req.body.planType : "pro";
+      const validPlans = ["founder", "individual", "pro", "team", "enterprise"];
+      const rawPlan = validPlans.includes(req.body?.planType) ? req.body.planType : "individual";
+      const planType = rawPlan === "pro" ? "individual" : rawPlan;
+      const extraSeats = planType === "team" && typeof req.body?.extraSeats === "number" ? Math.max(0, req.body.extraSeats) : 0;
 
       if (planType === "founder") {
         const founderCount = await storage.getFounderSubscriptionCount();
@@ -1917,7 +1919,7 @@ export async function registerRoutes(
         }
       }
 
-      const result = await createCheckoutSession(orgId, userId, user.email, planType);
+      const result = await createCheckoutSession(orgId, userId, user.email, planType, extraSeats);
       if ("error" in result) {
         if (result.error.includes("not configured")) {
           return res.json({ message: result.error, fallback: true });
@@ -2970,11 +2972,18 @@ export async function registerRoutes(
   app.get("/api/executive/revenue", requireAuth, requirePlatformOwner, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      const PLAN_PRICES: Record<string, number> = { founder: 79, individual: 49, pro: 199, team: 399, enterprise: 0 };
+      const PLAN_PRICES: Record<string, number> = { founder: 79, individual: 99, pro: 99, team: 299, enterprise: 0 };
       const allBilling = await storage.getAllBillingAccounts();
       const active = allBilling.filter(b => ["active", "trialing"].includes(b.subscriptionStatus || ""));
-      const mrr = active.reduce((sum, b) => sum + (PLAN_PRICES[b.planType] || 0), 0);
-      const byPlan = active.reduce((acc: Record<string, number>, b) => { acc[b.planType] = (acc[b.planType] || 0) + 1; return acc; }, {});
+      const mrr = active.reduce((sum, b) => {
+        const planType = b.planType === "pro" ? "individual" : b.planType;
+        return sum + (PLAN_PRICES[planType] || 0);
+      }, 0);
+      const byPlan = active.reduce((acc: Record<string, number>, b) => {
+        const planType = b.planType === "pro" ? "individual" : b.planType;
+        acc[planType] = (acc[planType] || 0) + 1;
+        return acc;
+      }, {});
       const canceled = allBilling.filter(b => b.subscriptionStatus === "canceled").length;
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "EXECUTIVE_DASHBOARD_VIEWED", entityType: "platform", entityId: "revenue", ipAddress: getClientIp(req) });
       res.json({

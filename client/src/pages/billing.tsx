@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, Shield, Loader2 } from "lucide-react";
+import { CreditCard, Shield, Loader2, Image } from "lucide-react";
 import { useState } from "react";
+import { Link } from "wouter";
+import { getPlanLabel, getPlanPrice, PLANS } from "@/lib/pricing";
 
 export default function BillingPage() {
   const { data: auth, refetch } = useAuth();
@@ -21,10 +23,15 @@ export default function BillingPage() {
   const isTrialing = billing?.subscriptionStatus === "trialing" && billing.trialEndDate && new Date(billing.trialEndDate) > new Date();
   const needsPayment = !isActive && !isTrialing;
 
+  const planType = billing?.planType || "individual";
+  const isFounder = planType === "founder";
+  const isTeam = planType === "team";
+  const isIndividual = planType === "individual" || planType === "pro";
+
   async function handleCheckout() {
     try {
       setLoading(true);
-      const res = await apiRequest("POST", "/api/billing/checkout", { planType: billing?.planType || "pro" });
+      const res = await apiRequest("POST", "/api/billing/checkout", { planType });
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
@@ -65,7 +72,9 @@ export default function BillingPage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Plan</span>
-              <span className="text-sm font-medium" data-testid="text-plan-type">{billing?.planType === "founder" ? "Founding Partner" : billing?.planType ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1) : "None"}</span>
+              <span className="text-sm font-medium" data-testid="text-plan-type">
+                {getPlanLabel(billing?.planType)}
+              </span>
             </div>
             {isTrialing && daysLeft !== null && (
               <div className="flex items-center justify-between">
@@ -84,35 +93,41 @@ export default function BillingPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <CardTitle className="text-base" data-testid="text-plan-name">
-              {billing?.planType === "founder" ? "Founding Partner" : billing?.planType ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1) : "Free"} Plan
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base" data-testid="text-plan-name">
+                {getPlanLabel(billing?.planType)} Plan
+              </CardTitle>
+              {isFounder && (
+                <Badge className="text-xs bg-amber-500/20 text-amber-400 border-amber-500/30">
+                  Locked for Life
+                </Badge>
+              )}
+            </div>
             <Shield className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Price</span>
               <span className="text-sm font-medium" data-testid="text-plan-price">
-                {billing?.planType === "founder" ? "$79/mo"
-                  : billing?.planType === "pro" ? "$199/mo"
-                  : billing?.planType === "team" ? "$399/mo"
-                  : billing?.planType === "enterprise" ? "Custom"
-                  : "N/A"}
+                {getPlanPrice(billing?.planType)}
               </span>
             </div>
-            {billing?.planType === "founder" && (
+            {isTeam && (
+              <p className="text-xs text-muted-foreground">Includes {PLANS.team.seats} users · +${PLANS.team.extraSeatPrice}/user/month for additional seats</p>
+            )}
+            {isFounder && (
               <ul className="text-sm space-y-1 text-muted-foreground">
-                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Founding Partner access</li>
-                <li className="flex items-center gap-2"><CreditCard className="w-3 h-3 text-primary" /> Permanently locked pricing</li>
+                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Permanently locked pricing while subscription remains active</li>
+                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Rate forfeited permanently upon cancellation</li>
               </ul>
             )}
-            {(billing?.planType === "pro" || billing?.planType === "team") && (
+            {(isIndividual || isTeam) && (
               <ul className="text-sm space-y-1 text-muted-foreground">
-                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> No trial - immediate access</li>
+                <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> No trial — immediate access</li>
                 <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Full platform access</li>
               </ul>
             )}
-            {billing?.planType === "enterprise" && (
+            {planType === "enterprise" && (
               <ul className="text-sm space-y-1 text-muted-foreground">
                 <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Custom enterprise plan</li>
                 <li className="flex items-center gap-2"><Shield className="w-3 h-3 text-primary" /> Dedicated support</li>
@@ -136,6 +151,25 @@ export default function BillingPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-border/40">
+        <CardContent className="p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+              <Image className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Brand Assets</p>
+              <p className="text-xs text-muted-foreground">Download logos and view brand guidelines</p>
+            </div>
+          </div>
+          <Link href="/brand-assets">
+            <Button variant="outline" size="sm" data-testid="link-brand-assets">
+              View Brand Assets
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -24,6 +24,8 @@ import IntelligencePage from "@/pages/intelligence";
 import CarrierIntelligencePage from "@/pages/carrier-intelligence";
 import PlaybooksPage from "@/pages/playbooks";
 import RiskMapPage from "@/pages/risk-map";
+import BrandAssetsPage from "@/pages/brand-assets";
+import PricingPage from "@/pages/pricing";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -46,6 +48,7 @@ function AppRoutes() {
         <Route path="/adjusters/:id/report" component={AdjusterReportPage} />
         <Route path="/adjusters" component={AdjustersPage} />
         <Route path="/billing" component={BillingPage} />
+        <Route path="/brand-assets" component={BrandAssetsPage} />
         <Route path="/legal/founder" component={FounderLegalPage} />
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />
@@ -58,6 +61,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Homepage} />
+      <Route path="/pricing" component={PricingPage} />
       <Route path="/login" component={LoginPage} />
       <Route>
         <AppRoutes />

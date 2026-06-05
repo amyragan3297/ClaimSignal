@@ -40,7 +40,9 @@ import {
   Building2,
   BookOpen,
   MapPin,
+  Image,
 } from "lucide-react";
+import { getPlanLabel } from "@/lib/pricing";
 
 const ROLE_LABEL: Record<string, string> = {
   super_admin: "Master Admin",
@@ -81,11 +83,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const isExecutive = role === "carrier_analyst";
   const roleLabel = ROLE_LABEL[role] ?? role;
 
-  const planLabel = billing?.planType === "founder"
-    ? "Founder"
-    : billing?.planType
-      ? billing.planType.charAt(0).toUpperCase() + billing.planType.slice(1)
-      : "Free";
+  const planLabel = getPlanLabel(billing?.planType);
 
   const style = {
     "--sidebar-width": "16rem",
@@ -178,6 +176,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {navItem("Billing", "/billing", CreditCard)}
+                  {navItem("Brand Assets", "/brand-assets", Image, "nav-brand-assets")}
                   {(isMaster || isExecutive) && navItem("Executive Metrics", "/admin", BarChart2, "nav-executive-metrics")}
                   {isMaster && navItem("Admin", "/admin", Lock, "nav-admin")}
                   {billing?.planType === "founder" && navItem("Founder Agreement", "/legal/founder", Shield)}

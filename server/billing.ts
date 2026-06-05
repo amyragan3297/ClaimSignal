@@ -20,7 +20,8 @@ export async function createCheckoutSession(
   orgId: string,
   userId: string,
   userEmail: string,
-  planType: string
+  planType: string,
+  extraSeats?: number
 ): Promise<{ url: string } | { error: string }> {
   if (planType === "founder") {
     const founderCount = await getFounderCount();
@@ -53,9 +54,10 @@ export async function createCheckoutSession(
 
   const priceEnvMap: Record<string, string | undefined> = {
     founder: process.env.STRIPE_PRICE_FOUNDER,
-    pro: process.env.STRIPE_PRICE_PRO,
+    individual: process.env.STRIPE_PRICE_INDIVIDUAL,
+    pro: process.env.STRIPE_PRICE_INDIVIDUAL,
     team: process.env.STRIPE_PRICE_TEAM,
-    enterprise: process.env.STRIPE_PRICE_ENTERPRISE,
+    enterprise: undefined,
   };
 
   const priceId = priceEnvMap[planType];
@@ -77,10 +79,20 @@ export async function createCheckoutSession(
     subscriptionData.trial_period_days = 14;
   }
 
+  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+    { price: priceId, quantity: 1 },
+  ];
+
+  const extraSeatPriceId = process.env.STRIPE_PRICE_EXTRA_SEAT;
+  const extraSeatCount = planType === "team" && extraSeats && extraSeatPriceId ? Math.max(0, extraSeats) : 0;
+  if (extraSeatCount > 0 && extraSeatPriceId) {
+    lineItems.push({ price: extraSeatPriceId, quantity: extraSeatCount });
+  }
+
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     payment_method_collection: "always",
-    line_items: [{ price: priceId, quantity: 1 }],
+    line_items: lineItems,
     success_url: `${appUrl}/dashboard?checkout=success`,
     cancel_url: `${appUrl}/billing?checkout=canceled`,
     customer_email: userEmail,

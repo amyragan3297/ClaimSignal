@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { loginSchema, signupSchema } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PLANS } from "@/lib/pricing";
 
 export default function LoginPage() {
   const { login, register: registerUser } = useAuth();
@@ -23,7 +24,8 @@ export default function LoginPage() {
 
   const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const defaultTab = searchParams.get("tab") === "register" ? "register" : "login";
-  const defaultPlan = searchParams.get("plan") || "pro";
+  const rawPlan = searchParams.get("plan") || "individual";
+  const defaultPlan = rawPlan === "pro" ? "individual" : rawPlan;
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -32,7 +34,7 @@ export default function LoginPage() {
 
   const registerForm = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "", fullName: "", orgName: "", planType: defaultPlan as "pro" | "team" | "founder" | "enterprise" },
+    defaultValues: { email: "", password: "", fullName: "", orgName: "", planType: defaultPlan as "individual" | "team" | "founder" | "enterprise" },
   });
 
   const [loginLoading, setLoginLoading] = useState(false);
@@ -52,7 +54,7 @@ export default function LoginPage() {
 
   async function onRegister(data: z.infer<typeof signupSchema>) {
     if (data.planType === "enterprise") {
-      window.location.href = "mailto:enterprise@claimsignal.com?subject=Enterprise Plan Inquiry";
+      window.location.href = "mailto:claimsignal1@gmail.com?subject=Enterprise Plan Inquiry";
       return;
     }
 
@@ -66,6 +68,9 @@ export default function LoginPage() {
       setRegisterLoading(false);
     }
   }
+
+  const selectedPlan = registerForm.watch("planType");
+  const planInfo = selectedPlan && selectedPlan !== "pro" ? PLANS[selectedPlan as keyof typeof PLANS] : PLANS.individual;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -194,34 +199,26 @@ export default function LoginPage() {
                     <Label htmlFor="register-plan">Plan</Label>
                     <Select
                       value={registerForm.watch("planType")}
-                      onValueChange={(value) => registerForm.setValue("planType", value as "pro" | "team" | "founder" | "enterprise")}
+                      onValueChange={(value) => registerForm.setValue("planType", value as "individual" | "team" | "founder" | "enterprise")}
                       data-testid="select-register-plan"
                     >
                       <SelectTrigger id="register-plan" data-testid="select-trigger-plan">
                         <SelectValue placeholder="Select a plan" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="pro" data-testid="select-item-pro">Pro - $199/mo</SelectItem>
-                        <SelectItem value="team" data-testid="select-item-team">Team - $399/mo</SelectItem>
-                        <SelectItem value="founder" data-testid="select-item-founder">Founding Partner - $99/mo (14-day trial, invitation only)</SelectItem>
-                        <SelectItem value="enterprise" data-testid="select-item-enterprise">Enterprise - Contact sales</SelectItem>
+                        <SelectItem value="individual" data-testid="select-item-individual">{PLANS.individual.name} — {PLANS.individual.priceLabel}</SelectItem>
+                        <SelectItem value="team" data-testid="select-item-team">{PLANS.team.name} — {PLANS.team.priceLabel} ({PLANS.team.seats} users, +${PLANS.team.extraSeatPrice}/seat)</SelectItem>
+                        <SelectItem value="founder" data-testid="select-item-founder">{PLANS.founder.name} — {PLANS.founder.priceLabel} ({PLANS.founder.trialDays}-day trial, invitation only)</SelectItem>
+                        <SelectItem value="enterprise" data-testid="select-item-enterprise">{PLANS.enterprise.name} — {PLANS.enterprise.priceLabel}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <Button type="submit" className="w-full" disabled={registerLoading} data-testid="button-register-submit">
                     {registerLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {registerForm.watch("planType") === "founder"
-                      ? "Start 14-Day Free Trial"
-                      : registerForm.watch("planType") === "enterprise"
-                        ? "Contact Sales"
-                        : "Get Started"}
+                    {planInfo?.ctaLabel ?? "Get Started"}
                   </Button>
                   <p className="text-xs text-center text-muted-foreground">
-                    {registerForm.watch("planType") === "founder"
-                      ? "14-day free trial. Payment method required."
-                      : registerForm.watch("planType") === "enterprise"
-                        ? "Custom pricing for large organizations."
-                        : "Immediate access. No trial period."}
+                    {planInfo?.note ?? ""}
                   </p>
                 </form>
               </TabsContent>

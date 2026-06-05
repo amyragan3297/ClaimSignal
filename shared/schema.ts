@@ -810,7 +810,7 @@ export const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   fullName: z.string().min(2, "Full name required"),
   orgName: z.string().min(2, "Organization name required"),
-  planType: z.enum(["founder", "pro", "team", "enterprise"]).default("pro"),
+  planType: z.enum(["founder", "pro", "individual", "team", "enterprise"]).default("individual"),
   organizationType: z.enum(["contractor", "roofing_firm", "enterprise_operator", "carrier", "tpa"]).default("contractor"),
 });
 

@@ -42,6 +42,9 @@ export default function Homepage() {
             </div>
           </Link>
           <div className="flex items-center gap-3">
+            <Link href="/pricing">
+              <Button variant="ghost" size="sm">Pricing</Button>
+            </Link>
             <Link href="/login">
               <Button variant="ghost" size="sm" data-testid="link-login">Log In to Platform</Button>
             </Link>
@@ -225,6 +228,11 @@ export default function Homepage() {
                 <a href="#platform" className="hover:text-foreground transition-colors">Overview</a>
                 <a href="#security" className="hover:text-foreground transition-colors">Security</a>
                 <Link href="/login" className="hover:text-foreground transition-colors">Log In</Link>
+              </div>
+              <div className="flex flex-col gap-2">
+                <span className="font-semibold text-foreground uppercase tracking-wider text-[10px]">Contact</span>
+                <a href="mailto:claimsignal1@gmail.com" className="hover:text-foreground transition-colors">claimsignal1@gmail.com</a>
+                <Link href="/brand-assets" className="hover:text-foreground transition-colors">Brand Assets</Link>
               </div>
             </div>
           </div>
