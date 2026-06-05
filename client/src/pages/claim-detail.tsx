@@ -181,9 +181,12 @@ export default function ClaimDetailPage() {
   });
 
   const [suppDialogOpen, setSuppDialogOpen] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [expandedFileIds, setExpandedFileIds] = useState<Set<string>>(new Set());
+  const [editingFileId, setEditingFileId] = useState<string | null>(null);
+  const [editFileName, setEditFileName] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [patternDialogOpen, setPatternDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: ircScreening } = useQuery({
@@ -223,7 +226,6 @@ export default function ClaimDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/timeline", claimId] });
       toast({ title: "Document uploaded" });
       setUploadingFiles(false);
-      setUploadOpen(false);
     },
     onError: (err: Error) => {
       const msg = err.message || "";
@@ -281,6 +283,34 @@ export default function ClaimDetailPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Failed to apply extraction", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const renameFileMutation = useMutation({
+    mutationFn: async ({ fileId, fileName }: { fileId: string; fileName: string }) => {
+      const res = await apiRequest("PATCH", `/api/evidence/files/${fileId}`, { fileName });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files", claimId] });
+      setEditingFileId(null);
+      toast({ title: "File renamed" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to rename file", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteFileMutation = useMutation({
+    mutationFn: async (fileId: string) => {
+      await apiRequest("DELETE", `/api/evidence/files/${fileId}/permanent`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files", claimId] });
+      toast({ title: "File deleted" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to delete file", description: err.message, variant: "destructive" });
     },
   });
 
@@ -344,6 +374,25 @@ export default function ClaimDetailPage() {
       toast({ title: "AI analysis generated" });
     },
     onError: (err: Error) => toast({ title: "Analysis failed", description: err.message, variant: "destructive" }),
+  });
+
+  // ── Denial-to-approval pattern detection ──
+  const { data: denialPatterns } = useQuery<{
+    available: boolean;
+    caseCount: number;
+    summary: string;
+    patterns: Array<{ name: string; description: string; frequency: number }>;
+    topStrategies: string[];
+    commonDocumentation: string[];
+    typicalTimeline: string;
+    confidence: number;
+  }>({
+    queryKey: ["/api/claims", claimId, "denial-patterns"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/claims/${claimId}/denial-patterns`);
+      return res.json();
+    },
+    enabled: !!claimId && (claim?.initialOutcome?.toLowerCase().includes("deni") || claim?.denialOverturned === false),
   });
 
   // ── Weather ──
@@ -1012,42 +1061,29 @@ export default function ClaimDetailPage() {
             )}
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" data-testid="button-upload-evidence">
-                  <Upload className="w-3 h-3" /> Upload
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Upload Documents</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Upload denial letters, estimates, email threads, photos, or audio files. They will be auto-classified and linked to this claim.</p>
-                  <div className="rounded-md border border-dashed border-border p-6 text-center space-y-3">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      id="evidence-upload"
-                      data-testid="input-evidence-file"
-                    />
-                    <label htmlFor="evidence-upload" className="cursor-pointer block">
-                      <FileUp className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium">Click to select files</p>
-                      <p className="text-xs text-muted-foreground mt-1">PDF, images, DOCX, TXT, EML, audio</p>
-                    </label>
-                  </div>
-                  {uploadingFiles && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Uploading...
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+              id="evidence-upload"
+              data-testid="input-evidence-file"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="button-upload-evidence"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingFiles}
+            >
+              {uploadingFiles ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Upload className="w-3 h-3" />
+              )}
+              Upload
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -1324,6 +1360,69 @@ export default function ClaimDetailPage() {
           </Card>
         );
       })()}
+
+      {denialPatterns && denialPatterns.available && denialPatterns.patterns.length > 0 && (
+        <Card data-testid="card-denial-patterns">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <ArrowRight className="w-4 h-4 text-primary" />
+              Denial-to-Approval Patterns
+              <Badge variant="outline" className="text-[10px]">
+                {denialPatterns.caseCount} historical cases
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground" data-testid="denial-pattern-summary">
+              {denialPatterns.summary}
+            </p>
+            {denialPatterns.patterns.length > 0 && (
+              <div className="space-y-2">
+                {denialPatterns.patterns.map((p, i) => (
+                  <div key={i} className="rounded-md border border-border p-3" data-testid={`denial-pattern-${i}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">{p.name}</p>
+                      <span className="text-[10px] text-muted-foreground">{Math.round(p.frequency * 100)}% of cases</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{p.description}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {denialPatterns.topStrategies.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Top Strategies</p>
+                <ul className="space-y-1">
+                  {denialPatterns.topStrategies.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground" data-testid={`strategy-${i}`}>
+                      <CheckCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-400" />
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {denialPatterns.commonDocumentation.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Common Documentation</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {denialPatterns.commonDocumentation.map((d, i) => (
+                    <Badge key={i} variant="secondary" className="text-[10px] capitalize" data-testid={`doc-${i}`}>
+                      {d}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {denialPatterns.typicalTimeline && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1">Typical Path</p>
+                <p className="text-sm" data-testid="typical-timeline">{denialPatterns.typicalTimeline}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card data-testid="card-ai-intelligence">
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">

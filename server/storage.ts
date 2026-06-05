@@ -181,6 +181,8 @@ export interface IStorage {
   updateAudioRecording(id: string, orgId: string, data: Partial<AudioRecording>): Promise<AudioRecording | undefined>;
 
   getTimelineEvents(claimId: string, orgId: string): Promise<TimelineEvent[]>;
+  getTimelineEventsByOrgId(orgId: string): Promise<TimelineEvent[]>;
+  getAllTimelineEvents(): Promise<TimelineEvent[]>;
   createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent>;
   getTimelineEvent(id: string, orgId: string): Promise<TimelineEvent | undefined>;
   getTimelineCandidates(orgId: string, claimId?: string): Promise<TimelineEvent[]>;
@@ -870,6 +872,16 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(timelineEvents).where(
       and(eq(timelineEvents.claimId, claimId), eq(timelineEvents.organizationId, orgId))
     ).orderBy(desc(timelineEvents.eventDate));
+  }
+
+  async getTimelineEventsByOrgId(orgId: string): Promise<TimelineEvent[]> {
+    return db.select().from(timelineEvents).where(
+      eq(timelineEvents.organizationId, orgId)
+    ).orderBy(desc(timelineEvents.eventDate));
+  }
+
+  async getAllTimelineEvents(): Promise<TimelineEvent[]> {
+    return db.select().from(timelineEvents).orderBy(desc(timelineEvents.eventDate));
   }
 
   async createTimelineEvent(event: InsertTimelineEvent): Promise<TimelineEvent> {

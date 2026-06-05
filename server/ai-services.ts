@@ -8,6 +8,9 @@ import type { Claim } from "@shared/schema";
 
 export { isOpenAIConfigured };
 
+export type { ClaimAnalysis };
+export type { GeneratedPlaybookEntry };
+
 // the newest OpenAI model is "gpt-5.4" — do not change unless explicitly requested.
 const ANALYSIS_MODEL = "gpt-5.4";
 const TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
@@ -662,6 +665,138 @@ ${seedLines || "(no seed inputs — generate a general best-practice playbook en
 // ── Playbook: AI-enhanced natural language query parsing ──────────────────────
 // Parses a free-text search query into structured PlaybookFilters.
 // Caller is responsible for importing PlaybookFilters from playbook-engine.
+
+export async function generateDenialToApprovalPatterns(
+  target: { carrier?: string; lossType?: string; claimType?: string; denialReason?: string; city?: string; state?: string },
+  historicalCases: Array<{
+    carrier: string;
+    lossType?: string;
+    claimType?: string;
+    initialOutcome?: string;
+    finalOutcome?: string;
+    denialReason?: string;
+    whatWorked?: string;
+    whatDidNotWork?: string;
+    escalationUsed?: boolean;
+    reinspectionRequested?: boolean;
+    reinspectionOutcome?: string;
+    supplementOutcome?: string;
+    denialOverturned?: boolean;
+    adjusterNames: string[];
+    evidenceCategories: string[];
+    timelinePhases: string[];
+    aiSummary?: string;
+  }>
+): Promise<{
+  summary: string;
+  patterns: Array<{ name: string; description: string; frequency: number }>;
+  topStrategies: string[];
+  commonDocumentation: string[];
+  typicalTimeline: string;
+  confidence: number;
+}> {
+  const client = getOpenAIClient();
+  if (historicalCases.length === 0) {
+    return {
+      summary: "No historical denial-to-approval cases found yet in this data set.",
+      patterns: [],
+      topStrategies: [],
+      commonDocumentation: [],
+      typicalTimeline: "Insufficient data",
+      confidence: 0,
+    };
+  }
+
+  const targetContext = [
+    target.carrier ? `Carrier: ${target.carrier}` : null,
+    target.lossType ? `Loss Type: ${target.lossType}` : null,
+    target.claimType ? `Claim Type: ${target.claimType}` : null,
+    target.denialReason ? `Denial Reason: ${target.denialReason}` : null,
+    target.city || target.state ? `Location: ${target.city || ""}, ${target.state || ""}` : null,
+  ].filter(Boolean).join("\n");
+
+  const casesJson = JSON.stringify(
+    historicalCases.map((c, i) => ({
+      index: i + 1,
+      carrier: c.carrier,
+      lossType: c.lossType || null,
+      claimType: c.claimType || null,
+      initialOutcome: c.initialOutcome || null,
+      finalOutcome: c.finalOutcome || null,
+      denialReason: c.denialReason || null,
+      whatWorked: c.whatWorked || null,
+      whatDidNotWork: c.whatDidNotWork || null,
+      escalationUsed: c.escalationUsed || false,
+      reinspectionRequested: c.reinspectionRequested || false,
+      reinspectionOutcome: c.reinspectionOutcome || null,
+      supplementOutcome: c.supplementOutcome || null,
+      denialOverturned: c.denialOverturned || false,
+      adjusters: c.adjusterNames.slice(0, 3),
+      evidenceCategories: c.evidenceCategories.slice(0, 5),
+      timelinePhases: c.timelinePhases.slice(0, 5),
+      aiSummary: c.aiSummary || null,
+    })),
+    null,
+    2
+  );
+
+  const userPrompt = `You are a property insurance claims intelligence analyst. Analyze these historical claims that started with a DENIAL and were later overturned to APPROVAL, and identify the patterns that worked.
+
+TARGET CLAIM (the one we want to help):
+${targetContext || "(target claim context not fully specified)"}
+
+HISTORICAL DENIAL-OVERTURNED CASES (${historicalCases.length}):
+${casesJson.slice(0, 12000)}
+
+Return JSON with this exact shape:
+{
+  "summary": "2-3 sentences describing the overall pattern landscape for this type of claim",
+  "patterns": [
+    {
+      "name": "short name (5 words max)",
+      "description": "1-2 sentences explaining what this pattern looks like and why it worked",
+      "frequency": 0.0-1.0 (how many of the historical cases used this pattern)
+    }
+  ],
+  "topStrategies": ["strategy 1", "strategy 2", "..."],
+  "commonDocumentation": ["document type commonly used", "..."],
+  "typicalTimeline": "1 sentence describing the typical path from denial to approval",
+  "confidence": 0.0-1.0 (how confident the analysis is based on data quality)
+}
+
+Keep patterns to 3-5 items. Top strategies to 3-5. Common documentation to 3-5. Base everything ONLY on the data provided. Do not invent.";
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+  const patterns = Array.isArray(parsed.patterns)
+    ? (parsed.patterns as unknown[])
+      .filter((p) => p && typeof (p as Record<string, unknown>).name === "string")
+      .map((p) => ({
+        name: String((p as Record<string, unknown>).name),
+        description: typeof (p as Record<string, unknown>).description === "string" ? String((p as Record<string, unknown>).description) : "",
+        frequency: typeof (p as Record<string, unknown>).frequency === "number" ? Math.min(1, Math.max(0, (p as Record<string, unknown>).frequency as number)) : 0.5,
+      }))
+    : [];
+
+  return {
+    summary: typeof parsed.summary === "string" ? parsed.summary : "Pattern analysis complete.",
+    patterns,
+    topStrategies: Array.isArray(parsed.topStrategies) ? (parsed.topStrategies as unknown[]).map(String).slice(0, 6) : [],
+    commonDocumentation: Array.isArray(parsed.commonDocumentation) ? (parsed.commonDocumentation as unknown[]).map(String).slice(0, 6) : [],
+    typicalTimeline: typeof parsed.typicalTimeline === "string" ? parsed.typicalTimeline : "",
+    confidence: typeof parsed.confidence === "number" ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5,
+  };
+}
 
 export async function parsePlaybookQueryWithAI(
   query: string,

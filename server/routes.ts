@@ -12,7 +12,7 @@ import { analyzeDocumentText } from "./document-intelligence";
 import { computeEscalationEffectiveness, buildRecommendedEscalationPath } from "./escalation-intelligence";
 import { computeClaimHealthScore, computeRiskSignals, computeAlerts, buildExecutiveSummary } from "./claim-intelligence";
 import { runCopilotQuery, AI_DISCLOSURE } from "./copilot-engine";
-import { generatePlaybookStrategy, parsePlaybookQueryWithAI } from "./ai-services";
+import { generatePlaybookStrategy, parsePlaybookQueryWithAI, generateDenialToApprovalPatterns } from "./ai-services";
 import { computePatterns, computeOutcomeCorrelations, computeTrends, computeEmergingSignals } from "./network-intelligence";
 import { insertEscalationSchema } from "@shared/schema";
 import { createCandidatesFromText, sampleClaimDocumentText } from "./timeline-extraction";
@@ -806,7 +806,7 @@ export async function registerRoutes(
   });
 
   // Unlink an adjuster from a claim (preserves adjuster + other claims; history intact).
-  app.delete("/api/claims/:id/adjusters/:linkId", requireAuth, requireActiveSubscription, requireSuperAdmin, async (req: AuthRequest, res) => {
+  app.delete("/api/claims/:id/adjusters/:linkId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
       if (role === "carrier_analyst") return res.status(403).json({ message: "Not permitted for this role" });
@@ -1594,6 +1594,111 @@ export async function registerRoutes(
       res.json({ analysis, generatedAt: generatedAt.toISOString(), claim: updated });
     } catch (err) {
       recordAiError("generateClaimAnalysis", err);
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // AI pattern detection: what worked to go from denial to approval
+  app.get("/api/claims/:id/denial-patterns", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      if (!isOpenAIConfigured()) {
+        return res.status(503).json({ message: "AI pattern detection is not configured." });
+      }
+      const orgId = req.auth!.organizationId;
+      const role = req.auth!.role;
+      let target = await storage.getClaim(req.params.id as string, orgId);
+      if (!target && role === "super_admin") {
+        const all = await storage.getAllClaimsAcrossTenants();
+        target = all.find((c) => c.id === req.params.id) || undefined;
+      }
+      if (!target) return res.status(404).json({ message: "Claim not found" });
+
+      const allClaims = isMaster(role)
+        ? await storage.getAllClaimsAcrossTenants()
+        : await storage.getClaims(orgId);
+
+      const allAdj = isMaster(role)
+        ? await storage.getAllAdjustersAcrossTenants()
+        : await storage.getAdjusters(orgId);
+      const adjById = new Map(allAdj.map((a) => [a.id, a.adjusterName as string]));
+
+      const allFiles = isMaster(role)
+        ? await storage.getAllEvidenceFilesAcrossTenants()
+        : await storage.getEvidenceFilesByOrgId(orgId);
+
+      const allEvents = isMaster(role)
+        ? await storage.getAllTimelineEvents()
+        : await storage.getTimelineEventsByOrgId(orgId);
+
+      const deniedThenApproved = allClaims.filter((c) => {
+        if (c.id === target!.id) return false;
+        const initialDenied = c.initialOutcome && (c.initialOutcome.toLowerCase().includes("deni") || c.initialOutcome.toLowerCase().includes("reject"));
+        const finalApproved = c.finalOutcome && (c.finalOutcome.toLowerCase().includes("approv") || c.finalOutcome.toLowerCase().includes("full") || c.finalOutcome.toLowerCase().includes("paid"));
+        return c.denialOverturned || (initialDenied && finalApproved);
+      });
+
+      const historicalCases = await Promise.all(
+        deniedThenApproved.slice(0, 20).map(async (c) => {
+          const links = await storage.getClaimAdjusters(c.id, isMaster(role) ? undefined : orgId);
+          const adjusterNames = links.map((l) => adjById.get(l.adjusterId)).filter(Boolean) as string[];
+          const claimFiles = allFiles.filter((f) => f.claimId === c.id);
+          const evidenceCategories = [...new Set(claimFiles.map((f) => f.docCategory).filter(Boolean))];
+          const claimEvents = allEvents.filter((e) => e.claimId === c.id);
+          const timelinePhases = [...new Set(claimEvents.map((e) => e.eventType).filter(Boolean))];
+          return {
+            carrier: c.carrier || "Unknown",
+            lossType: c.lossType || undefined,
+            claimType: c.claimType || undefined,
+            initialOutcome: c.initialOutcome || undefined,
+            finalOutcome: c.finalOutcome || undefined,
+            denialReason: c.denialReason || undefined,
+            whatWorked: c.whatWorked || undefined,
+            whatDidNotWork: c.whatDidNotWork || undefined,
+            escalationUsed: c.escalationUsed || false,
+            reinspectionRequested: c.reinspectionRequested || false,
+            reinspectionOutcome: c.reinspectionOutcome || undefined,
+            supplementOutcome: c.supplementOutcome || undefined,
+            denialOverturned: c.denialOverturned || false,
+            adjusterNames,
+            evidenceCategories,
+            timelinePhases,
+            aiSummary: c.aiClaimSummary || undefined,
+          };
+        })
+      );
+
+      const result = await generateDenialToApprovalPatterns(
+        {
+          carrier: target.carrier || undefined,
+          lossType: target.lossType || undefined,
+          claimType: target.claimType || undefined,
+          denialReason: target.denialReason || undefined,
+          city: target.city || undefined,
+          state: target.state || undefined,
+        },
+        historicalCases
+      );
+
+      await storage.createAuditLog({
+        organizationId: orgId,
+        actorUserId: req.auth!.userId,
+        actorRole: role,
+        isImpersonation: req.auth!.isImpersonation,
+        impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "DENIAL_PATTERN_ANALYSIS",
+        entityType: "claim",
+        entityId: target.id,
+        afterJson: { caseCount: historicalCases.length, confidence: result.confidence },
+        ipAddress: getClientIp(req),
+      });
+
+      res.json({
+        available: true,
+        caseCount: historicalCases.length,
+        ...result,
+      });
+    } catch (err) {
+      recordAiError("generateDenialToApprovalPatterns", err);
       res.status(500).json({ message: (err as Error).message });
     }
   });
@@ -2560,7 +2665,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.delete("/api/evidence/files/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+  app.delete("/api/evidence/files/:id/permanent", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
       await storage.permanentDeleteEvidenceFile(req.params.id as string, undefined);

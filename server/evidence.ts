@@ -1063,6 +1063,27 @@ router.get("/files/:id", async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.patch("/files/:id", async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    const master = isMaster(req.auth.role);
+    const file = master
+      ? await storage.getEvidenceFileAnyTenant(req.params.id as string)
+      : await storage.getEvidenceFile(req.params.id as string, req.auth.organizationId);
+    if (!file) return res.status(404).json({ message: "File not found" });
+    const updates: Partial<typeof file> = {};
+    if (req.body.fileName !== undefined) updates.fileName = req.body.fileName;
+    if (req.body.docCategory !== undefined) updates.docCategory = req.body.docCategory;
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "Nothing to update" });
+    }
+    const updated = await storage.updateEvidenceFile(req.params.id as string, file.organizationId, updates);
+    res.json(updated);
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
+  }
+});
+
 router.get("/files/:id/entities", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
