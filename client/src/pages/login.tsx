@@ -53,14 +53,23 @@ export default function LoginPage() {
   }
 
   async function onRegister(data: z.infer<typeof signupSchema>) {
+    if (data.planType === "founder") {
+      setLocation("/founding-partner-apply");
+      return;
+    }
     if (data.planType === "enterprise") {
-      window.location.href = "mailto:claimsignal1@gmail.com?subject=Enterprise Plan Inquiry";
+      setLocation("/enterprise-contact");
       return;
     }
 
     try {
       setRegisterLoading(true);
       await registerUser(data);
+      // After registration, redirect to billing page for immediate checkout
+      if (data.planType === "individual" || data.planType === "team") {
+        setLocation("/billing");
+        return;
+      }
       setLocation("/dashboard");
     } catch (err) {
       toast({ title: "Registration failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });

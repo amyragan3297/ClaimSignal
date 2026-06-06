@@ -42,15 +42,6 @@ export default function Homepage() {
             </div>
           </Link>
           <div className="flex items-center gap-3">
-            <Link href="/carriers">
-              <Button variant="ghost" size="sm" className="hidden sm:inline-flex">Carriers</Button>
-            </Link>
-            <Link href="/learn">
-              <Button variant="ghost" size="sm" className="hidden sm:inline-flex">Glossary</Button>
-            </Link>
-            <Link href="/pricing">
-              <Button variant="ghost" size="sm">Pricing</Button>
-            </Link>
             <Link href="/login">
               <Button variant="ghost" size="sm" data-testid="link-login">Log In</Button>
             </Link>

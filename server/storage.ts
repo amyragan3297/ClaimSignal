@@ -304,6 +304,12 @@ export interface IStorage {
   // Section 18 — Evidence intelligence
   updateEvidenceFileIntelligence(id: string, orgId: string, intelligenceJson: unknown, reviewStatus: string): Promise<void>;
 
+  // Pricing & Registration
+  createFoundingPartnerRequest(data: { fullName: string; email: string; companyName: string; phone?: string; estimatedMonthlyClaimVolume?: string; reasonForJoining?: string }): Promise<unknown>;
+  getFoundingPartnerRequests(): Promise<unknown[]>;
+  createEnterpriseContactLead(data: { fullName: string; companyName: string; email: string; phone?: string; organizationType?: string; estimatedUsers?: number; estimatedMonthlyClaimVolume?: string; integrationNeeds?: string; message?: string }): Promise<unknown>;
+  getEnterpriseContactLeads(): Promise<unknown[]>;
+
   getGovernanceOverview(): Promise<{
     claims: { active: number; archived: number };
     adjusters: { active: number; archived: number };
@@ -1415,6 +1421,25 @@ export class DatabaseStorage implements IStorage {
     await db.update(evidenceFiles)
       .set({ extractedJson: merged })
       .where(and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId)));
+  }
+
+  // —— Pricing & Registration ——
+  async createFoundingPartnerRequest(data: { fullName: string; email: string; companyName: string; phone?: string; estimatedMonthlyClaimVolume?: string; reasonForJoining?: string }) {
+    const [created] = await db.insert(foundingPartnerRequests).values(data).returning();
+    return created;
+  }
+
+  async getFoundingPartnerRequests() {
+    return db.select().from(foundingPartnerRequests).orderBy(desc(foundingPartnerRequests.createdAt));
+  }
+
+  async createEnterpriseContactLead(data: { fullName: string; companyName: string; email: string; phone?: string; organizationType?: string; estimatedUsers?: number; estimatedMonthlyClaimVolume?: string; integrationNeeds?: string; message?: string }) {
+    const [created] = await db.insert(enterpriseContactLeads).values(data).returning();
+    return created;
+  }
+
+  async getEnterpriseContactLeads() {
+    return db.select().from(enterpriseContactLeads).orderBy(desc(enterpriseContactLeads.createdAt));
   }
 }
 

@@ -172,6 +172,9 @@ export async function requireActiveSubscription(req: AuthRequest, res: Response,
   if (status === "trialing" && billing.trialEndDate && new Date(billing.trialEndDate) > new Date()) {
     return next();
   }
+  if (status === "pending_billing") {
+    return res.status(403).json({ message: "Payment required to access the platform", code: "PENDING_BILLING" });
+  }
 
   return res.status(403).json({ message: "Subscription required", code: "SUBSCRIPTION_REQUIRED" });
 }

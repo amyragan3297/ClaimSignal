@@ -21,6 +21,7 @@ export default function BillingPage() {
 
   const isActive = billing?.subscriptionStatus === "active";
   const isTrialing = billing?.subscriptionStatus === "trialing" && billing.trialEndDate && new Date(billing.trialEndDate) > new Date();
+  const isPendingBilling = billing?.subscriptionStatus === "pending_billing";
   const needsPayment = !isActive && !isTrialing;
 
   const planType = billing?.planType || "individual";
@@ -63,7 +64,7 @@ export default function BillingPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>
               <Badge
-                variant={isActive ? "default" : isTrialing ? "secondary" : "destructive"}
+                variant={isActive ? "default" : isTrialing ? "secondary" : isPendingBilling ? "outline" : "destructive"}
                 className="capitalize"
                 data-testid="badge-subscription-status"
               >
@@ -137,7 +138,22 @@ export default function BillingPage() {
         </Card>
       </div>
 
-      {needsPayment && (
+      {isPendingBilling && (
+        <Card className="border-primary/30">
+          <CardContent className="p-6 text-center space-y-4">
+            <h3 className="text-lg font-semibold">Payment Required</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Complete checkout to activate your {getPlanLabel(billing?.planType)} subscription and start using ClaimSignal™.
+            </p>
+            <Button onClick={handleCheckout} disabled={loading} data-testid="button-checkout">
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Start Subscription
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {needsPayment && !isPendingBilling && (
         <Card className="border-primary/30">
           <CardContent className="p-6 text-center space-y-4">
             <h3 className="text-lg font-semibold">Subscription Required</h3>

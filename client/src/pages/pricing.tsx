@@ -92,7 +92,7 @@ export default function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href={`/login?tab=register&plan=${plan.id}`}>
+                <Link href={plan.id === "founder" ? "/founding-partner-apply" : plan.id === "enterprise" ? "/enterprise-contact" : `/login?tab=register&plan=${plan.id}`}>
                   <Button className="w-full" size="sm" variant={plan.id === "founder" ? "default" : "outline"} data-testid={`button-plan-${plan.id}`}>
                     {plan.id === "enterprise" ? (
                       <>

@@ -3,7 +3,7 @@ import { type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
-import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema, type TimelineEvent, type InsertClaim } from "@shared/schema";
+import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema, type TimelineEvent, type InsertClaim, foundingPartnerRequestSchema, enterpriseContactSchema } from "@shared/schema";
 import { applyPiiMasking, canViewUnmasked, sanitizeSharedClaimList, sanitizePlaybookList, sanitizePlaybookRecord, toPlaybookAggregate, isMaster } from "./masking";
 import { computeCarrierIntelligence } from "./carrier-intelligence";
 import { computeAdjusterScorecard } from "./adjuster-scorecard";
@@ -51,6 +51,31 @@ import {
   clearRefreshTokenCookie,
   getClientIp,
 } from "./auth";
+
+const ADMIN_NOTIFICATION_EMAIL = "claimsignal1@gmail.com";
+
+async function sendAdminNotificationEmail(opts: { subject: string; body: string }): Promise<void> {
+  try {
+    const nodemailer = await import("nodemailer");
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER || ADMIN_NOTIFICATION_EMAIL,
+        pass: process.env.SMTP_PASS || "",
+      },
+    });
+    await transporter.sendMail({
+      from: `"ClaimSignal" <${ADMIN_NOTIFICATION_EMAIL}>`,
+      to: ADMIN_NOTIFICATION_EMAIL,
+      subject: opts.subject,
+      text: opts.body,
+    });
+  } catch (err) {
+    console.warn("[email] Admin notification failed:", (err as Error).message);
+  }
+}
 
 const CLAIM_NUMERIC_FIELDS = [
   "rcvAmount", "acvAmount", "deductible", "supplementAmountTotal", "finalPaidAmount",
@@ -149,7 +174,8 @@ export async function registerRoutes(
         billingData.trialStartDate = new Date();
         billingData.trialEndDate = trialEnd;
       } else {
-        billingData.subscriptionStatus = "active";
+        // Professional and Team require immediate Stripe payment before access
+        billingData.subscriptionStatus = "pending_billing";
       }
 
       await storage.createBillingAccount(billingData as Parameters<typeof storage.createBillingAccount>[0]);
@@ -2313,6 +2339,54 @@ export async function registerRoutes(
         activeCount: allBilling.filter(b => b.subscriptionStatus === "active").length,
         canceledCount: allBilling.filter(b => b.subscriptionStatus === "canceled").length,
       });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // —— Founding Partner Request (public) ——
+  app.post("/api/founding-partner/request", async (req, res) => {
+    try {
+      const data = foundingPartnerRequestSchema.parse(req.body);
+      const request = await storage.createFoundingPartnerRequest(data);
+      await sendAdminNotificationEmail({
+        subject: "New Founding Partner Application",
+        body: `Founding Partner Application Received\n\nName: ${data.fullName}\nEmail: ${data.email}\nCompany: ${data.companyName}\nPhone: ${data.phone || "N/A"}\nEstimated Monthly Claims: ${data.estimatedMonthlyClaimVolume || "N/A"}\nReason: ${data.reasonForJoining || "N/A"}`,
+      });
+      res.json({ success: true, id: (request as Record<string, unknown>).id });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
+    }
+  });
+
+  app.get("/api/admin/founding-partner-requests", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
+    try {
+      const requests = await storage.getFoundingPartnerRequests();
+      res.json(requests);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // —— Enterprise Contact Lead (public) ——
+  app.post("/api/enterprise/contact-sales", async (req, res) => {
+    try {
+      const data = enterpriseContactSchema.parse(req.body);
+      const lead = await storage.createEnterpriseContactLead(data);
+      await sendAdminNotificationEmail({
+        subject: "New Enterprise Contact Lead",
+        body: `Enterprise Contact Lead Received\n\nName: ${data.fullName}\nEmail: ${data.email}\nCompany: ${data.companyName}\nPhone: ${data.phone || "N/A"}\nOrganization Type: ${data.organizationType || "N/A"}\nEstimated Users: ${data.estimatedUsers || "N/A"}\nEstimated Monthly Claims: ${data.estimatedMonthlyClaimVolume || "N/A"}\nIntegration Needs: ${data.integrationNeeds || "N/A"}\nMessage: ${data.message || "N/A"}`,
+      });
+      res.json({ success: true, id: (lead as Record<string, unknown>).id });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
+    }
+  });
+
+  app.get("/api/admin/enterprise-leads", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
+    try {
+      const leads = await storage.getEnterpriseContactLeads();
+      res.json(leads);
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
     }

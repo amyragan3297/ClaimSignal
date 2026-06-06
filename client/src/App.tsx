@@ -26,6 +26,8 @@ import PlaybooksPage from "@/pages/playbooks";
 import RiskMapPage from "@/pages/risk-map";
 import BrandAssetsPage from "@/pages/brand-assets";
 import PricingPage from "@/pages/pricing";
+import FoundingPartnerApplyPage from "@/pages/founding-partner-apply";
+import EnterpriseContactPage from "@/pages/enterprise-contact";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -62,6 +64,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Homepage} />
       <Route path="/pricing" component={PricingPage} />
+      <Route path="/founding-partner-apply" component={FoundingPartnerApplyPage} />
+      <Route path="/enterprise-contact" component={EnterpriseContactPage} />
       <Route path="/login" component={LoginPage} />
       <Route>
         <AppRoutes />
