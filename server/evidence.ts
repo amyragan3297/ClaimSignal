@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking, maskExtractionData } from "./masking";
-import { extractClaimFieldsFromText, extractClaimFieldsFromImages, transcribeAudio, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
+import { extractClaimFieldsFromText, extractClaimFieldsFromImages, transcribeAudio, extractAdjustersFromTranscript, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
 import { extractAndLinkAdjustersForClaim, type AdjusterMention } from "./adjuster-linking";
 import { renderPdfToImages } from "./pdf-render";
 import { computeFullClaimScoring } from "./scoring";
@@ -715,15 +715,46 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
 
       // Auto-link adjusters found in the transcript to the associated claim.
       if (claimId && audioRecId && textContent && textContent.trim()) {
+        const transcriptCarrier = matchedClaim?.carrier || undefined;
+        const transcriptOrgId = matchedClaim?.organizationId || organizationId;
+
+        // Regex-based mentions from extractEntities() — fast, no API cost
         const adjusterEntities = entities.filter(e => e.entityType === "adjuster_name");
-        if (adjusterEntities.length > 0) {
-          const transcriptCarrier = matchedClaim?.carrier || undefined;
-          const transcriptMentions: AdjusterMention[] = adjusterEntities.map(e => ({
-            name: e.rawValue,
-            carrier: transcriptCarrier,
-          }));
+        const regexMentions: AdjusterMention[] = adjusterEntities.map(e => ({
+          name: e.rawValue,
+          carrier: transcriptCarrier,
+          confidenceScore: e.confidence,
+        }));
+
+        // LLM-based mentions — smarter, includes role labels, understands conversation context
+        let llmMentions: AdjusterMention[] = [];
+        if (isOpenAIConfigured()) {
           try {
-            await extractAndLinkAdjustersForClaim(claimId, matchedClaim?.organizationId || organizationId, transcriptMentions, {
+            const llmExtracted = await extractAdjustersFromTranscript(textContent);
+            llmMentions = llmExtracted.map(m => ({
+              name: m.name,
+              roleLabel: m.roleLabel,
+              carrier: m.carrier || transcriptCarrier,
+              confidenceScore: 0.85,
+            }));
+            console.log(`[audio-transcript] LLM extracted ${llmMentions.length} adjuster mention(s) from transcript`);
+          } catch (llmErr: unknown) {
+            console.error("[audio-transcript] LLM adjuster extraction non-fatal:", (llmErr as Error)?.message);
+          }
+        }
+
+        // Merge: LLM mentions take priority (they include role labels); regex fills any gaps
+        const allMentions: AdjusterMention[] = [...llmMentions];
+        const llmNamesLower = new Set(llmMentions.map(m => m.name.toLowerCase().trim()));
+        for (const rm of regexMentions) {
+          if (!llmNamesLower.has(rm.name.toLowerCase().trim())) {
+            allMentions.push(rm);
+          }
+        }
+
+        if (allMentions.length > 0) {
+          try {
+            await extractAndLinkAdjustersForClaim(claimId, transcriptOrgId, allMentions, {
               sourceType: "transcript",
               sourceTranscriptId: audioRecId,
             });

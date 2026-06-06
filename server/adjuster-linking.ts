@@ -177,11 +177,12 @@ export async function extractAndLinkAdjustersForClaim(
       const existingCarrier = normalizeCarrierKey(a.carrierName);
       // Strict dedup: both sides have known carriers -> must match
       if (existingCarrier && mentionCarrier) return existingCarrier === mentionCarrier;
-      // When both sides have unknown carriers, allow name-only match
-      if (!existingCarrier && !mentionCarrier) return true;
-      // When only one side has a carrier, require a tighter match to avoid merging
-      // different adjusters with the same name across different carriers
-      return false;
+      // When either side has unknown carrier, merge on name alone.
+      // An unknown-carrier record cannot claim a different carrier, so name
+      // match is sufficient. This prevents duplicate profiles when a document
+      // captures an adjuster without carrier info (stored as "Unknown") and a
+      // transcript later extracts the same person with a known carrier.
+      return true;
     });
 
     if (!adj) {

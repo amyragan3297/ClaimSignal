@@ -207,6 +207,74 @@ export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
   return response.text;
 }
 
+export interface TranscriptAdjusterMention {
+  name: string;
+  roleLabel?: string;
+  carrier?: string;
+}
+
+/**
+ * Lightweight LLM call to extract insurance adjuster names and role labels
+ * from a call transcript. Returns only carrier-side adjusters (field adjuster,
+ * desk adjuster, CAT adjuster, claim representative, etc.). Non-adjuster parties
+ * (homeowners, contractors, public adjusters) are excluded by the prompt.
+ */
+export async function extractAdjustersFromTranscript(
+  transcriptText: string,
+): Promise<TranscriptAdjusterMention[]> {
+  const client = getOpenAIClient();
+  const truncated = transcriptText.slice(0, 8000);
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    temperature: 0,
+    messages: [
+      {
+        role: "system",
+        content: `You are an expert property insurance claims analyst. Extract all insurance adjuster names and their roles from the provided call transcript.
+
+Rules:
+1. Only include carrier-side adjusters (e.g. field adjuster, desk adjuster, CAT adjuster, claim representative, claims specialist, supervisor, team lead, reinspection adjuster).
+2. Do NOT include homeowners, contractors, public adjusters, roofing staff, estimators, or the insured party.
+3. Capture the role label exactly as spoken or mentioned (e.g. "field adjuster", "desk adjuster", "CAT adjuster").
+4. If a name appears clearly in an adjuster context but no explicit role is stated, use roleLabel "adjuster".
+5. If the carrier or insurance company name is mentioned alongside the adjuster, include it in "carrier".
+6. Return ONLY valid JSON: {"adjusters": [{"name": "Full Name", "roleLabel": "role label", "carrier": "carrier name or null"}]}
+7. If no adjusters are found, return {"adjusters": []}`,
+      },
+      {
+        role: "user",
+        content: `Transcript:\n${truncated}\n\nExtract all carrier-side adjuster mentions as JSON.`,
+      },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  try {
+    const parsed = JSON.parse(raw) as { adjusters?: unknown[] };
+    if (!Array.isArray(parsed.adjusters)) return [];
+    return parsed.adjusters
+      .filter(
+        (m): m is { name: string; roleLabel?: string; carrier?: string } =>
+          !!m &&
+          typeof (m as Record<string, unknown>).name === "string" &&
+          ((m as Record<string, unknown>).name as string).trim().length > 0,
+      )
+      .map((m) => ({
+        name: m.name.trim(),
+        ...(typeof m.roleLabel === "string" && m.roleLabel.trim()
+          ? { roleLabel: m.roleLabel.trim() }
+          : {}),
+        ...(typeof m.carrier === "string" && m.carrier.trim() && m.carrier.toLowerCase() !== "null"
+          ? { carrier: m.carrier.trim() }
+          : {}),
+      }));
+  } catch {
+    return [];
+  }
+}
+
 // ── AI document field extraction ──────────────────────────────────────────────
 
 export interface AdjusterMentionExtracted {

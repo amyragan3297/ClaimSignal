@@ -25,7 +25,8 @@ import evidenceRouter from "./evidence";
 import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity, computeFullClaimScoring } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
-import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus, generatePlaybookEntry, generateAiFallbackPlaybookRecs, generatePlaybookDraft } from "./ai-services";
+import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, extractAdjustersFromTranscript, recordAiError, getAiStatus, generatePlaybookEntry, generateAiFallbackPlaybookRecs, generatePlaybookDraft } from "./ai-services";
+import { extractAndLinkAdjustersForClaim, type AdjusterMention } from "./adjuster-linking";
 import { getClaimWeather, geocodeZip, geocodeCity } from "./weather";
 import { findDuplicateClaims } from "./claim-matching";
 import express from "express";
@@ -2067,9 +2068,10 @@ export async function registerRoutes(
         // claim, run MVP timeline/date extraction over the transcript so spoken
         // events (loss date, inspection, denial, etc.) feed the claim's timeline.
         let extractedEventCount = 0;
+        let linkedClaim: Awaited<ReturnType<typeof storage.getClaim>> | null = null;
         if (claimId && transcriptText && transcriptText.trim()) {
           try {
-            const linkedClaim = await storage.getClaim(claimId, req.auth!.organizationId);
+            linkedClaim = await storage.getClaim(claimId, req.auth!.organizationId);
             if (linkedClaim) {
               const created = await createCandidatesFromText({
                 text: transcriptText,
@@ -2098,6 +2100,33 @@ export async function registerRoutes(
           } catch (extractErr) {
             // Extraction is best-effort; transcription itself already succeeded.
             console.error("[audio/transcribe] timeline extraction failed:", (extractErr as Error)?.message);
+          }
+        }
+
+        // Auto-link adjusters mentioned in the transcript to the associated claim.
+        if (claimId && transcriptText && transcriptText.trim()) {
+          try {
+            const transcriptOrgId = linkedClaim?.organizationId || req.auth!.organizationId;
+            const transcriptCarrier = linkedClaim?.carrier || undefined;
+
+            const llmExtracted = await extractAdjustersFromTranscript(transcriptText);
+            const llmMentions: AdjusterMention[] = llmExtracted.map(m => ({
+              name: m.name,
+              roleLabel: m.roleLabel,
+              carrier: m.carrier || transcriptCarrier,
+              confidenceScore: 0.85,
+            }));
+            console.log(`[audio/transcribe] LLM extracted ${llmMentions.length} adjuster mention(s) from transcript`);
+
+            if (llmMentions.length > 0) {
+              await extractAndLinkAdjustersForClaim(claimId, transcriptOrgId, llmMentions, {
+                sourceType: "transcript",
+                sourceTranscriptId: recording.id,
+              });
+            }
+          } catch (adjErr) {
+            // Non-fatal: adjuster extraction failure must never break transcription.
+            console.error("[audio/transcribe] adjuster extraction non-fatal:", (adjErr as Error)?.message);
           }
         }
 
