@@ -118,19 +118,27 @@ export function mapRoleLabelToEnum(label: string | undefined): ClaimAdjusterRole
  * Returns the list of newly created ClaimAdjuster link records
  * (skips already-linked pairs; does not return the existing row for those).
  */
-const NON_ADJUSTER_ROLES = [
-  "homeowner", "insured", "contractor", "public adjuster", "roofing", "roofing staff",
+const NON_ADJUSTER_PHRASES = [
+  "homeowner", "insured", "contractor", "public adjuster", "roofing staff",
   "restoration", "mitigation", "project manager", "estimator", "user", "owner",
   "property owner", "building owner", "tenant", "claimant", "vendor", "supplier",
   "material supplier", "subcontractor", "inspector", "engineer", "attorney",
-  "legal", "pa", "independent adjuster", "ia",
+  "legal", "pa",
 ];
 
 function isNonAdjusterRole(label: string | undefined): boolean {
   if (!label) return false;
-  const l = label.toLowerCase();
-  for (const term of NON_ADJUSTER_ROLES) {
-    if (l.includes(term)) return true;
+  const l = label.toLowerCase().trim();
+  // Exact phrase match for multi-word terms to avoid substring false positives
+  for (const term of NON_ADJUSTER_PHRASES) {
+    if (l === term) return true;
+    // For multi-word phrases, check if the label contains the exact phrase
+    if (term.includes(" ") && l.includes(term)) return true;
+    // For single-word terms, require word-boundary match to avoid "ia" catching "specialist"
+    if (!term.includes(" ")) {
+      const re = new RegExp(`\\b${term}\\b`);
+      if (re.test(l)) return true;
+    }
   }
   return false;
 }
