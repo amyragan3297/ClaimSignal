@@ -62,12 +62,12 @@ export function ssrShell({
   <meta property="og:description" content="${escHtml(description)}" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="${escHtml(canonical)}" />
-  <meta property="og:image" content="https://claimsignal1.com/favicon.png" />
+  <meta property="og:image" content="https://claimsignal1.com/og-image.png" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:site" content="@ClaimSignal" />
   <meta name="twitter:title" content="${escHtml(title)}" />
   <meta name="twitter:description" content="${escHtml(description)}" />
-  <meta name="twitter:image" content="https://claimsignal1.com/favicon.png" />
+  <meta name="twitter:image" content="https://claimsignal1.com/og-image.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />

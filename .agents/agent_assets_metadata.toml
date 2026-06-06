@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "C6rpiglrI7mK8I35trd7m"
+uri = "file://attached_assets/og-image.png"
+type = "image"
+title = "generated_image"
