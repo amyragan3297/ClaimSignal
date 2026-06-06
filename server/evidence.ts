@@ -7,6 +7,7 @@ import { isMaster, canViewUnmasked, applyPiiMasking, maskExtractionData } from "
 import { extractClaimFieldsFromText, extractClaimFieldsFromImages, transcribeAudio, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
 import { renderPdfToImages } from "./pdf-render";
 import { computeFullClaimScoring } from "./scoring";
+import { findOrCreateClaimFromExtraction, coerceStr, type ExtractionData } from "./claim-matching";
 
 interface AuthRequest extends Request {
   auth?: {
@@ -364,7 +365,7 @@ async function generateTimelineEvents(
 // link the file to it, link any adjuster, and generate timeline events.
 // Used both on upload (no draft step) and by the manual create-claim route.
 // Field priority: UI-accepted values > LLM extraction > rule-based entities.
-async function createClaimFromExtraction(opts: {
+async function _createClaimFromExtraction(opts: {
   fileId: string;
   fileOrganizationId: string;
   fileDocCategory: string | null | undefined;
@@ -880,47 +881,111 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       }
     }
 
-    // When the upload doesn't match an existing claim but the document contains
-    // real claim indicators, create a fully-populated claim directly from the
-    // extracted data (no intermediate draft step). The new claim is linked to
-    // the file and surfaced to the user immediately.
+    // When the upload isn't pre-linked to a claim, run the normalized
+    // claim-matching layer. If a match is found, attach the document and
+    // apply extracted fields. If not, create one new claim. This is the
+    // ONLY path for creating claims from uploaded documents.
     let createdClaim: Awaited<ReturnType<typeof storage.createClaim>> | null = null;
+    let matchResult: import("./claim-matching").MatchResult | null = null;
     if (!claimId) {
-      const claimNum = entities.find(e => e.entityType === "claim_number");
-      const insured = entities.find(e => e.entityType === "insured_name");
-      const addr = entities.find(e => e.entityType === "property_address");
-      const carrier = entities.find(e => e.entityType === "carrier_name");
-      const dol = entities.find(e => e.entityType === "date_of_loss");
+      const extractionData: ExtractionData = {
+        claimNumber: coerceStr(llmExtraction?.claimNumber) || coerceStr(entities.find(e => e.entityType === "claim_number")?.rawValue),
+        carrier: coerceStr(llmExtraction?.carrier) || coerceStr(entities.find(e => e.entityType === "carrier_name")?.rawValue),
+        homeownerName: coerceStr(llmExtraction?.homeownerName) || coerceStr(entities.find(e => e.entityType === "insured_name")?.rawValue),
+        insuredName: coerceStr(llmExtraction?.insuredName) || coerceStr(entities.find(e => e.entityType === "insured_name")?.rawValue),
+        propertyAddress: coerceStr(llmExtraction?.propertyAddress) || coerceStr(entities.find(e => e.entityType === "property_address")?.rawValue),
+        address: coerceStr(llmExtraction?.propertyAddress),
+        city: coerceStr(llmExtraction?.city),
+        state: coerceStr(llmExtraction?.state),
+        zipCode: coerceStr(llmExtraction?.zipCode),
+        dateOfLoss: coerceStr(llmExtraction?.dateOfLoss) || coerceStr(entities.find(e => e.entityType === "date_of_loss")?.rawValue),
+        policyNumber: coerceStr(llmExtraction?.policyNumber),
+        adjusterName: coerceStr(llmExtraction?.adjusterName),
+        adjusterEmail: coerceStr(llmExtraction?.adjusterEmail),
+        adjusterPhone: coerceStr(llmExtraction?.adjusterPhone),
+        rcv: coerceStr(llmExtraction?.rcv) || coerceStr(entities.find(e => e.entityType === "rcv")?.rawValue),
+        acv: coerceStr(llmExtraction?.acv) || coerceStr(entities.find(e => e.entityType === "acv")?.rawValue),
+        deductible: coerceStr(llmExtraction?.deductible) || coerceStr(entities.find(e => e.entityType === "deductible")?.rawValue),
+        supplementRequested: coerceStr(llmExtraction?.supplementRequested),
+        supplementApproved: coerceStr(llmExtraction?.supplementApproved),
+        supplementTotal: coerceStr(llmExtraction?.supplementTotal),
+        recoverableDepreciation: coerceStr(llmExtraction?.recoverableDepreciation),
+        approvedAmount: coerceStr(llmExtraction?.approvedAmount),
+        claimAmount: coerceStr(llmExtraction?.claimAmount),
+        finalPaid: coerceStr(llmExtraction?.finalPaid),
+        denialReason: coerceStr(llmExtraction?.denialReason),
+        initialOutcome: coerceStr(llmExtraction?.initialOutcome),
+        finalOutcome: coerceStr(llmExtraction?.finalOutcome),
+        iaFirm: coerceStr(llmExtraction?.iaFirm),
+        vendor: coerceStr(llmExtraction?.vendor),
+        inspectionDate: coerceStr(llmExtraction?.inspectionDate),
+      };
 
       const hasClaimIndicators = !!(
-        claimNum || insured || addr || carrier || dol ||
-        llmExtraction?.claimNumber || llmExtraction?.homeownerName || llmExtraction?.insuredName ||
-        llmExtraction?.propertyAddress || llmExtraction?.carrier || llmExtraction?.adjusterName ||
-        llmExtraction?.rcv || llmExtraction?.policyNumber
+        extractionData.claimNumber || extractionData.homeownerName || extractionData.insuredName ||
+        extractionData.propertyAddress || extractionData.carrier || extractionData.adjusterName ||
+        extractionData.rcv || extractionData.policyNumber || extractionData.dateOfLoss
       );
 
       if (hasClaimIndicators) {
         try {
-          createdClaim = await createClaimFromExtraction({
-            fileId: evidenceFile.id,
-            fileOrganizationId: organizationId,
-            fileDocCategory: effectiveCategory,
-            llmExtraction,
-            entities,
-            userId,
+          matchResult = await findOrCreateClaimFromExtraction(extractionData, {
+            organizationId,
             role: req.auth.role,
-            actorOrganizationId: organizationId,
+            userId,
+            fileId: evidenceFile.id,
+            fileDocCategory: effectiveCategory,
           });
-          claimId = createdClaim.id;
-          console.log(`[upload] created claim ${createdClaim.claimNumber} from "${req.file!.originalname}" with extracted fields`);
-          // Seed initial intelligence scores for the new claim (non-blocking).
-          computeFullClaimScoring(createdClaim.id, organizationId)
-            .then(scores => storage.updateClaim(createdClaim!.id, organizationId, {
-              frictionScore: Math.round(scores.claimFrictionScore),
-            } as Partial<import("@shared/schema").InsertClaim>))
-            .catch((scoreErr: unknown) => console.error("[scoring-auto] non-fatal (new claim):", (scoreErr as Error)?.message));
-        } catch (createErr: unknown) {
-          console.error("[upload] failed to create claim from extraction:", (createErr as Error)?.message);
+          claimId = matchResult.claim.id;
+          createdClaim = matchResult.created ? matchResult.claim : null;
+          if (matchResult.created) {
+            console.log(`[upload] created claim ${matchResult.claim.claimNumber} from "${req.file!.originalname}" via findOrCreateClaimFromExtraction`);
+            // Seed initial intelligence scores for the new claim (non-blocking).
+            computeFullClaimScoring(matchResult.claim.id, organizationId)
+              .then(scores => storage.updateClaim(matchResult!.claim.id, organizationId, {
+                frictionScore: Math.round(scores.claimFrictionScore),
+              } as Partial<import("@shared/schema").InsertClaim>))
+              .catch((scoreErr: unknown) => console.error("[scoring-auto] non-fatal (new claim):", (scoreErr as Error)?.message));
+
+            // Auto-link adjuster from extracted data on new claim
+            const adjName = coerceStr(llmExtraction?.adjusterName) || coerceStr(entities.find(e => e.entityType === "adjuster_name")?.rawValue);
+            if (adjName) {
+              try {
+                const existingAdjs = await storage.getAdjusters(organizationId);
+                let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjName.toLowerCase());
+                if (!adj) {
+                  const adjEmail = coerceStr(llmExtraction?.adjusterEmail);
+                  const adjPhone = coerceStr(llmExtraction?.adjusterPhone);
+                  const carrierName = coerceStr(llmExtraction?.carrier) || coerceStr(entities.find(e => e.entityType === "carrier_name")?.rawValue) || "Unknown";
+                  adj = await storage.createAdjuster({
+                    organizationId,
+                    adjusterName: adjName,
+                    adjusterEmail: adjEmail || undefined,
+                    adjusterPhone: adjPhone || undefined,
+                    carrierName,
+                  });
+                  console.log(`[adjuster-extract] created adjuster "${adjName}" from upload on new claim ${matchResult.claim.id}`);
+                }
+                await storage.linkAdjusterToClaim({
+                  claimId: matchResult.claim.id,
+                  adjusterId: adj.id,
+                  organizationId,
+                  roleOnClaim: "primary_adjuster",
+                  sourceType: "document",
+                  sourceDocumentId: evidenceFile.id,
+                });
+                adjusterAutoLinked = true;
+                adjusterAutoLinkedName = adjName;
+                console.log(`[adjuster-extract] linked adjuster "${adjName}" to new claim ${matchResult.claim.id}`);
+              } catch (adjErr: unknown) {
+                console.error("[adjuster-extract] non-fatal:", (adjErr as Error)?.message);
+              }
+            }
+          } else {
+            console.log(`[upload] matched existing claim ${matchResult.claim.claimNumber} from "${req.file!.originalname}" matchedBy=${matchResult.matchedBy}`);
+          }
+        } catch (matchErr: unknown) {
+          console.error("[upload] claim matching failed:", (matchErr as Error)?.message);
         }
       }
     }
@@ -1173,10 +1238,10 @@ router.post("/files/:id/match", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Create a brand-new claim from an uploaded file's extracted fields, then link
-// the file to it and wire adjuster/timeline/scoring intelligence.
-// Accepts `fields` in body (accepted/edited extraction values from the UI) OR
-// falls back to storedEntities + LLM extraction so older callers still work.
+// Create a claim from an uploaded file's extracted fields. Uses the normalized
+// matching layer first: if an existing claim matches, attach the file there instead
+// of creating a duplicate. Accepts `fields` in body (accepted/edited extraction
+// values from the UI) or falls back to storedEntities + LLM extraction.
 router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
@@ -1195,19 +1260,100 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
     // LLM extraction and rule-based entities (in that priority order).
     const accepted: Record<string, string> = req.body?.fields || {};
 
-    const claim = await createClaimFromExtraction({
-      fileId: file.id,
-      fileOrganizationId: file.organizationId,
-      fileDocCategory: file.docCategory,
-      accepted,
-      llmExtraction,
-      entities: storedEntities.map(e => ({ entityType: e.entityType, rawValue: e.rawValue, confidence: e.confidence || 0 })),
-      userId,
+    const extractionData: ExtractionData = {
+      claimNumber: accepted.claimNumber || llmExtraction?.claimNumber || storedEntities.find(e => e.entityType === "claim_number")?.rawValue || null,
+      carrier: accepted.carrier || llmExtraction?.carrier || null,
+      homeownerName: accepted.homeownerName || llmExtraction?.homeownerName || storedEntities.find(e => e.entityType === "insured_name")?.rawValue || null,
+      insuredName: accepted.insuredName || llmExtraction?.insuredName || null,
+      propertyAddress: accepted.propertyAddress || llmExtraction?.propertyAddress || storedEntities.find(e => e.entityType === "property_address")?.rawValue || null,
+      address: accepted.propertyAddress || llmExtraction?.propertyAddress || null,
+      city: accepted.city || llmExtraction?.city || null,
+      state: accepted.state || llmExtraction?.state || null,
+      zipCode: accepted.zipCode || llmExtraction?.zipCode || null,
+      dateOfLoss: accepted.dateOfLoss || llmExtraction?.dateOfLoss || storedEntities.find(e => e.entityType === "date_of_loss")?.rawValue || null,
+      policyNumber: accepted.policyNumber || llmExtraction?.policyNumber || null,
+      adjusterName: accepted.adjusterName || llmExtraction?.adjusterName || null,
+      adjusterEmail: accepted.adjusterEmail || llmExtraction?.adjusterEmail || null,
+      adjusterPhone: accepted.adjusterPhone || llmExtraction?.adjusterPhone || null,
+      rcv: accepted.rcv || llmExtraction?.rcv || null,
+      acv: accepted.acv || llmExtraction?.acv || null,
+      deductible: accepted.deductible || llmExtraction?.deductible || null,
+      supplementRequested: accepted.supplementRequested || llmExtraction?.supplementRequested || null,
+      supplementApproved: accepted.supplementApproved || llmExtraction?.supplementApproved || null,
+      supplementTotal: accepted.supplementTotal || llmExtraction?.supplementTotal || null,
+      recoverableDepreciation: accepted.recoverableDepreciation || llmExtraction?.recoverableDepreciation || null,
+      approvedAmount: accepted.approvedAmount || llmExtraction?.approvedAmount || null,
+      claimAmount: accepted.claimAmount || llmExtraction?.claimAmount || null,
+      finalPaid: accepted.finalPaid || llmExtraction?.finalPaid || null,
+      denialReason: accepted.denialReason || llmExtraction?.denialReason || null,
+      initialOutcome: accepted.initialOutcome || llmExtraction?.initialOutcome || null,
+      finalOutcome: accepted.finalOutcome || llmExtraction?.finalOutcome || null,
+      iaFirm: accepted.iaFirm || llmExtraction?.iaFirm || null,
+      vendor: accepted.vendor || llmExtraction?.vendor || null,
+      inspectionDate: accepted.inspectionDate || llmExtraction?.inspectionDate || null,
+    };
+
+    const matchResult = await findOrCreateClaimFromExtraction(extractionData, {
+      organizationId: file.organizationId,
       role,
-      actorOrganizationId: organizationId,
+      userId,
+      fileId: file.id,
+      fileDocCategory: file.docCategory,
     });
 
-    res.json({ created: true, claim });
+    // If the file was already linked to a different claim, make sure it
+    // now points to the matched/created claim.
+    if (file.claimId !== matchResult.claim.id) {
+      await storage.updateEvidenceFile(file.id, file.organizationId, { claimId: matchResult.claim.id });
+    }
+
+    // Generate timeline events for the matched/created claim.
+    const fileEntities = storedEntities.map(e => ({
+      entityType: e.entityType,
+      rawValue: e.rawValue,
+      confidence: e.confidence || 0,
+    }));
+    await generateTimelineEvents(matchResult.claim.id, file.organizationId, file.id, file.docCategory || "unknown", fileEntities, userId);
+
+    // Auto-link adjuster from accepted/extracted data.
+    const adjName = accepted.adjusterName || llmExtraction?.adjusterName || storedEntities.find(e => e.entityType === "adjuster_name")?.rawValue;
+    if (adjName) {
+      try {
+        const existingAdjs = await storage.getAdjusters(file.organizationId);
+        let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjName.toLowerCase());
+        if (!adj) {
+          const carrierName = accepted.carrier || llmExtraction?.carrier || "Unknown";
+          adj = await storage.createAdjuster({
+            organizationId: file.organizationId,
+            adjusterName: adjName,
+            adjusterEmail: accepted.adjusterEmail || llmExtraction?.adjusterEmail || undefined,
+            adjusterPhone: accepted.adjusterPhone || llmExtraction?.adjusterPhone || undefined,
+            carrierName,
+          });
+        }
+        await storage.linkAdjusterToClaim({
+          claimId: matchResult.claim.id,
+          adjusterId: adj.id,
+          organizationId: file.organizationId,
+          roleOnClaim: "primary_adjuster",
+        });
+      } catch (adjErr: unknown) {
+        console.error("[create-claim] adjuster linking non-fatal:", (adjErr as Error)?.message);
+      }
+    }
+
+    // Seed intelligence scores (non-blocking).
+    computeFullClaimScoring(matchResult.claim.id, file.organizationId)
+      .then(scores => storage.updateClaim(matchResult.claim.id, file.organizationId, {
+        frictionScore: Math.round(scores.claimFrictionScore),
+      } as Partial<import("@shared/schema").InsertClaim>))
+      .catch((scoreErr: unknown) => console.error("[scoring-auto] non-fatal (create-claim):", (scoreErr as Error)?.message));
+
+    res.json({
+      created: matchResult.created,
+      matchedBy: matchResult.matchedBy,
+      claim: matchResult.claim,
+    });
   } catch (err) {
     return res.status(500).json({ message: (err as Error).message });
   }
@@ -1243,8 +1389,13 @@ router.post("/files/:id/unmatch", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Apply LLM extraction fields to the matched claim. Only applies scalar fields
-// the user accepted; arrays (scope items, code items) are informational only.
+// Apply LLM extraction fields to a claim. Accepts:
+//   - claimId: if user is already inside a claim (optional)
+//   - fields: user-selected extracted fields (optional, falls back to all file extraction)
+// If claimId is missing or the claim doesn't exist, runs the normalized matching
+// logic using the extracted data. If a match is found, applies to that claim.
+// If no match is found, creates a new claim. Never returns 404 when extraction
+// data contains enough fields to create or match a claim.
 router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
@@ -1255,10 +1406,8 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       ? await storage.getEvidenceFileAnyTenant(req.params.id as string)
       : await storage.getEvidenceFile(req.params.id as string, organizationId);
     if (!file) return res.status(404).json({ message: "File not found" });
-    if (!file.claimId) {
-      return res.status(400).json({ message: "File must be matched to a claim before applying extraction" });
-    }
 
+    const bodyClaimId = req.body.claimId as string | undefined;
     const bodyFields = req.body.fields as Record<string, string> | undefined;
     const fileExtraction = (file.extractedJson as { extraction?: Record<string, unknown> } | null)?.extraction;
     const fields: Record<string, string> = bodyFields && typeof bodyFields === "object" && Object.keys(bodyFields).length > 0
@@ -1272,10 +1421,109 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       return res.status(400).json({ message: "No extraction fields available to apply" });
     }
 
-    const claim = master
-      ? await storage.getClaimAnyTenant(file.claimId)
-      : await storage.getClaim(file.claimId, file.organizationId);
-    if (!claim) return res.status(404).json({ message: "Matched claim not found" });
+    // Resolve the target claim
+    let claim: Awaited<ReturnType<typeof storage.getClaim>> | undefined;
+    let targetClaimId: string | null = bodyClaimId || file.claimId || null;
+
+    if (targetClaimId) {
+      claim = master
+        ? await storage.getClaimAnyTenant(targetClaimId)
+        : await storage.getClaim(targetClaimId, file.organizationId);
+    }
+
+    // If no claim found, run normalized matching logic
+    if (!claim) {
+      const storedEntities = await storage.getExtractedEntities(file.id);
+      const extractionData: ExtractionData = {
+        claimNumber: coerceStr(fields.claimNumber) || coerceStr(fileExtraction?.claimNumber) || coerceStr(storedEntities.find(e => e.entityType === "claim_number")?.rawValue),
+        carrier: coerceStr(fields.carrier) || coerceStr(fileExtraction?.carrier),
+        homeownerName: coerceStr(fields.homeownerName) || coerceStr(fileExtraction?.homeownerName) || coerceStr(storedEntities.find(e => e.entityType === "insured_name")?.rawValue),
+        insuredName: coerceStr(fields.insuredName) || coerceStr(fileExtraction?.insuredName),
+        propertyAddress: coerceStr(fields.propertyAddress) || coerceStr(fileExtraction?.propertyAddress) || coerceStr(storedEntities.find(e => e.entityType === "property_address")?.rawValue),
+        address: coerceStr(fields.propertyAddress) || coerceStr(fileExtraction?.propertyAddress),
+        city: coerceStr(fields.city) || coerceStr(fileExtraction?.city),
+        state: coerceStr(fields.state) || coerceStr(fileExtraction?.state),
+        zipCode: coerceStr(fields.zipCode) || coerceStr(fileExtraction?.zipCode),
+        dateOfLoss: coerceStr(fields.dateOfLoss) || coerceStr(fileExtraction?.dateOfLoss) || coerceStr(storedEntities.find(e => e.entityType === "date_of_loss")?.rawValue),
+        policyNumber: coerceStr(fields.policyNumber) || coerceStr(fileExtraction?.policyNumber) || coerceStr(storedEntities.find(e => e.entityType === "policy_number")?.rawValue),
+        adjusterName: coerceStr(fields.adjusterName) || coerceStr(fileExtraction?.adjusterName) || coerceStr(storedEntities.find(e => e.entityType === "adjuster_name")?.rawValue),
+        adjusterEmail: coerceStr(fields.adjusterEmail) || coerceStr(fileExtraction?.adjusterEmail) || coerceStr(storedEntities.find(e => e.entityType === "adjuster_email")?.rawValue),
+        adjusterPhone: coerceStr(fields.adjusterPhone) || coerceStr(fileExtraction?.adjusterPhone) || coerceStr(storedEntities.find(e => e.entityType === "adjuster_phone")?.rawValue),
+        rcv: coerceStr(fields.rcv) || coerceStr(fileExtraction?.rcv) || coerceStr(storedEntities.find(e => e.entityType === "rcv")?.rawValue),
+        acv: coerceStr(fields.acv) || coerceStr(fileExtraction?.acv) || coerceStr(storedEntities.find(e => e.entityType === "acv")?.rawValue),
+        deductible: coerceStr(fields.deductible) || coerceStr(fileExtraction?.deductible) || coerceStr(storedEntities.find(e => e.entityType === "deductible")?.rawValue),
+        supplementRequested: coerceStr(fields.supplementRequested) || coerceStr(fileExtraction?.supplementRequested),
+        supplementApproved: coerceStr(fields.supplementApproved) || coerceStr(fileExtraction?.supplementApproved),
+        supplementTotal: coerceStr(fields.supplementTotal) || coerceStr(fileExtraction?.supplementTotal),
+        recoverableDepreciation: coerceStr(fields.recoverableDepreciation) || coerceStr(fileExtraction?.recoverableDepreciation),
+        approvedAmount: coerceStr(fields.approvedAmount) || coerceStr(fileExtraction?.approvedAmount),
+        claimAmount: coerceStr(fields.claimAmount) || coerceStr(fileExtraction?.claimAmount),
+        finalPaid: coerceStr(fields.finalPaid) || coerceStr(fileExtraction?.finalPaid),
+        denialReason: coerceStr(fields.denialReason) || coerceStr(fileExtraction?.denialReason),
+        initialOutcome: coerceStr(fields.initialOutcome) || coerceStr(fileExtraction?.initialOutcome),
+        finalOutcome: coerceStr(fields.finalOutcome) || coerceStr(fileExtraction?.finalOutcome),
+        iaFirm: coerceStr(fields.iaFirm) || coerceStr(fileExtraction?.iaFirm),
+        vendor: coerceStr(fields.vendor) || coerceStr(fileExtraction?.vendor),
+        inspectionDate: coerceStr(fields.inspectionDate) || coerceStr(fileExtraction?.inspectionDate),
+      };
+
+      const hasIndicators = !!(
+        extractionData.claimNumber || extractionData.homeownerName || extractionData.insuredName ||
+        extractionData.propertyAddress || extractionData.carrier || extractionData.adjusterName ||
+        extractionData.rcv || extractionData.policyNumber || extractionData.dateOfLoss
+      );
+
+      if (hasIndicators) {
+        try {
+          const matchResult = await findOrCreateClaimFromExtraction(extractionData, {
+            organizationId: file.organizationId,
+            role,
+            userId,
+            fileId: file.id,
+          });
+          claim = matchResult.claim;
+          targetClaimId = matchResult.claim.id;
+          console.log(`[apply-extraction] ${matchResult.created ? "created" : "matched"} claim ${matchResult.claim.id} matchedBy=${matchResult.matchedBy}`);
+
+          // Auto-link adjuster from extracted data
+          const adjName = extractionData.adjusterName;
+          if (adjName) {
+            try {
+              const existingAdjs = await storage.getAdjusters(file.organizationId);
+              let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjName.toLowerCase());
+              if (!adj) {
+                const carrierName = extractionData.carrier || "Unknown";
+                adj = await storage.createAdjuster({
+                  organizationId: file.organizationId,
+                  adjusterName: adjName,
+                  adjusterEmail: extractionData.adjusterEmail || undefined,
+                  adjusterPhone: extractionData.adjusterPhone || undefined,
+                  carrierName,
+                });
+              }
+              await storage.linkAdjusterToClaim({
+                claimId: matchResult.claim.id,
+                adjusterId: adj.id,
+                organizationId: file.organizationId,
+                roleOnClaim: "primary_adjuster",
+                sourceType: "document",
+                sourceDocumentId: file.id,
+              });
+              console.log(`[apply-extraction] linked adjuster "${adjName}" to claim ${matchResult.claim.id}`);
+            } catch (adjErr: unknown) {
+              console.error("[apply-extraction] adjuster linking non-fatal:", (adjErr as Error)?.message);
+            }
+          }
+        } catch (matchErr: unknown) {
+          console.error("[apply-extraction] claim matching failed:", (matchErr as Error)?.message);
+        }
+      }
+    }
+
+    if (!claim) {
+      return res.status(400).json({ message: "No claim found or creatable from the extracted data. Please link this file to a claim first." });
+    }
+
     if (!master && claim.organizationId !== organizationId) {
       return res.status(403).json({ message: "Access denied" });
     }
@@ -1318,6 +1566,9 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       const raw = fields[exKey];
       if (!raw || String(raw).trim() === "") continue;
       const val = String(raw).trim();
+      // Only apply if the claim field is currently blank/null — never overwrite user data
+      const existingVal = (claim as Record<string, unknown>)[claimKey];
+      if (existingVal != null && existingVal !== "") continue;
       if (DATE_KEYS.has(exKey)) {
         const d = parseFlexDate(val);
         if (d) claimUpdate[claimKey] = d;
@@ -1333,10 +1584,10 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
     }
 
     if (Object.keys(claimUpdate).length === 0) {
-      return res.status(400).json({ message: "No valid fields to apply" });
+      return res.status(400).json({ message: "No valid fields to apply (all target fields already populated)" });
     }
 
-    const updated = await storage.updateClaim(file.claimId, claim.organizationId, claimUpdate as Partial<import("@shared/schema").InsertClaim>);
+    const updated = await storage.updateClaim(claim.id, claim.organizationId, claimUpdate as Partial<import("@shared/schema").InsertClaim>);
 
     await storage.createAuditLog({
       organizationId: claim.organizationId,
@@ -1344,7 +1595,7 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
       actorRole: role,
       actionType: "AI_EXTRACTION_APPLIED",
       entityType: "claim",
-      entityId: file.claimId,
+      entityId: claim.id,
       afterJson: {
         fileId: file.id,
         fileName: file.fileName,

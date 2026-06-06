@@ -27,6 +27,7 @@ import { computeLifecycleVelocity, computeFullClaimScoring } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
 import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus, generatePlaybookEntry, generateAiFallbackPlaybookRecs } from "./ai-services";
 import { getClaimWeather, geocodeZip, geocodeCity } from "./weather";
+import { findDuplicateClaims } from "./claim-matching";
 import express from "express";
 import { createHash } from "crypto";
 import { isDemoSeedingAllowed, resolveSeedMasterCredentials } from "./config";
@@ -2392,6 +2393,18 @@ export async function registerRoutes(
     try {
       const overview = await storage.getGovernanceOverview();
       res.json(overview);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // GET duplicate report (Master only — safe, read-only)
+  app.get("/api/admin/duplicates", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const { role, organizationId } = req.auth!;
+      const orgFilter = req.query.orgId as string | undefined;
+      const groups = await findDuplicateClaims(role, orgFilter || organizationId);
+      res.json({ groups, totalGroups: groups.length });
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
     }

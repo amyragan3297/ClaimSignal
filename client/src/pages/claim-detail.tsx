@@ -276,11 +276,14 @@ export default function ClaimDetailPage() {
 
   const applyExtractionMutation = useMutation({
     mutationFn: async (fileId: string) => {
-      const res = await apiRequest("POST", `/api/evidence/files/${fileId}/apply-extraction`, {});
+      const res = await apiRequest("POST", `/api/evidence/files/${fileId}/apply-extraction`, {
+        claimId: claimId || undefined,
+      });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files", claimId] });
       toast({ title: "Extraction applied to claim" });
     },
     onError: (err: Error) => {

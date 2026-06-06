@@ -1,0 +1,143 @@
+Fix the ClaimSignal claim matching, duplicate claim creation, and Apply Extraction 404 errors.
+
+Do not redesign the UI.
+Do not add demo data.
+Do not remove existing features.
+Do not fake AI results.
+
+Primary problem:
+Uploaded documents are extracting data, but the system is creating duplicate claims and failing to apply extracted fields with errors like:
+404 {"message":"Matched claim not found"}
+404 {"message":"Claim not found"}
+
+Required fixes:
+
+1. Add a normalized claim matching layer before creating any claim from uploaded documents.
+
+Normalize:
+- claim number: remove spaces, dashes, punctuation, uppercase
+- address: uppercase, trim, convert common abbreviations like TRAIL/TRAIL/TRL, STREET/ST/ST., AVENUE/AVE/AVE., ROAD/RD
+- homeowner name: uppercase, trim, remove extra spaces
+- carrier name: uppercase, trim
+
+Before creating a new claim, search existing claims using this priority:
+A. normalized claim number + carrier
+B. normalized property address + homeowner name
+C. normalized claim number alone
+D. normalized property address alone
+
+If a match is found:
+- attach the uploaded document to the existing claim
+- apply extracted fields to that existing claim
+- do not create a duplicate claim
+
+If no match is found:
+- create one new claim
+- save normalized matching fields on the claim record
+
+2. Fix Apply Extraction.
+
+Find the frontend function that calls Apply Extraction and the backend endpoint that receives it.
+
+The frontend must send:
+- extractionId
+- claimId, if user is already inside a claim
+- extracted fields selected by user
+
+The backend must:
+- first look up the claim by claimId
+- if claimId is missing or not found, run the normalized matching logic using extracted claim number, address, homeowner, and carrier
+- if a matching claim is found, apply fields to that claim
+- if no matching claim is found, create a new claim only once
+- never return 404 for “matched claim not found” when extracted fields contain enough data to create or match a claim
+
+3. Prevent duplicate claims at the database/service layer.
+
+Add a helper function similar to:
+
+findOrCreateClaimFromExtraction(extraction)
+
+This function must be the only path used when uploaded documents create or update claims.
+
+It should return:
+{
+  claim,
+  created: boolean,
+  matchedBy: string
+}
+
+4. Link extracted people and vendors to the claim.
+
+When extraction finds an adjuster, carrier, or vendor:
+- create or find adjuster profile
+- create or find carrier profile
+- create or find vendor profile
+- create claim relationship records
+
+For adjusters:
+- do not classify the logged-in user, contractor, homeowner, or sender as the adjuster unless the document clearly labels them as adjuster
+- examples of valid adjuster labels: adjuster, claim representative, desk adjuster, field adjuster, claims specialist for carrier
+
+5. Fix address and claim number formatting conflicts.
+
+These must match as the same claim:
+- 0705120731
+- 07-0512-0731
+
+These must match as the same address:
+- 24816 Bubba Trail
+- 24816 BUBBA TRL
+
+6. Add logging for the matching decision.
+
+Log:
+- extracted claim number
+- normalized claim number
+- extracted address
+- normalized address
+- matched claim id
+- matchedBy reason
+- whether a new claim was created
+
+7. Clean up existing duplicates carefully.
+
+Do not delete data.
+Instead, add a script or admin-safe function that identifies likely duplicates by normalized claim number, address, homeowner, and carrier.
+
+Return a duplicate report first.
+Do not merge automatically unless explicitly called.
+
+Acceptance tests:
+
+Test 1:
+Upload two documents for Sharon Priora, State Farm, 24816 Bubba Trail, claim 0184C504J.
+Expected result:
+One claim only.
+Both documents attached to that claim.
+
+Test 2:
+Upload Heith Blaxton documents with claim number 0705120731 and 07-0512-0731.
+Expected result:
+One claim only.
+No duplicate cards in My Claims.
+
+Test 3:
+Click Apply Extraction from the AI Extraction Review modal.
+Expected result:
+No 404 error.
+Selected fields apply to the correct claim.
+
+Test 4:
+Extract Cody Vines as Allstate adjuster.
+Expected result:
+Cody Vines profile links to the claim evidence.
+Adjuster profile no longer says “No linked claim evidence yet” when claim evidence exists.
+
+Test 5:
+If the system cannot confidently match a claim, show the user a review modal:
+“Possible matching claim found”
+with options:
+- Apply to existing claim
+- Create new claim
+
+Implement this as a data integrity fix, not a UI redesign.
