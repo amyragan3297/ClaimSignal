@@ -387,12 +387,20 @@ function ScorecardCards({ adjusterId }: { adjusterId: string }) {
 }
 
 function AdjusterDetail({ adjuster, onBack }: { adjuster: Adjuster; onBack: () => void }) {
-  const tracked = adjuster.totalClaimsTracked ?? 0;
+  const { data: linkedData } = useQuery<{ linkedClaimCount: number; links: LinkedClaim[] }>({
+    queryKey: ["/api/adjusters", adjuster.id, "claims"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/adjusters/${adjuster.id}/claims`);
+      return res.json();
+    },
+  });
+
+  const linkedCount = linkedData?.linkedClaimCount ?? 0;
   const basisNote =
-    tracked === 0
+    linkedCount === 0
       ? "No linked claim evidence yet — scores shown are seeded/directional, not yet derived from your claims."
-      : tracked < 5
-        ? `Based on ${tracked} tracked claim${tracked === 1 ? "" : "s"} — directional only.`
+      : linkedCount < 5
+        ? `Based on ${linkedCount} linked claim${linkedCount === 1 ? "" : "s"} — directional only.`
         : null;
   return (
     <div className="space-y-6">

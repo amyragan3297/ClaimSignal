@@ -447,7 +447,7 @@ async function _createClaimFromExtraction(opts: {
         : [];
     if (adjMentions.length > 0) {
       try {
-        await extractAndLinkAdjustersForClaim(claim.id, claim.organizationId, adjMentions, { sourceType: "document" });
+        await extractAndLinkAdjustersForClaim(claim.id, claim.organizationId, adjMentions, { sourceType: "document", sourceDocumentId: fileId });
       } catch (adjErr: unknown) {
         console.error("[create-claim] adjuster linking non-fatal:", (adjErr as Error)?.message);
       }

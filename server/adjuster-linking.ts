@@ -118,6 +118,23 @@ export function mapRoleLabelToEnum(label: string | undefined): ClaimAdjusterRole
  * Returns the list of newly created ClaimAdjuster link records
  * (skips already-linked pairs; does not return the existing row for those).
  */
+const NON_ADJUSTER_ROLES = [
+  "homeowner", "insured", "contractor", "public adjuster", "roofing", "roofing staff",
+  "restoration", "mitigation", "project manager", "estimator", "user", "owner",
+  "property owner", "building owner", "tenant", "claimant", "vendor", "supplier",
+  "material supplier", "subcontractor", "inspector", "engineer", "attorney",
+  "legal", "pa", "independent adjuster", "ia",
+];
+
+function isNonAdjusterRole(label: string | undefined): boolean {
+  if (!label) return false;
+  const l = label.toLowerCase();
+  for (const term of NON_ADJUSTER_ROLES) {
+    if (l.includes(term)) return true;
+  }
+  return false;
+}
+
 export async function extractAndLinkAdjustersForClaim(
   claimId: string,
   orgId: string,
@@ -136,6 +153,12 @@ export async function extractAndLinkAdjustersForClaim(
     const normalized = normalizeAdjusterName(rawName);
     if (!normalized) continue;
 
+    // Never classify homeowners/contractors/roofing staff/users as adjusters
+    if (isNonAdjusterRole(mention.roleLabel)) {
+      console.log(`[adjuster-linking] skipped non-adjuster role "${mention.roleLabel}" for "${normalized}"`);
+      continue;
+    }
+
     const mentionKey = nameComparisonKey(normalized);
     const mentionCarrier = normalizeCarrierKey(mention.carrier);
 
@@ -144,8 +167,13 @@ export async function extractAndLinkAdjustersForClaim(
       const nameMatch = nameComparisonKey(a.adjusterName) === mentionKey;
       if (!nameMatch) return false;
       const existingCarrier = normalizeCarrierKey(a.carrierName);
+      // Strict dedup: both sides have known carriers -> must match
       if (existingCarrier && mentionCarrier) return existingCarrier === mentionCarrier;
-      return true;
+      // When both sides have unknown carriers, allow name-only match
+      if (!existingCarrier && !mentionCarrier) return true;
+      // When only one side has a carrier, require a tighter match to avoid merging
+      // different adjusters with the same name across different carriers
+      return false;
     });
 
     if (!adj) {
