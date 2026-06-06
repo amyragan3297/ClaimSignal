@@ -471,17 +471,35 @@ export default function ClaimDetailPage() {
   });
   type PlaybookFormData = { title: string; actionTaken: string; whatWorked: string; outcome: string; recommendedNextStep: string };
 
-  // Auto-fill playbook form when dialog opens and claim data is available
+  // Auto-fill playbook form when dialog opens — fetch AI draft first
+  const [draftLoading, setDraftLoading] = useState(false);
   useEffect(() => {
     if (playbookDialogOpen && claim) {
-      const prefilled = {
-        title: claim.claimNumber ? `Outcome: ${claim.claimNumber}` : `Outcome: ${claim.homeownerName || "Claim"}`,
-        actionTaken: claim.notes || "",
-        whatWorked: claim.whatWorked || "",
-        outcome: claim.finalOutcome || claim.initialOutcome || "",
-        recommendedNextStep: claim.actionNote || "",
-      };
-      playbookForm.reset(prefilled);
+      setDraftLoading(true);
+      apiRequest("POST", `/api/claims/${claimId}/generate-playbook-draft`, {})
+        .then(async (res) => {
+          const draft = await res.json();
+          playbookForm.reset({
+            title: draft.title || "",
+            actionTaken: draft.actionTaken || "",
+            whatWorked: draft.whatWorked || "",
+            outcome: draft.outcome || "",
+            recommendedNextStep: draft.recommendedNextStep || "",
+          });
+        })
+        .catch((err: Error) => {
+          // Fallback to simple prefill if AI draft fails
+          const prefilled = {
+            title: claim.claimNumber ? `Outcome: ${claim.claimNumber}` : `Outcome: ${claim.homeownerName || "Claim"}`,
+            actionTaken: claim.notes || "",
+            whatWorked: claim.whatWorked || "",
+            outcome: claim.finalOutcome || claim.initialOutcome || "",
+            recommendedNextStep: claim.actionNote || "",
+          };
+          playbookForm.reset(prefilled);
+          toast({ title: "AI draft failed, using basic prefill", description: err.message, variant: "destructive" });
+        })
+        .finally(() => setDraftLoading(false));
     }
   }, [playbookDialogOpen, claim]);
 
@@ -1686,29 +1704,35 @@ export default function ClaimDetailPage() {
                 <DialogHeader>
                   <DialogTitle>Capture Outcome as Playbook</DialogTitle>
                 </DialogHeader>
+                {draftLoading && (
+                  <div className="flex items-center gap-2 py-6 text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Generating playbook draft from claim data...</span>
+                  </div>
+                )}
                 <form onSubmit={playbookForm.handleSubmit((d) => playbookMutation.mutate(d))} className="space-y-3">
                   <div className="space-y-1.5">
                     <Label>Title *</Label>
-                    <Input data-testid="input-playbook-title" {...playbookForm.register("title", { required: true })} />
+                    <Input data-testid="input-playbook-title" disabled={draftLoading} {...playbookForm.register("title", { required: true })} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Action Taken</Label>
-                    <Textarea rows={2} data-testid="input-playbook-action" {...playbookForm.register("actionTaken")} />
+                    <Textarea rows={2} data-testid="input-playbook-action" disabled={draftLoading} {...playbookForm.register("actionTaken")} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>What Worked</Label>
-                    <Textarea rows={2} data-testid="input-playbook-worked" {...playbookForm.register("whatWorked")} />
+                    <Textarea rows={2} data-testid="input-playbook-worked" disabled={draftLoading} {...playbookForm.register("whatWorked")} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Outcome</Label>
-                    <Input data-testid="input-playbook-outcome" {...playbookForm.register("outcome")} />
+                    <Input data-testid="input-playbook-outcome" disabled={draftLoading} {...playbookForm.register("outcome")} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Recommended Next Step</Label>
-                    <Textarea rows={2} data-testid="input-playbook-next" {...playbookForm.register("recommendedNextStep")} />
+                    <Textarea rows={2} data-testid="input-playbook-next" disabled={draftLoading} {...playbookForm.register("recommendedNextStep")} />
                   </div>
                   <DialogFooter>
-                    <Button type="submit" disabled={playbookMutation.isPending} data-testid="button-save-playbook">
+                    <Button type="submit" disabled={draftLoading || playbookMutation.isPending} data-testid="button-save-playbook">
                       {playbookMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save Playbook"}
                     </Button>
                   </DialogFooter>

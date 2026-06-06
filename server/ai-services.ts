@@ -600,6 +600,19 @@ export interface GeneratedPlaybookEntry {
   confidenceScore: number;
 }
 
+export interface PlaybookDraft {
+  title: string;
+  actionTaken: string;
+  whatWorked: string;
+  outcome: string;
+  recommendedNextStep: string;
+  outcomeType: string;
+  confidence: number;
+  sourceDocumentIds: string[];
+  sourceTranscriptIds: string[];
+  sourceTimelineEventIds: string[];
+}
+
 export async function generatePlaybookEntry(seed: {
   scenarioType?: string;
   carrier?: string;
@@ -666,6 +679,195 @@ ${seedLines || "(no seed inputs — generate a general best-practice playbook en
     confidenceScore: typeof parsed.confidenceScore === "number"
       ? Math.min(1, Math.max(0, parsed.confidenceScore))
       : 0.75,
+  };
+}
+
+// ── Playbook: AI-powered draft generation from full claim data ─────────────────
+
+export async function generatePlaybookDraft(
+  claim: Claim,
+  opts: {
+    evidenceFiles: Array<{
+      id: string;
+      fileName: string;
+      docCategory?: string | null;
+      extractionStatus?: string | null;
+      extractedJson?: unknown;
+    }>;
+    transcripts: Array<{
+      id: string;
+      evidenceFileId?: string | null;
+      transcriptText?: string | null;
+      transcriptStatus?: string | null;
+    }>;
+    timelineEvents: Array<{
+      id: string;
+      eventType?: string | null;
+      description?: string | null;
+      eventDate?: Date | null;
+    }>;
+    adjuster?: { adjusterName?: string | null; carrierName?: string | null; } | null;
+    vendor?: { vendorName?: string | null; vendorType?: string | null; } | null;
+  }
+): Promise<PlaybookDraft> {
+  const client = getOpenAIClient();
+
+  const OUTCOME_TYPES = [
+    "Denial overturned",
+    "Supplement approved",
+    "Partial approval improved",
+    "Reinspection secured",
+    "Payment released",
+    "Code item approved",
+    "Matching issue resolved",
+    "Vendor report challenged",
+    "Other",
+    "Insufficient data",
+  ];
+
+  // Build context sections
+  const claimContext = [
+    claim.claimNumber ? `Claim Number: ${claim.claimNumber}` : null,
+    claim.carrier ? `Carrier: ${claim.carrier}` : null,
+    claim.lossType ? `Loss Type: ${claim.lossType}` : null,
+    claim.claimType ? `Claim Type: ${claim.claimType}` : null,
+    claim.status ? `Status: ${claim.status}` : null,
+    claim.currentPhase ? `Current Phase: ${claim.currentPhase}` : null,
+    claim.state ? `State: ${claim.state}` : null,
+    claim.city ? `City: ${claim.city}` : null,
+    claim.dateOfLoss ? `Date of Loss: ${claim.dateOfLoss.toISOString().slice(0, 10)}` : null,
+    claim.determinationDate ? `Determination Date: ${claim.determinationDate.toISOString().slice(0, 10)}` : null,
+    claim.resolutionDate ? `Resolution Date: ${claim.resolutionDate.toISOString().slice(0, 10)}` : null,
+    claim.denialReason ? `Denial Reason: ${claim.denialReason}` : null,
+    claim.initialOutcome ? `Initial Outcome: ${claim.initialOutcome}` : null,
+    claim.finalOutcome ? `Final Outcome: ${claim.finalOutcome}` : null,
+    claim.denialOverturned ? "Denial Overturned: Yes" : null,
+    claim.notes ? `Notes: ${claim.notes.slice(0, 500)}` : null,
+    claim.whatWorked ? `What Worked (recorded): ${claim.whatWorked.slice(0, 300)}` : null,
+    claim.actionNote ? `Action Note: ${claim.actionNote.slice(0, 300)}` : null,
+    claim.rcvAmount ? `RCV: $${claim.rcvAmount}` : null,
+    claim.acvAmount ? `ACV: $${claim.acvAmount}` : null,
+    claim.approvedAmount ? `Approved Amount: $${claim.approvedAmount}` : null,
+    claim.supplementAmountTotal ? `Supplement Total: $${claim.supplementAmountTotal}` : null,
+    claim.deductible ? `Deductible: $${claim.deductible}` : null,
+  ].filter(Boolean).join("\n");
+
+  const adjContext = opts.adjuster
+    ? `Adjuster: ${opts.adjuster.adjusterName || "Unknown"}\nAdjuster Carrier: ${opts.adjuster.carrierName || "Unknown"}`
+    : "";
+
+  const vendorContext = opts.vendor
+    ? `Vendor: ${opts.vendor.vendorName || "Unknown"}\nVendor Type: ${opts.vendor.vendorType || "Unknown"}`
+    : "";
+
+  const docContext = opts.evidenceFiles.length > 0
+    ? opts.evidenceFiles.map((e, i) => {
+        const extraction = (e.extractedJson as { extraction?: Record<string, unknown> } | null)?.extraction;
+        const extractedSummary = extraction
+          ? Object.entries(extraction)
+              .filter(([_, v]) => v !== null && v !== undefined && v !== "")
+              .map(([k, v]) => `${k}: ${String(v).slice(0, 100)}`)
+              .join("\n  ")
+          : "(no extraction)";
+        return `[Document ${i + 1}: ${e.fileName} (${e.docCategory || "unknown"})]\n  ${extractedSummary}`;
+      }).join("\n\n")
+    : "(no documents uploaded)";
+
+  const transcriptContext = opts.transcripts.length > 0
+    ? opts.transcripts
+        .filter(t => t.transcriptStatus === "completed" && t.transcriptText)
+        .map((t, i) => `[Transcript ${i + 1}]\n${t.transcriptText!.slice(0, 800)}`)
+        .join("\n\n")
+    : "(no transcripts available)";
+
+  const timelineContext = opts.timelineEvents.length > 0
+    ? opts.timelineEvents
+        .map((e, i) => `[Event ${i + 1}: ${e.eventType || "unknown"} @ ${e.eventDate ? e.eventDate.toISOString().slice(0, 10) : "no date"}]\n${e.description || ""}`)
+        .join("\n\n")
+    : "(no timeline events recorded)";
+
+  const userPrompt = `You are an expert property insurance claims intelligence analyst. You are drafting a "playbook entry" that captures what happened on a specific claim and what should be reused for similar future claims.
+
+Analyze ALL the data provided below. Do NOT invent facts. If a field cannot be confirmed from the data, write "Insufficient data found." for that field.
+
+Return ONLY a JSON object with this exact shape:
+{
+  "title": "concise title (max 10 words)",
+  "actionTaken": "what actions were taken on this claim",
+  "whatWorked": "what tactics, documents, or strategies produced the positive outcome",
+  "outcome": "the final claim outcome",
+  "recommendedNextStep": "what should be done next time a similar claim arises",
+  "outcomeType": "MUST be one of the listed options below",
+  "confidence": 0.0-1.0,
+  "sourceDocumentIds": ["id1", "id2"],
+  "sourceTranscriptIds": ["id1"],
+  "sourceTimelineEventIds": ["id1", "id2"]
+}
+
+Outcome type MUST be exactly one of:
+${OUTCOME_TYPES.map(o => `- "${o}"`).join("\n")}
+
+Rules:
+- Do NOT invent PII (no homeowner names, addresses, policy numbers).
+- Use only data found in the claim record, documents, transcripts, notes, or timeline.
+- If a field cannot be confirmed, write "Insufficient data found."
+- Keep language professional and claim-specific.
+- Focus on what worked, what changed the claim outcome, and what should be reused.
+- Include carrier, adjuster, vendor, loss type, and issue type when available.
+- sourceDocumentIds: list IDs of evidence files that were most relevant to the outcome.
+- sourceTranscriptIds: list IDs of transcripts that informed the outcome.
+- sourceTimelineEventIds: list IDs of timeline events that were pivotal.
+
+── CLAIM RECORD ──
+${claimContext || "(no claim data)"}
+
+── ADJUSTER ──
+${adjContext || "(no adjuster data)"}
+
+── VENDOR ──
+${vendorContext || "(no vendor data)"}
+
+── DOCUMENTS & EXTRACTIONS ──
+${docContext}
+
+── TRANSCRIPTS ──
+${transcriptContext}
+
+── TIMELINE EVENTS ──
+${timelineContext}`;
+
+  const completion = await client.chat.completions.create({
+    model: ANALYSIS_MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+
+  const raw = completion.choices[0]?.message?.content || "{}";
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+  const safeString = (v: unknown): string => (typeof v === "string" ? v : "Insufficient data found.");
+  const safeArr = (v: unknown): string[] => (Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : []);
+  const safeNum = (v: unknown): number => (typeof v === "number" ? Math.min(1, Math.max(0, v)) : 0);
+
+  const validOutcomeType = (v: unknown): string => {
+    const s = typeof v === "string" ? v : "Insufficient data";
+    return OUTCOME_TYPES.includes(s) ? s : "Other";
+  };
+
+  return {
+    title: safeString(parsed.title),
+    actionTaken: safeString(parsed.actionTaken),
+    whatWorked: safeString(parsed.whatWorked),
+    outcome: safeString(parsed.outcome),
+    recommendedNextStep: safeString(parsed.recommendedNextStep),
+    outcomeType: validOutcomeType(parsed.outcomeType),
+    confidence: safeNum(parsed.confidence),
+    sourceDocumentIds: safeArr(parsed.sourceDocumentIds),
+    sourceTranscriptIds: safeArr(parsed.sourceTranscriptIds),
+    sourceTimelineEventIds: safeArr(parsed.sourceTimelineEventIds),
   };
 }
 

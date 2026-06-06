@@ -25,7 +25,7 @@ import evidenceRouter from "./evidence";
 import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity, computeFullClaimScoring } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
-import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus, generatePlaybookEntry, generateAiFallbackPlaybookRecs } from "./ai-services";
+import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus, generatePlaybookEntry, generateAiFallbackPlaybookRecs, generatePlaybookDraft } from "./ai-services";
 import { getClaimWeather, geocodeZip, geocodeCity } from "./weather";
 import { findDuplicateClaims } from "./claim-matching";
 import express from "express";
@@ -1767,6 +1767,50 @@ export async function registerRoutes(
   });
 
   // ── Capture claim outcome as playbook (auto-populated) ───────────────
+  app.post("/api/claims/:id/generate-playbook-draft", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const claim = await storage.getClaim(req.params.id as string, orgId);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+      const linkedAdjs = await storage.getClaimAdjusters(claim.id);
+      const primaryAdj = linkedAdjs.find(l => l.roleOnClaim === "primary_adjuster");
+      const adjuster = primaryAdj ? await storage.getAdjuster(primaryAdj.adjusterId, orgId) : null;
+
+      const vendor = claim.vendorName ? { vendorName: claim.vendorName, vendorType: claim.vendorType } : null;
+      const evidence = await storage.getEvidenceFiles(orgId, claim.id);
+      const docs = evidence.filter(e => !e.fileName.match(/\.(mp3|m4a|wav|ogg|aac|flac|webm)$/i));
+      const audioFiles = evidence.filter(e => e.fileName.match(/\.(mp3|m4a|wav|ogg|aac|flac|webm)$/i));
+
+      const transcripts: Array<{ id: string; evidenceFileId?: string | null; transcriptText?: string | null; transcriptStatus?: string | null; }> = [];
+      for (const audio of audioFiles) {
+        const ar = await storage.getAudioRecordingByEvidenceFile(audio.id);
+        if (ar) {
+          transcripts.push({ id: ar.id, evidenceFileId: ar.evidenceFileId, transcriptText: ar.transcriptText, transcriptStatus: ar.transcriptStatus });
+        }
+      }
+
+      const timelineEvents = await storage.getTimelineEvents(claim.id, orgId);
+
+      if (!isOpenAIConfigured()) {
+        return res.status(503).json({ message: "AI service is not configured." });
+      }
+
+      const draft = await generatePlaybookDraft(claim, {
+        evidenceFiles: docs,
+        transcripts,
+        timelineEvents: timelineEvents.map(t => ({ id: t.id, eventType: t.eventType, description: t.description, eventDate: t.eventDate })),
+        adjuster: adjuster ? { adjusterName: adjuster.adjusterName, carrierName: adjuster.carrierName } : null,
+        vendor: vendor ? { vendorName: vendor.vendorName, vendorType: vendor.vendorType } : null,
+      });
+
+      return res.json(draft);
+    } catch (err) {
+      console.error("[generate-playbook-draft] error", err);
+      return res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
   app.post("/api/claims/:id/capture-playbook", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;

@@ -1,0 +1,175 @@
+Reinforce ClaimSignal adjuster extraction and automatic claim linking.
+
+Do not redesign the UI.
+Do not add fake demo data.
+Do not require the user to manually link adjusters.
+Do not overwrite good adjuster data with weaker extraction data.
+
+Problem:
+ClaimSignal must capture every adjuster mentioned in uploaded documents, transcripts, estimates, letters, notes, and communications. The user should not have to manually link each adjuster to each claim. If one claim has multiple adjusters, all should be captured. If one adjuster appears on multiple claims, that adjuster profile must automatically link to every related claim.
+
+Required behavior:
+When any claim document, audio transcript, estimate, email, letter, note, or communication is processed, the system must automatically detect and link all adjusters mentioned.
+
+Capture adjusters from labels including:
+- Adjuster
+- Field Adjuster
+- Desk Adjuster
+- Claims Adjuster
+- Claim Representative
+- Claim Specialist
+- Claims Specialist
+- Property Claim Representative
+- Team Lead
+- Supervisor
+- Manager
+- Examiner
+- Reinspection adjuster
+- CAT adjuster
+- Inside adjuster
+- Outside adjuster
+
+For every adjuster found:
+1. Normalize the adjuster name.
+2. Search existing adjuster profiles.
+3. If profile exists, reuse it.
+4. If profile does not exist, create it.
+5. Link the adjuster to the claim automatically.
+6. Store the adjuster role on that specific claim.
+7. Store the source document, transcript, note, or communication where the adjuster was found.
+8. Store confidence score and extraction reason.
+
+Database relationship requirement:
+One adjuster can be linked to many claims.
+One claim can have many adjusters.
+
+Use or create a junction table similar to:
+
+claim_adjusters:
+- id
+- claim_id
+- adjuster_id
+- role
+- carrier_id
+- source_type
+- source_id
+- evidence_text
+- confidence
+- first_seen_at
+- last_seen_at
+- created_at
+- updated_at
+
+Do not store only one adjuster field on the claim and call it done. That will corrupt the intelligence layer.
+
+Primary adjuster logic:
+- A claim may have one primary adjuster.
+- A claim may also have additional adjusters.
+- Do not delete additional adjusters when setting a primary adjuster.
+- If the document clearly says “primary adjuster,” mark that adjuster as primary.
+- If multiple adjusters are mentioned without clear hierarchy, link all of them and mark role as “mentioned adjuster” or “additional adjuster.”
+- If a supervisor or team lead is mentioned, link them too with role “supervisor” or “team lead.”
+
+Automatic linking examples:
+Example 1:
+Document says “Adjuster: Cody Vines”
+Expected:
+Cody Vines is created or found.
+Cody Vines is linked to that claim.
+
+Example 2:
+Document says “Desk adjuster Shay Griggs and field adjuster DeAndre Woods”
+Expected:
+Both adjusters are linked to the claim with separate roles.
+
+Example 3:
+A transcript mentions “I spoke with Cody Vines on the Allstate claim”
+Expected:
+Cody Vines is linked to the claim with source_type transcript.
+
+Example 4:
+Cody Vines appears on five Allstate claims.
+Expected:
+One Cody Vines profile.
+Five claim links.
+Adjuster Intelligence page shows all five linked claims.
+
+Adjuster Intelligence page requirement:
+The adjuster profile must derive metrics from linked claims, not from seeded or fake data.
+
+The adjuster page should show:
+- linked claims count
+- carrier association
+- claim numbers
+- homeowners, masked unless Master Admin
+- property address, masked unless Master Admin
+- outcome status
+- documents where adjuster was mentioned
+- transcript references where adjuster was mentioned
+- common denial reasons
+- average response time if timeline data exists
+- reinspection frequency
+- supplement approval frequency
+- friction score based only on actual linked claim evidence
+
+If no linked claim evidence exists, show that message only when there are truly zero claim_adjusters records.
+
+Extraction safeguards:
+Do not classify the logged-in user as an adjuster unless the source document clearly labels that person as carrier adjuster.
+Do not classify the homeowner as adjuster.
+Do not classify the contractor as adjuster.
+Do not classify roofing company staff as adjuster.
+If role is ambiguous, still capture the person as “mentioned contact,” but do not mark as adjuster until confirmed by document language.
+
+Required backend function:
+Create or fix:
+
+extractAndLinkAdjustersForClaim(claimId, source)
+
+This function must:
+- parse all adjuster names from the source
+- normalize names
+- create or find adjuster profiles
+- create or update claim_adjusters records
+- avoid duplicate links
+- preserve source evidence
+- return linked adjusters
+
+Required deduplication:
+These must resolve to the same adjuster if carrier and name match:
+- Cody Vines
+- Vines, Cody
+- CODY VINES
+- Cody M. Vines
+
+But do not merge two people with same last name unless confidence is high.
+
+Required acceptance tests:
+
+Test 1:
+Upload a document mentioning Cody Vines.
+Expected:
+Cody Vines profile is created or found.
+The claim is automatically linked.
+No manual link required.
+
+Test 2:
+Upload a document mentioning two adjusters.
+Expected:
+Both adjusters are linked to the same claim.
+
+Test 3:
+Upload another claim mentioning Cody Vines.
+Expected:
+No duplicate Cody Vines profile.
+Existing Cody Vines profile now shows two linked claims.
+
+Test 4:
+Open Adjuster Intelligence for Cody Vines.
+Expected:
+It no longer says “No linked claim evidence yet” when linked claims exist.
+
+Test 5:
+If Amy Ragan appears as contractor, sender, uploader, or user, do not classify her as adjuster.
+
+This is a core data integrity requirement. Adjuster Intelligence is useless unless every adjuster mention is captured, normalized, deduplicated, and automatically linked to every related claim.
