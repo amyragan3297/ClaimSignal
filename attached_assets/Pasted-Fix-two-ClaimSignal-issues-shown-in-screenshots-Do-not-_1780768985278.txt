@@ -1,0 +1,151 @@
+Fix two ClaimSignal issues shown in screenshots.
+
+Do not redesign the UI.
+Do not add fake demo data.
+Do not remove existing modules.
+
+ISSUE 1: Audio/Audible call upload has no transcription view
+
+Problem:
+An audio call file can be uploaded and appears under Documents & Evidence, but there is no visible transcription, no “View Transcript” button, and no way to inspect what the AI heard.
+
+Required fix:
+1. Detect audio files by MIME type and extension:
+- .mp3
+- .m4a
+- .wav
+- .aac
+- .ogg
+- .webm
+- .mov or .mp4 if audio/video contains speech
+
+2. When an audio file is uploaded:
+- save the original file
+- create a document/evidence record
+- run transcription automatically if transcription provider/API is configured
+- save transcript text to the database
+- save transcription status:
+  pending
+  processing
+  completed
+  failed
+
+3. Add visible UI controls on audio evidence cards:
+- View Transcript
+- Reprocess Transcription
+- Download Audio
+
+4. If transcript exists:
+- show transcript in expandable panel or modal
+- include speaker/timestamp support if available
+- show extracted claim facts from transcript separately from document extraction
+
+5. If transcript does not exist:
+show a clear message:
+“No transcript available yet. Click Reprocess Transcription.”
+
+6. If transcription fails:
+show the actual error in admin/debug mode, not just silent failure.
+
+7. Add backend routes if missing:
+GET /api/documents/:id/transcript
+POST /api/documents/:id/transcribe
+GET /api/claims/:claimId/transcripts
+
+8. The transcript must be linked to:
+- claim_id
+- document_id
+- evidence_id if that table exists
+- extraction_id if AI extraction uses it
+
+9. The AI extraction engine must be able to read transcript text and extract:
+- claim number
+- homeowner
+- carrier
+- adjuster
+- date of loss
+- inspection date
+- denial/approval language
+- promised next steps
+- payment/supplement references
+
+Acceptance test:
+Upload an audio call.
+Expected:
+The file appears under Documents & Evidence.
+A transcription status appears.
+A View Transcript button appears.
+The transcript can be opened.
+The transcript is searchable and connected to the claim.
+
+ISSUE 2: Capture Outcome as Playbook is manual only and not connected enough
+
+Problem:
+The Capture Outcome as Playbook modal is blank and requires manual entry, but it should help create reusable claim intelligence from the current claim outcome.
+
+Required fix:
+1. When opening “Capture Outcome as Playbook” from inside a claim, prefill the modal from the current claim.
+
+Auto-fill:
+- Title
+- Action Taken
+- What Worked
+- Outcome
+- Recommended Next Step
+
+2. Use existing claim data, documents, transcript, timeline, supplement status, approval/denial status, and notes to generate draft playbook content.
+
+3. Required fields:
+Title should auto-generate like:
+“State Farm roof approval after supplement and documentation review”
+or
+“Allstate denial dispute with adjuster reinspection request”
+
+4. Add source linkage:
+Each playbook record must store:
+- claim_id
+- carrier_id
+- adjuster_id if present
+- vendor_id if present
+- document_ids used
+- transcript_ids used
+- outcome_type
+- loss_type
+- state
+- created_by_user_id
+
+5. Add outcome type options:
+- Denial overturned
+- Supplement approved
+- Partial approval improved
+- Reinspection secured
+- Payment released
+- Code item approved
+- Matching issue resolved
+- Vendor report challenged
+- Other
+
+6. The Playbook Search Engine must later be able to answer:
+- What worked before in similar claims?
+- Which carrier approved after reinspection?
+- Which adjuster was involved?
+- Which documents supported the outcome?
+
+7. If no outcome data exists yet, show:
+“No resolved outcome found yet. You can still manually capture a playbook entry.”
+
+8. Save should create a real playbook database record, not just frontend state.
+
+Backend routes if missing:
+POST /api/playbooks
+GET /api/playbooks
+GET /api/playbooks/:id
+GET /api/claims/:claimId/playbooks
+POST /api/claims/:claimId/capture-playbook
+
+Acceptance test:
+Open Capture Outcome as Playbook from a claim with documents and claim status.
+Expected:
+The modal is prefilled.
+Saving creates a playbook record linked to the claim.
+The playbook is searchable later by carrier, adjuster, claim type, and outcome.

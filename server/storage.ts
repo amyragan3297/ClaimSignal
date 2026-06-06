@@ -177,8 +177,10 @@ export interface IStorage {
 
   getAudioRecordings(claimId: string, orgId: string): Promise<AudioRecording[]>;
   getAudioRecordingsByOrg(orgId: string): Promise<AudioRecording[]>;
+  getAudioRecordingByEvidenceFile(evidenceFileId: string): Promise<AudioRecording | undefined>;
   createAudioRecording(recording: InsertAudioRecording): Promise<AudioRecording>;
   updateAudioRecording(id: string, orgId: string, data: Partial<AudioRecording>): Promise<AudioRecording | undefined>;
+  getAudioRecordingById(id: string): Promise<AudioRecording | undefined>;
 
   getTimelineEvents(claimId: string, orgId: string): Promise<TimelineEvent[]>;
   getTimelineEventsByOrgId(orgId: string): Promise<TimelineEvent[]>;
@@ -854,6 +856,20 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(audioRecordings).where(
       eq(audioRecordings.organizationId, orgId)
     ).orderBy(desc(audioRecordings.createdAt));
+  }
+
+  async getAudioRecordingByEvidenceFile(evidenceFileId: string): Promise<AudioRecording | undefined> {
+    const [row] = await db.select().from(audioRecordings).where(
+      eq(audioRecordings.evidenceFileId, evidenceFileId)
+    ).limit(1);
+    return row;
+  }
+
+  async getAudioRecordingById(id: string): Promise<AudioRecording | undefined> {
+    const [row] = await db.select().from(audioRecordings).where(
+      eq(audioRecordings.id, id)
+    ).limit(1);
+    return row;
   }
 
   async createAudioRecording(recording: InsertAudioRecording): Promise<AudioRecording> {

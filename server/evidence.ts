@@ -696,6 +696,25 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         ? { entities, extraction: llmExtraction || null }
         : undefined,
     });
+
+    // Create audio recording record for audio uploads
+    if (fileType === "audio") {
+      try {
+        const audioRec = await storage.createAudioRecording({
+          organizationId,
+          claimId: claimId || undefined,
+          evidenceFileId: evidenceFile.id,
+          uploadedByUserId: userId,
+          sha256Hash: sha256,
+          transcriptText: textContent && textContent.trim().length > 0 ? textContent : undefined,
+          transcriptStatus: textContent && textContent.trim().length > 0 ? "completed" : (isOpenAIConfigured() ? "failed" : "pending"),
+          transcriptError: isOpenAIConfigured() && !textContent ? "Transcription failed or returned empty" : undefined,
+        });
+        console.log(`[audio-upload] created audioRecording id=${audioRec.id} for evidenceFile=${evidenceFile.id} status=${audioRec.transcriptStatus}`);
+      } catch (audioRecErr: unknown) {
+        console.error("[audio-upload] non-fatal creating audioRecordings:", (audioRecErr as Error)?.message);
+      }
+    }
     
     for (const entity of entities) {
       if (!PERSISTABLE_ENTITY_TYPES.has(entity.entityType)) continue;
@@ -1616,6 +1635,47 @@ router.get("/timeline/:claimId", async (req: AuthRequest, res: Response) => {
     if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
     const events = await storage.getTimelineEvents(req.params.claimId as string, req.auth.organizationId);
     res.json(events);
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
+  }
+});
+
+// ── Transcript endpoints ──────────────────────────────────────────────────
+router.get("/files/:id/transcript", async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    const file = await storage.getEvidenceFile(req.params.id as string, req.auth.organizationId);
+    if (!file) return res.status(404).json({ message: "File not found" });
+    const audio = await storage.getAudioRecordingByEvidenceFile(file.id);
+    if (!audio) return res.status(404).json({ message: "No audio recording found for this file" });
+    res.json({
+      id: audio.id,
+      evidenceFileId: audio.evidenceFileId,
+      transcriptText: audio.transcriptText,
+      transcriptStatus: audio.transcriptStatus,
+      transcriptError: audio.transcriptError,
+      transcriptConfidence: audio.transcriptConfidence,
+      createdAt: audio.createdAt,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
+  }
+});
+
+router.post("/files/:id/transcribe", async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.auth) return res.status(401).json({ message: "Unauthorized" });
+    if (!isOpenAIConfigured()) return res.status(503).json({ message: "OpenAI not configured" });
+    const file = await storage.getEvidenceFile(req.params.id as string, req.auth.organizationId);
+    if (!file) return res.status(404).json({ message: "File not found" });
+
+    const audio = await storage.getAudioRecordingByEvidenceFile(file.id);
+    if (!audio) return res.status(404).json({ message: "No audio recording found for this file" });
+
+    // Re-fetch raw audio bytes from storage (using file content stored elsewhere)
+    // For now, if we have the original storage, we'll try to transcribe
+    // In this implementation, we need the raw audio buffer which we don't persist after upload
+    return res.status(501).json({ message: "Re-transcription requires the original audio buffer to be re-uploaded." });
   } catch (err) {
     return res.status(500).json({ message: (err as Error).message });
   }

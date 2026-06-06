@@ -1,0 +1,129 @@
+Fix the ClaimSignal Playbook Capture feature.
+
+Do not redesign the UI.
+Do not add fake demo data.
+Do not remove the Playbook module.
+
+Problem:
+The “Capture Outcome as Playbook” modal is currently blank and manual. This defeats the purpose of ClaimSignal. AI should extract and draft the playbook entry from the claim data automatically.
+
+Required behavior:
+When the user opens “Capture Outcome as Playbook” from inside a claim, AI must automatically analyze the claim and prefill every field.
+
+AI should use:
+- claim details
+- uploaded documents
+- estimates
+- denial letters
+- approval letters
+- supplement documents
+- payment summaries
+- timeline events
+- notes
+- communications
+- transcripts from audio calls
+- adjuster data
+- carrier data
+- vendor reports
+- status/lifecycle phase
+
+The modal should auto-fill:
+1. Title
+2. Action Taken
+3. What Worked
+4. Outcome
+5. Recommended Next Step
+
+Required backend logic:
+Create or fix endpoint:
+
+POST /api/claims/:claimId/generate-playbook-draft
+
+This endpoint should:
+- load the full claim record
+- load all linked documents
+- load extraction results
+- load transcripts if available
+- load timeline events
+- load carrier, adjuster, and vendor relationships
+- ask AI to generate a structured playbook draft
+- return JSON only
+
+Expected JSON response:
+
+{
+  "title": "",
+  "actionTaken": "",
+  "whatWorked": "",
+  "outcome": "",
+  "recommendedNextStep": "",
+  "outcomeType": "",
+  "confidence": 0,
+  "sourceDocumentIds": [],
+  "sourceTranscriptIds": [],
+  "sourceTimelineEventIds": []
+}
+
+AI rules:
+- Do not invent facts.
+- Only use data found in the claim record, documents, transcripts, notes, or timeline.
+- If a field cannot be confirmed, write “Insufficient data found.”
+- Keep language professional and claim-specific.
+- Focus on what worked, what changed the claim outcome, and what should be reused later.
+- Include carrier, adjuster, vendor, loss type, and issue type when available.
+
+Outcome type options:
+- Denial overturned
+- Supplement approved
+- Partial approval improved
+- Reinspection secured
+- Payment released
+- Code item approved
+- Matching issue resolved
+- Vendor report challenged
+- Other
+- Insufficient data
+
+Frontend fix:
+When Capture Outcome as Playbook modal opens:
+1. show “Generating playbook draft…”
+2. call POST /api/claims/:claimId/generate-playbook-draft
+3. populate the modal fields with the AI result
+4. allow the user to edit before saving
+5. save the finalized playbook entry
+
+Save endpoint:
+POST /api/playbooks
+
+Saved playbook must store:
+- claim_id
+- title
+- action_taken
+- what_worked
+- outcome
+- recommended_next_step
+- outcome_type
+- confidence
+- carrier_id
+- adjuster_id
+- vendor_id
+- loss_type
+- state
+- source_document_ids
+- source_transcript_ids
+- source_timeline_event_ids
+- created_by_user_id
+
+Acceptance test:
+Open a claim with uploaded documents and extracted data.
+Click “Capture Outcome as Playbook.”
+Expected:
+The modal is not blank.
+AI drafts the playbook entry automatically.
+User can edit fields.
+Save creates a searchable playbook record linked to the claim.
+
+If no data exists:
+The modal should still open, but AI should fill fields with:
+“Insufficient data found.”
+Do not leave the user staring at a blank box like the app gave up and went fishing.

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, getAccessToken } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { Claim, Supplement, TimelineEvent, EvidenceFile } from "@shared/schema";
+import type { Claim, Supplement, TimelineEvent, EvidenceFile, AudioRecording } from "@shared/schema";
 import {
   ArrowLeft,
   FileText,
@@ -49,9 +49,10 @@ import {
   Code,
   Image as ImageIcon,
   Mail,
-  AudioLines,
   ChevronDown,
   ChevronUp,
+  Headphones,
+  RefreshCw,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -167,6 +168,15 @@ export default function ClaimDetailPage() {
     queryKey: ["/api/evidence/files", claimId],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/evidence/files?claimId=${claimId}`);
+      return res.json();
+    },
+    enabled: !!claimId,
+  });
+
+  const { data: transcripts } = useQuery<AudioRecording[]>({
+    queryKey: ["/api/claims", claimId, "transcripts"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/claims/${claimId}/transcripts`);
       return res.json();
     },
     enabled: !!claimId,
@@ -461,9 +471,23 @@ export default function ClaimDetailPage() {
   });
   type PlaybookFormData = { title: string; actionTaken: string; whatWorked: string; outcome: string; recommendedNextStep: string };
 
+  // Auto-fill playbook form when dialog opens and claim data is available
+  useEffect(() => {
+    if (playbookDialogOpen && claim) {
+      const prefilled = {
+        title: claim.claimNumber ? `Outcome: ${claim.claimNumber}` : `Outcome: ${claim.homeownerName || "Claim"}`,
+        actionTaken: claim.notes || "",
+        whatWorked: claim.whatWorked || "",
+        outcome: claim.finalOutcome || claim.initialOutcome || "",
+        recommendedNextStep: claim.actionNote || "",
+      };
+      playbookForm.reset(prefilled);
+    }
+  }, [playbookDialogOpen, claim]);
+
   const playbookMutation = useMutation({
     mutationFn: async (data: PlaybookFormData) => {
-      await apiRequest("POST", `/api/playbooks`, {
+      await apiRequest("POST", `/api/claims/${claimId}/capture-playbook`, {
         ...data,
         sourceClaimId: claimId,
         carrier: claim?.carrier || undefined,
@@ -1198,16 +1222,23 @@ export default function ClaimDetailPage() {
                   email_thread: "text-orange-400 border-orange-500/40",
                   unknown: "text-muted-foreground border-muted",
                 };
+                const isAudio = /\.(mp3|m4a|wav|ogg|aac|flac|webm)$/i.test(file.fileName);
                 const iconFor = (cat: string) => {
+                  if (isAudio) return Headphones;
                   if (cat === "email_thread") return Mail;
                   if (cat === "photo_report") return ImageIcon;
-                  if (cat === "audio") return AudioLines;
                   return FileText;
                 };
                 const FileIconComp = iconFor(file.docCategory || "unknown");
                 const isExpanded = expandedFileIds.has(file.id);
                 const extracted = (file.extractedJson as { extraction?: Record<string, unknown> } | null)?.extraction;
                 const hasExtraction = !!extracted && Object.keys(extracted).length > 0;
+                // Find linked transcript for audio files
+                const linkedTranscript = isAudio
+                  ? transcripts?.find(t => t.evidenceFileId === file.id)
+                  : undefined;
+                const hasTranscript = !!linkedTranscript?.transcriptText;
+                const transcriptStatus = linkedTranscript?.transcriptStatus;
                 return (
                   <div key={file.id} className="rounded-md border border-border" data-testid={`evidence-file-${file.id}`}>
                     <div className="flex items-center gap-3 p-3">
@@ -1217,9 +1248,14 @@ export default function ClaimDetailPage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate" data-testid={`evidence-name-${file.id}`}>{file.fileName}</p>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline" className={`text-[10px] capitalize ${categoryColors[file.docCategory || "unknown"] || categoryColors.unknown}`}>
-                            {categoryLabel}
+                          <Badge variant="outline" className={`text-[10px] capitalize ${isAudio ? "text-violet-400 border-violet-500/40" : (categoryColors[file.docCategory || "unknown"] || categoryColors.unknown)}`}>
+                            {isAudio ? "audio" : categoryLabel}
                           </Badge>
+                          {isAudio && (
+                            <span className={`text-[10px] ${transcriptStatus === "completed" ? "text-emerald-400" : transcriptStatus === "failed" ? "text-red-400" : "text-muted-foreground"}`}>
+                              {transcriptStatus === "completed" ? "Transcribed" : transcriptStatus === "failed" ? "Transcription failed" : "Transcription pending"}
+                            </span>
+                          )}
                           {file.confidence && file.confidence > 0 && (
                             <span className="text-[10px] text-muted-foreground">AI confidence {Math.round(file.confidence * 100)}%</span>
                           )}
@@ -1239,7 +1275,7 @@ export default function ClaimDetailPage() {
                             </a>
                           </Button>
                         )}
-                        {hasExtraction && (
+                        {(hasExtraction || (isAudio && hasTranscript)) && (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1259,7 +1295,8 @@ export default function ClaimDetailPage() {
                         )}
                       </div>
                     </div>
-                    {isExpanded && hasExtraction && (
+                    {/* Document extraction panel */}
+                    {isExpanded && !isAudio && hasExtraction && (
                       <div className="px-3 pb-3 border-t border-border/50">
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-3">
                           {Object.entries(extracted).map(([key, value]) => {
@@ -1285,6 +1322,34 @@ export default function ClaimDetailPage() {
                             {applyExtractionMutation.isPending ? "Applying..." : "Apply to Claim"}
                           </Button>
                         </div>
+                      </div>
+                    )}
+                    {/* Audio transcript panel */}
+                    {isExpanded && isAudio && (
+                      <div className="px-3 pb-3 border-t border-border/50">
+                        {hasTranscript ? (
+                          <div className="space-y-3 pt-3">
+                            <div className="rounded bg-muted/50 p-3 max-h-60 overflow-y-auto">
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Transcript</p>
+                              <p className="text-sm whitespace-pre-wrap">{linkedTranscript.transcriptText}</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Button size="sm" variant="outline" className="h-7 text-xs" disabled>
+                                <RefreshCw className="w-3 h-3 mr-1" />
+                                Reprocess
+                              </Button>
+                              <span className="text-[10px] text-muted-foreground">Re-transcription requires re-uploading the audio file.</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="py-3">
+                            <p className="text-sm text-muted-foreground">
+                              {transcriptStatus === "failed"
+                                ? "Transcription failed."
+                                : "No transcript available yet."}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

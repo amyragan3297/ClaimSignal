@@ -1753,6 +1753,87 @@ export async function registerRoutes(
     }
   });
 
+  // ── Claim-specific transcripts endpoint ───────────────────────────────
+  app.get("/api/claims/:id/transcripts", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const claim = await storage.getClaim(req.params.id as string, orgId);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+      const transcripts = await storage.getAudioRecordings(claim.id, orgId);
+      res.json(transcripts);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // ── Capture claim outcome as playbook (auto-populated) ───────────────
+  app.post("/api/claims/:id/capture-playbook", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const userId = req.auth!.userId;
+      const role = req.auth!.role;
+      const claim = await storage.getClaim(req.params.id as string, orgId);
+      if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+      // Gather claim adjusters
+      const linkedAdjs = await storage.getClaimAdjusters(claim.id);
+      const primaryAdj = linkedAdjs.find(l => l.roleOnClaim === "primary_adjuster");
+      const adjuster = primaryAdj ? await storage.getAdjuster(primaryAdj.adjusterId, orgId) : undefined;
+
+      const evidence = await storage.getEvidenceFiles(orgId, claim.id);
+      const audioEvidence = evidence.filter(e => e.fileName.match(/\.(mp3|m4a|wav|ogg|aac|flac|webm)$/i));
+      const docEvidence = evidence.filter(e => !e.fileName.match(/\.(mp3|m4a|wav|ogg|aac|flac|webm)$/i));
+
+      const data = insertPlaybookEntrySchema.parse({
+        ...req.body,
+        organizationId: orgId,
+        sourceClaimId: claim.id,
+        carrier: claim.carrier || undefined,
+        adjuster: adjuster?.adjusterName || undefined,
+        adjusterId: adjuster?.id || undefined,
+        claimType: claim.claimType || claim.lossType || undefined,
+        denialReason: claim.denialReason || undefined,
+        outcome: claim.finalOutcome || claim.initialOutcome || undefined,
+        outcomeType: claim.finalOutcome || claim.initialOutcome || undefined,
+        state: claim.state || undefined,
+        region: claim.city || undefined,
+        actionTaken: claim.notes || undefined,
+        whatWorked: claim.whatWorked || undefined,
+        recommendedNextStep: claim.actionNote || undefined,
+        timelineSummary: claim.notes || undefined,
+        documentationUsed: docEvidence.map(e => e.docCategory).filter(Boolean),
+        metadataJson: {
+          evidenceFileIds: docEvidence.map(e => e.id),
+          audioFileIds: audioEvidence.map(e => e.id),
+          claimStatus: claim.status,
+          claimPhase: claim.currentPhase,
+          supplementAmount: claim.supplementAmountTotal,
+          approvedAmount: claim.approvedAmount,
+          rcvAmount: claim.rcvAmount,
+          acvAmount: claim.acvAmount,
+          deductible: claim.deductible,
+        },
+        createdBy: userId,
+      });
+      const entry = await storage.createPlaybookEntry(data);
+      await storage.createAuditLog({
+        organizationId: orgId,
+        actorUserId: userId,
+        actorRole: role,
+        isImpersonation: req.auth!.isImpersonation,
+        impersonatorUserId: req.auth!.impersonatorUserId,
+        actionType: "PLAYBOOK_CREATED",
+        entityType: "playbook",
+        entityId: entry.id,
+        afterJson: entry,
+        ipAddress: getClientIp(req),
+      });
+      res.json(entry);
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
+    }
+  });
+
   app.use("/api/evidence", requireAuth, requireActiveSubscription, evidenceRouter);
   app.use("/api/intelligence", requireAuth, requireActiveSubscription, intelligenceRouter);
 
