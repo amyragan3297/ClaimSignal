@@ -86,7 +86,7 @@ export default function Homepage() {
             </Link>
             <Link href="/login">
               <Button variant="outline" size="lg" className="px-8" data-testid="button-hero-secondary">
-                Log In to Platform
+                View Platform
               </Button>
             </Link>
           </div>
