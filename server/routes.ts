@@ -142,7 +142,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Email already registered" });
       }
 
-      const planType = data.planType === "pro" ? "individual" : (data.planType || "individual");
+      const planType = data.planType || "individual";
 
       if (planType === "founder") {
         const founderCount = await storage.getFounderSubscriptionCount();

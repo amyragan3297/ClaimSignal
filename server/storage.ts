@@ -34,6 +34,7 @@ import {
   type IntelligenceEvent, type InsertIntelligenceEvent,
   organizations, users, userSessions, billingAccounts,
   claims, claimVersions, adjusters, claimAdjusters,
+  foundingPartnerRequests, enterpriseContactLeads,
   clients, supplements, documents, emails, aiInsights,
   founderAgreements, auditLogs,
   evidenceFiles, extractedEntities, claimDrafts, audioRecordings, timelineEvents,

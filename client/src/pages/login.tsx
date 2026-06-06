@@ -79,7 +79,7 @@ export default function LoginPage() {
   }
 
   const selectedPlan = registerForm.watch("planType");
-  const planInfo = selectedPlan && selectedPlan !== "pro" ? PLANS[selectedPlan as keyof typeof PLANS] : PLANS.individual;
+  const planInfo = selectedPlan ? PLANS[selectedPlan as keyof typeof PLANS] : PLANS.individual;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
