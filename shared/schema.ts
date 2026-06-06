@@ -5,7 +5,7 @@ import { z } from "zod";
 
 export const userRoleEnum = pgEnum("user_role", ["super_admin", "admin", "team_owner", "founder", "standard", "carrier_analyst"]);
 export const userStatusEnum = pgEnum("user_status", ["active", "archived", "test"]);
-export const subscriptionStatusEnum = pgEnum("subscription_status", ["trialing", "active", "past_due", "canceled"]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", ["pending_billing", "trialing", "active", "past_due", "canceled"]);
 export const planTypeEnum = pgEnum("plan_type", ["founder", "pro", "team", "enterprise", "individual"]);
 export const organizationTypeEnum = pgEnum("organization_type", ["contractor", "roofing_firm", "enterprise_operator", "carrier", "tpa"]);
 export const eventSourceTypeEnum = pgEnum("event_source_type", ["document", "transcript", "email", "manual", "system"]);
@@ -94,6 +94,7 @@ export const billingAccounts = pgTable("billing_accounts", {
   trialStartDate: timestamp("trial_start_date"),
   trialEndDate: timestamp("trial_end_date"),
   planType: planTypeEnum("plan_type").notNull().default("founder"),
+  seatCount: integer("seat_count").default(1),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -598,6 +599,33 @@ export const founderAgreements = pgTable("founder_agreements", {
   agreementHash: text("agreement_hash"),
 });
 
+export const foundingPartnerRequests = pgTable("founding_partner_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fullName: text("full_name").notNull(),
+  email: text("email").notNull(),
+  companyName: text("company_name").notNull(),
+  phone: text("phone"),
+  estimatedMonthlyClaimVolume: text("estimated_monthly_claim_volume"),
+  reasonForJoining: text("reason_for_joining"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const enterpriseContactLeads = pgTable("enterprise_contact_leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fullName: text("full_name").notNull(),
+  companyName: text("company_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  organizationType: text("organization_type"),
+  estimatedUsers: integer("estimated_users"),
+  estimatedMonthlyClaimVolume: text("estimated_monthly_claim_volume"),
+  integrationNeeds: text("integration_needs"),
+  message: text("message"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const auditLogs = pgTable("audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id"),
@@ -823,11 +851,33 @@ export const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   fullName: z.string().min(2, "Full name required"),
   orgName: z.string().min(2, "Organization name required"),
-  planType: z.enum(["founder", "pro", "individual", "team", "enterprise"]).default("individual"),
+  planType: z.enum(["founder", "individual", "team", "enterprise"]).default("individual"),
   organizationType: z.enum(["contractor", "roofing_firm", "enterprise_operator", "carrier", "tpa"]).default("contractor"),
+  extraSeats: z.number().optional(),
 });
 
 export const registerSchema = signupSchema;
+
+export const foundingPartnerRequestSchema = z.object({
+  fullName: z.string().min(2, "Full name required"),
+  email: z.string().email("Valid email required"),
+  companyName: z.string().min(2, "Company name required"),
+  phone: z.string().optional(),
+  estimatedMonthlyClaimVolume: z.string().optional(),
+  reasonForJoining: z.string().optional(),
+});
+
+export const enterpriseContactSchema = z.object({
+  fullName: z.string().min(2, "Full name required"),
+  companyName: z.string().min(2, "Company name required"),
+  email: z.string().email("Valid email required"),
+  phone: z.string().optional(),
+  organizationType: z.string().optional(),
+  estimatedUsers: z.number().optional(),
+  estimatedMonthlyClaimVolume: z.string().optional(),
+  integrationNeeds: z.string().optional(),
+  message: z.string().optional(),
+});
 
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email("Valid email required"),

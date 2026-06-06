@@ -1,0 +1,154 @@
+PRICING & ACCESS
+
+FOUNDING PARTNER
+$79/month
+
+Limited to the first 100 organizations.
+
+Includes:
+• 14-day free trial
+• Locked lifetime pricing
+• Early feature access
+• Priority onboarding
+• Direct product feedback access
+• Future feature influence
+
+Access Method:
+Application required
+
+After registration:
+• Application submitted
+• Notification sent to claimsignal1@gmail.com
+• Account remains pending until approved
+• Stripe subscription activates after approval
+
+-----------------------------------
+
+PROFESSIONAL
+$129/month
+
+Includes:
+• Full platform access
+• Unlimited claims
+• Evidence management
+• AI extraction
+• Claim intelligence
+• Carrier intelligence
+• Adjuster intelligence
+• Audit logging
+• Storm date intelligence
+
+Access Method:
+Immediate access
+
+After registration:
+• Redirect to Stripe Checkout
+• Subscription created
+• Account activated automatically after successful payment
+
+-----------------------------------
+
+TEAM
+$299/month
+
+Includes:
+• Everything in Professional
+• 5 users included
+• Team reporting
+• Shared claim access
+• Organization management
+
+Additional users:
+$25/user/month
+
+Access Method:
+Immediate access
+
+After registration:
+• Redirect to Stripe Checkout
+• Subscription created
+• Team account activated automatically after successful payment
+
+-----------------------------------
+
+ENTERPRISE
+Custom Pricing
+
+Designed for:
+• Large restoration companies
+• Public adjusting firms
+• Insurance organizations
+• Multi-office operations
+• Custom integrations
+• Security reviews
+• Dedicated onboarding
+
+Access Method:
+Contact Sales
+
+Enterprise requests are sent directly to:
+
+claimsignal1@gmail.com
+
+-----------------------------------
+
+REGISTRATION WORKFLOW
+
+1. User selects a plan.
+
+2. User completes registration.
+
+3. System creates account record.
+
+4. System sends registration notification to:
+
+claimsignal1@gmail.com
+
+5. System sends confirmation email to applicant.
+
+6. Founding Partner:
+   • Status = Pending Approval
+   • No platform access until approved
+   • Stripe subscription activates after approval
+
+7. Professional:
+   • Redirect to Stripe Checkout
+   • Account activates automatically after payment
+
+8. Team:
+   • Redirect to Stripe Checkout
+   • Account activates automatically after payment
+
+9. Enterprise:
+   • No Stripe checkout
+   • Inquiry sent directly to claimsignal1@gmail.com
+
+-----------------------------------
+
+BUTTON TEXT
+
+Founding Partner:
+Apply for Access
+
+Professional:
+Start Subscription
+
+Team:
+Start Team Subscription
+
+Enterprise:
+Contact Sales
+
+-----------------------------------
+
+HERO PAGE
+
+Primary Button:
+Request Access
+
+Secondary Button:
+Log In
+
+Do not place pricing on the hero section.
+
+Allow visitors to understand ClaimSignal first, then view pricing lower on the page.
