@@ -1,0 +1,327 @@
+Fix ClaimSignal Evidence intake so users do not have to manually extract or manually apply claim data.
+
+Do not redesign the UI.
+Do not add demo data.
+Do not fake AI results.
+
+Problem:
+The Evidence Files section requires too much manual work. The user has to upload a file, manually open AI Extraction Review, manually apply fields, and manually connect the claim. This is not acceptable for ClaimSignal. Evidence intake should automatically extract, match, apply, and link claim data.
+
+Required behavior:
+When a user uploads evidence, the system must automatically:
+
+1. Save the file.
+2. Detect document type.
+3. Run AI extraction.
+4. Normalize extracted claim fields.
+5. Find or create the canonical claim.
+6. Attach the evidence to that claim.
+7. Apply extracted fields safely.
+8. Link carrier, adjusters, vendors, transcripts, and source references.
+9. Show the user a review only when there is a conflict or low confidence.
+
+Evidence upload should not sit there waiting for the user to manually extract the claim.
+
+Required workflow:
+Upload evidence
+→ AI extraction starts automatically
+→ claim matching starts automatically
+→ evidence attaches to matched claim automatically
+→ safe fields apply automatically
+→ relationships link automatically
+→ user only reviews conflicts
+
+Confidence rules:
+If confidence is high and no conflicts exist:
+- auto-apply extraction
+- show status: “Auto-applied to claim”
+
+If confidence is medium:
+- auto-link evidence to likely claim
+- show status: “Needs review”
+- allow user to confirm fields
+
+If confidence is low:
+- keep evidence in Needs Matching
+- show possible claim matches
+- allow user to choose existing claim or create new claim
+
+Do not require manual extraction when the system already has claim number, carrier, homeowner, and address.
+
+Required backend changes:
+Create or fix pipeline:
+
+processEvidenceUpload(file)
+
+It must call:
+
+extractEvidenceData(file)
+findOrCreateCanonicalClaim(extractedData)
+applyExtractionToClaim(claimId, extractionData)
+linkAdjustersToClaim(claimId, extractionData)
+linkCarrierToClaim(claimId, extractionData)
+linkVendorsToClaim(claimId, extractionData)
+createTimelineEventsFromExtraction(claimId, extractionData)
+saveEvidenceSourceLinks(claimId, documentId, extractionId)
+
+Required statuses:
+Evidence records should have:
+- uploaded
+- extracting
+- extracted
+- auto_matched
+- auto_applied
+- needs_review
+- conflict_review
+- failed
+
+UI requirements:
+Evidence card should show:
+- extraction status
+- matched claim
+- confidence
+- reason matched
+- View Extraction
+- Review Conflicts only if needed
+- View Claim
+
+Replace “Apply to Claim” as the main required action.
+It can remain as a fallback button, but it should not be the normal workflow.
+
+Acceptance tests:
+
+Test 1:
+Upload Priora State Farm evidence with:
+0184C504J
+PRIORA, SHARON
+24816 BUBBA TRL
+State Farm
+
+Expected:
+Evidence auto-extracts.
+Evidence auto-links to Sharon Priora claim.
+Fields auto-apply if no conflict.
+No manual Apply to Claim required.
+
+Test 2:
+Upload Blaxton Allstate evidence with:
+0705120731
+HEITH BLAXTON
+2812 LEXINGTON AVE SW
+Allstate Vehicle and Property
+
+Expected:
+Evidence auto-links to Heith Blaxton claim.
+No duplicate claim created.
+No manual extraction required.
+
+Test 3:
+Upload evidence with Cody Vines mentioned.
+
+Expected:
+Cody Vines auto-links to the related claim as an adjuster.
+User does not manually link adjuster.
+
+Test 4:
+Upload evidence with conflicting homeowner or claim number.
+
+Expected:
+System does not overwrite automatically.
+System shows conflict review.
+
+This is the intended product behavior:
+ClaimSignal should turn evidence into structured claim intelligence automatically. Manual extraction should be an exception, not the operating model.
+
+Implement this as one backend data-integrity fix, not separate patches.
+
+Primary objective:
+Evidence upload must automatically extract, match, apply, link, and preserve claim intelligence without requiring manual Apply Extraction unless there is low confidence or a true conflict.
+
+Fix these defects:
+1. Apply Extraction returns 400 when fields already exist.
+2. Apply Extraction returns 404 when matchedClaimId is stale or missing.
+3. Evidence upload requires manual extraction and manual claim application.
+4. Adjusters are overwritten as one field instead of linked as many-to-many relationships.
+5. Duplicate claims are still being created when normalized claim data matches.
+
+Required workflow:
+Upload evidence
+→ save file
+→ detect document/audio type
+→ run AI extraction/transcription automatically
+→ normalize claim fields
+→ resolve canonical claim
+→ attach evidence to canonical claim
+→ safely apply non-conflicting fields
+→ link carrier, adjusters, vendors, transcripts, timeline events, and source references
+→ only show user review for low confidence or conflicts
+
+Create or fix this pipeline:
+
+processEvidenceUpload(file)
+
+It must call:
+extractEvidenceData(file)
+findOrCreateCanonicalClaim(extractedData)
+applyExtractionToClaim(claimId, extractionData)
+linkAdjustersToClaim(claimId, extractionData)
+linkCarrierToClaim(claimId, extractionData)
+linkVendorsToClaim(claimId, extractionData)
+createTimelineEventsFromExtraction(claimId, extractionData)
+saveEvidenceSourceLinks(claimId, documentId, extractionId)
+
+Apply Extraction must be idempotent:
+If selected fields already match existing claim fields:
+- do not return 400
+- return success
+- attach evidence
+- attach extraction
+- link adjusters
+- link carrier
+- update source references
+- write audit log
+
+Expected response:
+{
+  "success": true,
+  "claimId": "...",
+  "status": "no_field_changes_needed",
+  "message": "Extraction already matched existing claim fields. Evidence and relationships were linked.",
+  "fieldsUpdated": [],
+  "relationshipsUpdated": true
+}
+
+Canonical claim resolution order:
+A. provided claimId
+B. extraction.claim_id
+C. document.claim_id
+D. normalized claim number + normalized carrier
+E. normalized property address + normalized homeowner
+F. create one canonical claim from extracted data only if no match exists
+
+Do not return 404 if extracted data is sufficient to match or create a claim.
+
+Normalize carriers:
+Allstate
+Allstate Vehicle and Property
+Allstate Insurance Company
+State Farm
+State Farm Fire and Casualty Company
+
+Use normalized carrier identity for matching. Preserve original display text as source text.
+
+Adjuster rules:
+A claim can have many adjusters.
+An adjuster can appear on many claims.
+Do not overwrite one adjuster with another.
+Create/find adjuster profile.
+Create claim_adjusters relationship record.
+Preserve source document or transcript.
+Preserve role if known.
+Preserve confidence.
+
+If extraction finds:
+Griggs, Shay
+Cody Vines
+Jermaine Peacher
+
+All must be linked to the claim if mentioned.
+
+If conflicts exist:
+Do not overwrite automatically.
+Return:
+{
+  "success": false,
+  "requiresReview": true,
+  "conflicts": [...]
+}
+
+Even during conflict:
+- attach evidence
+- save extraction
+- preserve extracted adjuster as possible linked adjuster
+- do not lose evidence
+
+Evidence statuses:
+uploaded
+extracting
+extracted
+auto_matched
+auto_applied
+needs_review
+conflict_review
+failed
+
+UI behavior:
+If high confidence and no conflict:
+show “Auto-applied to claim”
+
+If fields already exist:
+show “Extraction already matched claim. Evidence linked.”
+
+If fields applied:
+show “Extraction applied to claim.”
+
+If conflicts exist:
+show conflict review modal.
+
+Do not show red failure toast for normal idempotent behavior.
+
+Acceptance tests:
+1. Upload/apply Priora evidence:
+0184C504J
+PRIORA, SHARON
+24816 BUBBA TRL
+State Farm
+Griggs, Shay
+
+Expected:
+Auto-extracts.
+Auto-links to Sharon Priora canonical claim.
+No duplicate created.
+No manual Apply required unless conflict.
+No 400.
+No 404.
+Griggs, Shay linked as adjuster relationship.
+
+2. Upload/apply Blaxton evidence:
+0705120731
+HEITH BLAXTON
+2812 LEXINGTON AVE SW
+Allstate Vehicle and Property
+Jermaine Peacher
+
+Expected:
+Auto-links to Heith Blaxton canonical claim.
+No duplicate created.
+No manual Apply required unless conflict.
+No 400.
+No 404.
+Jermaine Peacher linked as adjuster relationship.
+
+3. Upload evidence mentioning Cody Vines.
+
+Expected:
+Cody Vines auto-links to the related claim as an adjuster.
+No manual adjuster linking required.
+
+4. Apply extraction where all selected fields already exist.
+
+Expected:
+Success response.
+Evidence remains linked.
+No 400 error.
+
+5. Apply extraction when matchedClaimId is stale or missing.
+
+Expected:
+Backend resolves claim by normalized claim number/carrier or address/homeowner.
+No 404 error.
+
+After implementation, run the app and prove with logs or screenshots:
+- Priora succeeds.
+- Blaxton succeeds.
+- existing fields do not cause 400.
+- stale matchedClaimId does not cause 404.
+- adjusters are relationship records, not overwritten fields.
+- Evidence intake is automatic by default.

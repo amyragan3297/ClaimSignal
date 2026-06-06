@@ -209,6 +209,13 @@ export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
 
 // ── AI document field extraction ──────────────────────────────────────────────
 
+export interface AdjusterMentionExtracted {
+  name: string;
+  roleLabel?: string;
+  email?: string;
+  phone?: string;
+}
+
 export interface ExtractionResult {
   claimNumber?: string;
   policyNumber?: string;
@@ -217,6 +224,7 @@ export interface ExtractionResult {
   adjusterName?: string;
   adjusterEmail?: string;
   adjusterPhone?: string;
+  adjusterMentions?: AdjusterMentionExtracted[];
   iaFirm?: string;
   carrier?: string;
   vendor?: string;
@@ -261,16 +269,18 @@ Rules you must follow exactly:
 2. Respond ONLY with valid JSON matching the provided schema.
 3. "propertyAddress" must contain ONLY the street address (e.g. "123 Main St" or "456 Oak Ave Apt 2"). Never include city, state, zip, date of loss, carrier name, policy number, or any other information in this field. If you cannot extract a clean street address, omit this field entirely.
 4. All date fields (dateOfLoss, inspectionDate, etc.) must be in YYYY-MM-DD format only. Convert any MM/DD/YYYY or spelled-out dates to YYYY-MM-DD before returning. If you cannot determine a date with confidence, omit that field.
-5. Numeric fields (rcv, acv, deductible, etc.) must be plain decimal strings, e.g. "18500.00". No currency symbols or commas.`;
+5. Numeric fields (rcv, acv, deductible, etc.) must be plain decimal strings, e.g. "18500.00". No currency symbols or commas.
+6. "adjusterMentions" must list EVERY insurance adjuster mentioned in the document. Use the raw role label exactly as it appears (e.g. "Desk Adjuster", "Field Adjuster", "CAT Adjuster"). Do NOT include homeowners, contractors, public adjusters, roofing staff, or the insured party — only carrier-side adjusters. If there is only one adjuster, still include them in the array. Set "adjusterName" and "adjusterEmail"/"adjusterPhone" to the primary adjuster's values for backward compatibility.`;
 
 const EXTRACTION_SCHEMA = `{
   "claimNumber": "claim number string",
   "policyNumber": "policy number string",
   "homeownerName": "homeowner full name",
   "insuredName": "insured party full name",
-  "adjusterName": "adjuster full name",
-  "adjusterEmail": "adjuster email",
-  "adjusterPhone": "adjuster phone number",
+  "adjusterName": "primary adjuster full name (backward compat — also include in adjusterMentions)",
+  "adjusterEmail": "primary adjuster email",
+  "adjusterPhone": "primary adjuster phone number",
+  "adjusterMentions": [{"name": "adjuster full name", "roleLabel": "raw role label from document e.g. 'Desk Adjuster', 'Field Adjuster', 'CAT Adjuster', 'Claim Representative'", "email": "email if present", "phone": "phone if present"}],
   "iaFirm": "independent adjusting firm name",
   "carrier": "insurance carrier or company name",
   "vendor": "engineering firm, ITEL, or vendor name",
@@ -354,6 +364,21 @@ function parseExtractionResponse(raw: string): ExtractionResult {
         !!e && typeof e.date === "string" && typeof e.description === "string"
     );
     if (evts.length > 0) result.timelineEvents = evts.map((e) => ({ date: e.date, description: e.description }));
+  }
+
+  if (Array.isArray(parsed.adjusterMentions)) {
+    interface RawAdjusterMention { name?: unknown; roleLabel?: unknown; email?: unknown; phone?: unknown }
+    const mentions = (parsed.adjusterMentions as RawAdjusterMention[])
+      .filter((m): m is { name: string; roleLabel?: string; email?: string; phone?: string } =>
+        !!m && typeof m.name === "string" && m.name.trim().length > 0
+      )
+      .map((m) => ({
+        name: (m.name as string).trim(),
+        ...(typeof m.roleLabel === "string" && m.roleLabel.trim() ? { roleLabel: m.roleLabel.trim() } : {}),
+        ...(typeof m.email === "string" && m.email.trim() ? { email: m.email.trim() } : {}),
+        ...(typeof m.phone === "string" && m.phone.trim() ? { phone: m.phone.trim() } : {}),
+      }));
+    if (mentions.length > 0) result.adjusterMentions = mentions;
   }
 
   return result;

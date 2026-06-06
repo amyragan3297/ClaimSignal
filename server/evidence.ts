@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking, maskExtractionData } from "./masking";
 import { extractClaimFieldsFromText, extractClaimFieldsFromImages, transcribeAudio, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
+import { extractAndLinkAdjustersForClaim, type AdjusterMention } from "./adjuster-linking";
 import { renderPdfToImages } from "./pdf-render";
 import { computeFullClaimScoring } from "./scoring";
 import { findOrCreateClaimFromExtraction, coerceStr, type ExtractionData } from "./claim-matching";
@@ -432,29 +433,24 @@ async function _createClaimFromExtraction(opts: {
   await storage.updateEvidenceFile(fileId, fileOrganizationId, { claimId: claim.id });
 
   // ── Adjuster intelligence linkage ────────────────────────────────────────
-  const adjName = accepted["adjusterName"]?.trim() || llm("adjusterName");
-  if (adjName) {
-    try {
-      const existingAdjs = await storage.getAdjusters(claim.organizationId);
-      let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjName.toLowerCase());
-      if (!adj) {
-        const carrierName = accepted["carrier"]?.trim() || llm("carrier") || "Unknown";
-        adj = await storage.createAdjuster({
-          organizationId: claim.organizationId,
-          adjusterName: adjName,
-          adjusterEmail: accepted["adjusterEmail"]?.trim() || llm("adjusterEmail") || undefined,
-          adjusterPhone: accepted["adjusterPhone"]?.trim() || llm("adjusterPhone") || undefined,
-          carrierName,
-        });
+  {
+    const singleAdjName = accepted["adjusterName"]?.trim() || llm("adjusterName");
+    const adjMentions: AdjusterMention[] = llmExtraction?.adjusterMentions?.length
+      ? llmExtraction.adjusterMentions
+      : singleAdjName
+        ? [{
+            name: singleAdjName,
+            email: accepted["adjusterEmail"]?.trim() || llm("adjusterEmail") || undefined,
+            phone: accepted["adjusterPhone"]?.trim() || llm("adjusterPhone") || undefined,
+            carrier: accepted["carrier"]?.trim() || llm("carrier") || undefined,
+          }]
+        : [];
+    if (adjMentions.length > 0) {
+      try {
+        await extractAndLinkAdjustersForClaim(claim.id, claim.organizationId, adjMentions, { sourceType: "document" });
+      } catch (adjErr: unknown) {
+        console.error("[create-claim] adjuster linking non-fatal:", (adjErr as Error)?.message);
       }
-      await storage.linkAdjusterToClaim({
-        claimId: claim.id,
-        adjusterId: adj.id,
-        organizationId: claim.organizationId,
-        roleOnClaim: "primary_adjuster",
-      });
-    } catch (adjErr: unknown) {
-      console.error("[create-claim] adjuster linking non-fatal:", (adjErr as Error)?.message);
     }
   }
 
@@ -515,7 +511,7 @@ async function _createClaimFromExtraction(opts: {
     afterJson: {
       claimNumber: claim.claimNumber,
       evidenceFileId: fileId,
-      adjusterLinked: !!adjName,
+      adjusterLinked: !!(accepted["adjusterName"]?.trim() || llm("adjusterName") || llmExtraction?.adjusterMentions?.length),
       fieldsAccepted: Object.keys(accepted),
       llmConfidence: llmExtraction?.confidence ?? null,
       actorOrganizationId,
@@ -853,38 +849,29 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     let adjusterAutoLinked = false;
     let adjusterAutoLinkedName: string | null = null;
     if (claimId && matchedClaim) {
-      // Adjuster auto-link (only when extraction produced a name)
+      // Adjuster auto-link — captures ALL adjusters from this document, with correct roles.
       if (llmExtraction) {
-        const adjName = (llmExtraction as unknown as Record<string, unknown>)["adjusterName"];
-        if (adjName && typeof adjName === "string" && adjName.trim()) {
-          const adjNameStr = adjName.trim();
+        const singleAdjName = llmExtraction.adjusterName?.trim();
+        const adjMentions: AdjusterMention[] = llmExtraction.adjusterMentions?.length
+          ? llmExtraction.adjusterMentions
+          : singleAdjName
+            ? [{
+                name: singleAdjName,
+                email: llmExtraction.adjusterEmail?.trim() || undefined,
+                phone: llmExtraction.adjusterPhone?.trim() || undefined,
+                carrier: llmExtraction.carrier?.trim() || matchedClaim.carrier || undefined,
+              }]
+            : [];
+        if (adjMentions.length > 0) {
           try {
-            const existingAdjs = await storage.getAdjusters(matchedClaim.organizationId);
-            let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjNameStr.toLowerCase());
-            if (!adj) {
-              const adjEmail = (llmExtraction as unknown as Record<string, unknown>)["adjusterEmail"];
-              const adjPhone = (llmExtraction as unknown as Record<string, unknown>)["adjusterPhone"];
-              const carrierName = (llmExtraction as unknown as Record<string, unknown>)["carrier"];
-              adj = await storage.createAdjuster({
-                organizationId: matchedClaim.organizationId,
-                adjusterName: adjNameStr,
-                adjusterEmail: typeof adjEmail === "string" && adjEmail.trim() ? adjEmail.trim() : undefined,
-                adjusterPhone: typeof adjPhone === "string" && adjPhone.trim() ? adjPhone.trim() : undefined,
-                carrierName: typeof carrierName === "string" && carrierName.trim() ? carrierName.trim() : (matchedClaim.carrier ?? "Unknown"),
-              });
-              console.log(`[adjuster-extract] created adjuster "${adjNameStr}" from upload on existing claim ${claimId}`);
-            }
-            await storage.linkAdjusterToClaim({
-              claimId,
-              adjusterId: adj.id,
-              organizationId: matchedClaim.organizationId,
-              roleOnClaim: "primary_adjuster",
+            const count = await extractAndLinkAdjustersForClaim(claimId!, matchedClaim.organizationId, adjMentions, {
               sourceType: "document",
               sourceDocumentId: evidenceFile.id,
             });
-            adjusterAutoLinked = true;
-            adjusterAutoLinkedName = adjNameStr;
-            console.log(`[adjuster-extract] linked adjuster "${adjNameStr}" to existing claim ${claimId}`);
+            if (count > 0) {
+              adjusterAutoLinked = true;
+              adjusterAutoLinkedName = adjMentions[0].name;
+            }
           } catch (adjErr: unknown) {
             console.error("[adjuster-extract] non-fatal:", (adjErr as Error)?.message);
           }
@@ -966,38 +953,32 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
               } as Partial<import("@shared/schema").InsertClaim>))
               .catch((scoreErr: unknown) => console.error("[scoring-auto] non-fatal (new claim):", (scoreErr as Error)?.message));
 
-            // Auto-link adjuster from extracted data on new claim
-            const adjName = coerceStr(llmExtraction?.adjusterName) || coerceStr(entities.find(e => e.entityType === "adjuster_name")?.rawValue);
-            if (adjName) {
-              try {
-                const existingAdjs = await storage.getAdjusters(organizationId);
-                let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjName.toLowerCase());
-                if (!adj) {
-                  const adjEmail = coerceStr(llmExtraction?.adjusterEmail);
-                  const adjPhone = coerceStr(llmExtraction?.adjusterPhone);
-                  const carrierName = coerceStr(llmExtraction?.carrier) || coerceStr(entities.find(e => e.entityType === "carrier_name")?.rawValue) || "Unknown";
-                  adj = await storage.createAdjuster({
-                    organizationId,
-                    adjusterName: adjName,
-                    adjusterEmail: adjEmail || undefined,
-                    adjusterPhone: adjPhone || undefined,
-                    carrierName,
+            // Auto-link ALL adjusters from extracted data on new claim
+            {
+              const singleAdjName = coerceStr(llmExtraction?.adjusterName) || coerceStr(entities.find(e => e.entityType === "adjuster_name")?.rawValue);
+              const adjMentions: AdjusterMention[] = llmExtraction?.adjusterMentions?.length
+                ? llmExtraction.adjusterMentions
+                : singleAdjName
+                  ? [{
+                      name: singleAdjName,
+                      email: coerceStr(llmExtraction?.adjusterEmail) || undefined,
+                      phone: coerceStr(llmExtraction?.adjusterPhone) || undefined,
+                      carrier: coerceStr(llmExtraction?.carrier) || coerceStr(entities.find(e => e.entityType === "carrier_name")?.rawValue) || undefined,
+                    }]
+                  : [];
+              if (adjMentions.length > 0) {
+                try {
+                  const count = await extractAndLinkAdjustersForClaim(matchResult.claim.id, organizationId, adjMentions, {
+                    sourceType: "document",
+                    sourceDocumentId: evidenceFile.id,
                   });
-                  console.log(`[adjuster-extract] created adjuster "${adjName}" from upload on new claim ${matchResult.claim.id}`);
+                  if (count > 0) {
+                    adjusterAutoLinked = true;
+                    adjusterAutoLinkedName = adjMentions[0].name;
+                  }
+                } catch (adjErr: unknown) {
+                  console.error("[adjuster-extract] non-fatal:", (adjErr as Error)?.message);
                 }
-                await storage.linkAdjusterToClaim({
-                  claimId: matchResult.claim.id,
-                  adjusterId: adj.id,
-                  organizationId,
-                  roleOnClaim: "primary_adjuster",
-                  sourceType: "document",
-                  sourceDocumentId: evidenceFile.id,
-                });
-                adjusterAutoLinked = true;
-                adjusterAutoLinkedName = adjName;
-                console.log(`[adjuster-extract] linked adjuster "${adjName}" to new claim ${matchResult.claim.id}`);
-              } catch (adjErr: unknown) {
-                console.error("[adjuster-extract] non-fatal:", (adjErr as Error)?.message);
               }
             }
           } else {
@@ -1334,30 +1315,28 @@ router.post("/files/:id/create-claim", async (req: AuthRequest, res: Response) =
     }));
     await generateTimelineEvents(matchResult.claim.id, file.organizationId, file.id, file.docCategory || "unknown", fileEntities, userId);
 
-    // Auto-link adjuster from accepted/extracted data.
-    const adjName = accepted.adjusterName || llmExtraction?.adjusterName || storedEntities.find(e => e.entityType === "adjuster_name")?.rawValue;
-    if (adjName) {
-      try {
-        const existingAdjs = await storage.getAdjusters(file.organizationId);
-        let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjName.toLowerCase());
-        if (!adj) {
-          const carrierName = accepted.carrier || llmExtraction?.carrier || "Unknown";
-          adj = await storage.createAdjuster({
-            organizationId: file.organizationId,
-            adjusterName: adjName,
-            adjusterEmail: accepted.adjusterEmail || llmExtraction?.adjusterEmail || undefined,
-            adjusterPhone: accepted.adjusterPhone || llmExtraction?.adjusterPhone || undefined,
-            carrierName,
+    // Auto-link ALL adjusters from accepted/extracted data.
+    {
+      const singleAdjName = accepted.adjusterName || llmExtraction?.adjusterName || storedEntities.find(e => e.entityType === "adjuster_name")?.rawValue;
+      const adjMentions: AdjusterMention[] = llmExtraction?.adjusterMentions?.length
+        ? llmExtraction.adjusterMentions
+        : singleAdjName
+          ? [{
+              name: singleAdjName,
+              email: accepted.adjusterEmail || llmExtraction?.adjusterEmail || undefined,
+              phone: accepted.adjusterPhone || llmExtraction?.adjusterPhone || undefined,
+              carrier: accepted.carrier || llmExtraction?.carrier || undefined,
+            }]
+          : [];
+      if (adjMentions.length > 0) {
+        try {
+          await extractAndLinkAdjustersForClaim(matchResult.claim.id, file.organizationId, adjMentions, {
+            sourceType: "document",
+            sourceDocumentId: file.id,
           });
+        } catch (adjErr: unknown) {
+          console.error("[create-claim] adjuster linking non-fatal:", (adjErr as Error)?.message);
         }
-        await storage.linkAdjusterToClaim({
-          claimId: matchResult.claim.id,
-          adjusterId: adj.id,
-          organizationId: file.organizationId,
-          roleOnClaim: "primary_adjuster",
-        });
-      } catch (adjErr: unknown) {
-        console.error("[create-claim] adjuster linking non-fatal:", (adjErr as Error)?.message);
       }
     }
 
@@ -1504,33 +1483,29 @@ router.post("/files/:id/apply-extraction", async (req: AuthRequest, res: Respons
           targetClaimId = matchResult.claim.id;
           console.log(`[apply-extraction] ${matchResult.created ? "created" : "matched"} claim ${matchResult.claim.id} matchedBy=${matchResult.matchedBy}`);
 
-          // Auto-link adjuster from extracted data
-          const adjName = extractionData.adjusterName;
-          if (adjName) {
-            try {
-              const existingAdjs = await storage.getAdjusters(file.organizationId);
-              let adj = existingAdjs.find(a => a.adjusterName?.toLowerCase() === adjName.toLowerCase());
-              if (!adj) {
-                const carrierName = extractionData.carrier || "Unknown";
-                adj = await storage.createAdjuster({
-                  organizationId: file.organizationId,
-                  adjusterName: adjName,
-                  adjusterEmail: extractionData.adjusterEmail || undefined,
-                  adjusterPhone: extractionData.adjusterPhone || undefined,
-                  carrierName,
+          // Auto-link ALL adjusters from extracted data
+          {
+            const fileExtractedMentions = (fileExtraction as unknown as ExtractionResult | null)?.adjusterMentions;
+            const singleAdjName = extractionData.adjusterName;
+            const adjMentions: AdjusterMention[] = fileExtractedMentions?.length
+              ? fileExtractedMentions
+              : singleAdjName
+                ? [{
+                    name: singleAdjName,
+                    email: extractionData.adjusterEmail || undefined,
+                    phone: extractionData.adjusterPhone || undefined,
+                    carrier: extractionData.carrier || undefined,
+                  }]
+                : [];
+            if (adjMentions.length > 0) {
+              try {
+                await extractAndLinkAdjustersForClaim(matchResult.claim.id, file.organizationId, adjMentions, {
+                  sourceType: "document",
+                  sourceDocumentId: file.id,
                 });
+              } catch (adjErr: unknown) {
+                console.error("[apply-extraction] adjuster linking non-fatal:", (adjErr as Error)?.message);
               }
-              await storage.linkAdjusterToClaim({
-                claimId: matchResult.claim.id,
-                adjusterId: adj.id,
-                organizationId: file.organizationId,
-                roleOnClaim: "primary_adjuster",
-                sourceType: "document",
-                sourceDocumentId: file.id,
-              });
-              console.log(`[apply-extraction] linked adjuster "${adjName}" to claim ${matchResult.claim.id}`);
-            } catch (adjErr: unknown) {
-              console.error("[apply-extraction] adjuster linking non-fatal:", (adjErr as Error)?.message);
             }
           }
         } catch (matchErr: unknown) {
