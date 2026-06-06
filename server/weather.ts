@@ -120,10 +120,20 @@ export async function geocodeCity(city: string, state?: string | null): Promise<
       const match = results.find(
         (r) => String(r.admin1 || "").toLowerCase() === full || String(r.admin1_code || "").toUpperCase() === st,
       );
-      if (match) chosen = match;
+      if (match) {
+        chosen = match;
+      } else {
+        // State didn't match any result — prefer a US result rather than a global fallback
+        const usOnly = results.find((r) => r.country_code === "US");
+        if (usOnly) chosen = usOnly;
+      }
+    }
+    if (chosen.latitude == null || chosen.longitude == null) {
+      _cityCache.set(cacheKey, null);
+      return null;
     }
     const label = [chosen.name, chosen.admin1, chosen.country_code].filter(Boolean).join(", ");
-    const result = { lat: chosen.latitude ?? 0, lon: chosen.longitude ?? 0, label };
+    const result = { lat: chosen.latitude, lon: chosen.longitude, label };
     _cityCache.set(cacheKey, result);
     return result;
   } catch {
@@ -137,7 +147,7 @@ export async function geocodeCity(city: string, state?: string | null): Promise<
  * keyless Open-Meteo archive + geocoding APIs. Returns null when the claim has
  * insufficient location/date data or the location can't be resolved.
  */
-export async function getClaimWeather(claim: Claim): Promise<ClaimWeather | null> {
+export async function getClaimWeather(claim: Claim): Promise<{ weather: ClaimWeather; reason?: string } | null> {
   const lossDate = claim.dateOfLoss || claim.lossDate;
   if (!lossDate) return null;
   const date = new Date(lossDate);
@@ -152,17 +162,23 @@ export async function getClaimWeather(claim: Claim): Promise<ClaimWeather | null
   if (!geo && claim.city) {
     geo = await geocodeCity(claim.city, claim.state);
   }
-  if (!geo) return null;
+  if (!geo) {
+    return null;
+  }
 
   const dailyVars = "temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,snowfall_sum,wind_gusts_10m_max,wind_speed_10m_max,weather_code";
   const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${dateStr}&end_date=${dateStr}&daily=${dailyVars}&timezone=auto`;
   interface MeteoDaily { time?: unknown[]; temperature_2m_max?: (number|null)[]; temperature_2m_min?: (number|null)[]; precipitation_sum?: (number|null)[]; rain_sum?: (number|null)[]; snowfall_sum?: (number|null)[]; wind_gusts_10m_max?: (number|null)[]; wind_speed_10m_max?: (number|null)[]; weather_code?: (number|null)[]; }
   interface MeteoData { daily?: MeteoDaily; }
   const res = await fetch(url);
-  if (!res.ok) return null;
+  if (!res.ok) {
+    return null;
+  }
   const data = await res.json() as MeteoData;
   const d = data?.daily;
-  if (!d || !Array.isArray(d.time) || d.time.length === 0) return null;
+  if (!d || !Array.isArray(d.time) || d.time.length === 0) {
+    return null;
+  }
 
   const pick = (arr: (number | null)[] | undefined): number | null => (Array.isArray(arr) && arr[0] != null ? Number(arr[0]) : null);
 
@@ -195,5 +211,5 @@ export async function getClaimWeather(claim: Claim): Promise<ClaimWeather | null
     weatherCode,
     isHail: weatherCode != null && HAIL_CODES.has(weatherCode),
   };
-  return { ...base, summary: buildSummary(base) };
+  return { weather: { ...base, summary: buildSummary(base) } };
 }

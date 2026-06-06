@@ -1724,10 +1724,11 @@ export async function registerRoutes(
       }
       if (!claim) return res.status(404).json({ message: "Claim not found" });
 
-      const weather = await getClaimWeather(claim);
-      if (!weather) {
+      const weatherResult = await getClaimWeather(claim);
+      if (!weatherResult) {
         return res.json({ available: false, reason: "Insufficient location or date-of-loss data to resolve weather." });
       }
+      const { weather } = weatherResult;
 
       // Audit cross-tenant access (super_admin viewing another org's claim).
       if (claim.organizationId !== orgId) {

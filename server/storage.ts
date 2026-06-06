@@ -870,7 +870,7 @@ export class DatabaseStorage implements IStorage {
 
   async getTimelineEvents(claimId: string, orgId: string): Promise<TimelineEvent[]> {
     return db.select().from(timelineEvents).where(
-      and(eq(timelineEvents.claimId, claimId), eq(timelineEvents.organizationId, orgId))
+      and(eq(timelineEvents.claimId, claimId), eq(timelineEvents.organizationId, orgId), eq(timelineEvents.needsReview, false))
     ).orderBy(desc(timelineEvents.eventDate));
   }
 
