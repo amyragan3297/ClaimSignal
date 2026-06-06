@@ -6,6 +6,7 @@ import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking, maskExtractionData } from "./masking";
 import { extractClaimFieldsFromText, extractClaimFieldsFromImages, transcribeAudio, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
 import { renderPdfToImages } from "./pdf-render";
+import { computeFullClaimScoring } from "./scoring";
 
 interface AuthRequest extends Request {
   auth?: {
@@ -689,7 +690,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       fileSize: buffer.length,
       docCategory: effectiveCategory as "denial_letter" | "estimate" | "scope" | "supplement" | "payment_letter" | "invoice" | "photo_report" | "policy" | "email_thread" | "unknown",
       confidence: classification.confidence,
-      extractionStatus: llmExtraction ? "complete" : (textContent && textContent.trim().length > 80 ? "failed" : (fileType === "pdf" || fileType === "docx" || fileType === "image" ? "failed" : "pending")),
+      extractionStatus: llmExtraction ? "complete" : (!isOpenAIConfigured() ? "pending" : (textContent && textContent.trim().length > 80 ? "failed" : (fileType === "pdf" || fileType === "docx" || fileType === "image" ? "failed" : "pending"))),
       extractedJson: (entities.length > 0 || llmExtraction)
         ? { entities, extraction: llmExtraction || null }
         : undefined,
@@ -809,6 +810,13 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
           if (debugExtraction) {
             console.log(`[extraction-debug] auto_apply_payload=${JSON.stringify(claimUpdate)}`);
           }
+          // Re-compute intelligence scores now that claim fields are fresher.
+          // Non-blocking — a scoring failure must never fail the upload.
+          computeFullClaimScoring(claimId, matchedClaim.organizationId)
+            .then(scores => storage.updateClaim(claimId!, matchedClaim.organizationId, {
+              frictionScore: Math.round(scores.claimFrictionScore),
+            } as Partial<import("@shared/schema").InsertClaim>))
+            .catch((scoreErr: unknown) => console.error("[scoring-auto] non-fatal:", (scoreErr as Error)?.message));
         } catch (applyErr: unknown) {
           console.error(`[ai-auto-apply] non-fatal — failed to apply extraction to claim ${claimId}:`, (applyErr as Error)?.message);
         }
@@ -905,6 +913,12 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
           });
           claimId = createdClaim.id;
           console.log(`[upload] created claim ${createdClaim.claimNumber} from "${req.file!.originalname}" with extracted fields`);
+          // Seed initial intelligence scores for the new claim (non-blocking).
+          computeFullClaimScoring(createdClaim.id, organizationId)
+            .then(scores => storage.updateClaim(createdClaim!.id, organizationId, {
+              frictionScore: Math.round(scores.claimFrictionScore),
+            } as Partial<import("@shared/schema").InsertClaim>))
+            .catch((scoreErr: unknown) => console.error("[scoring-auto] non-fatal (new claim):", (scoreErr as Error)?.message));
         } catch (createErr: unknown) {
           console.error("[upload] failed to create claim from extraction:", (createErr as Error)?.message);
         }

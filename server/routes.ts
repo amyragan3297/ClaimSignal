@@ -23,7 +23,7 @@ import exportsRouter from "./exports";
 import { registerSeoRoutes } from "./seo/routes";
 import evidenceRouter from "./evidence";
 import intelligenceRouter from "./intelligence";
-import { computeLifecycleVelocity } from "./scoring";
+import { computeLifecycleVelocity, computeFullClaimScoring } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
 import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, recordAiError, getAiStatus, generatePlaybookEntry, generateAiFallbackPlaybookRecs } from "./ai-services";
 import { getClaimWeather, geocodeZip, geocodeCity } from "./weather";
@@ -278,8 +278,9 @@ export async function registerRoutes(
       const claims = await storage.getClaims(orgId);
       const highRiskClaims = claims.filter(c => (c.riskScore ?? 0) >= 5).length;
       const overturnedDenials = claims.filter(c => c.status === "resolved" && (c.outcomeMigrationDelta ?? 0) > 0).length;
-      const avgSupplementOpp = claims.length > 0
-        ? claims.reduce((sum, c) => sum + (c.supplementAmountTotal ?? 0), 0) / claims.length
+      const claimsWithSupplement = claims.filter(c => (c.supplementAmountTotal ?? 0) > 0);
+      const avgSupplementOpp = claimsWithSupplement.length > 0
+        ? claimsWithSupplement.reduce((sum, c) => sum + (c.supplementAmountTotal ?? 0), 0) / claimsWithSupplement.length
         : 0;
       res.json({
         totalClaims,
@@ -596,6 +597,14 @@ export async function registerRoutes(
       if (velocity !== null && velocity !== claim.lifecycleVelocityScore) {
         await storage.updateClaim(req.params.id as string, orgId, { lifecycleVelocityScore: velocity });
       }
+
+      // Re-score after every claim update — non-blocking so it never delays the response.
+      const _claimIdForScoring = req.params.id as string;
+      computeFullClaimScoring(_claimIdForScoring, orgId)
+        .then(scores => storage.updateClaim(_claimIdForScoring, orgId, {
+          frictionScore: Math.round(scores.claimFrictionScore),
+        } as Partial<import("@shared/schema").InsertClaim>))
+        .catch((scoreErr: unknown) => console.error("[scoring-auto] non-fatal (patch):", (scoreErr as Error)?.message));
 
       const versionNumber = (await storage.getLatestVersionNumber(claim.id)) + 1;
       await storage.createClaimVersion({
