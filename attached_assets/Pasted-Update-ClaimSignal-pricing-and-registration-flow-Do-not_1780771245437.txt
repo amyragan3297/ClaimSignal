@@ -1,0 +1,174 @@
+Update ClaimSignal pricing and registration flow.
+
+Do not redesign the UI.
+Do not add fake billing.
+Do not bypass Stripe.
+
+Use this pricing structure:
+
+1. Founding Partner
+Price: $79/month
+Trial: 14 days
+Card required: yes
+Access: manual approval required
+Availability: limited early partner access
+Note: locked pricing for approved early partners only
+
+2. Individual
+Price: $129/month
+Trial: none
+Users included: 1
+Access: immediate after successful Stripe payment
+
+3. Team
+Price: $299/month
+Trial: none
+Users included: 5
+Additional seats: $25/user/month
+Access: immediate after successful Stripe payment
+
+4. Enterprise
+Price: Contact Sales
+Trial: none
+Access: manual sales process only
+No self-checkout
+
+Required copy changes:
+
+Founding Partner card:
+Title: Founding Partner
+Price: $79/mo
+Subtitle: 14-day trial. Card required.
+Badge: Limited Early Access
+Bullets:
+- Locked early partner pricing
+- Full platform access
+- 14-day trial with card required
+- Manual approval required
+- Limited availability
+
+Button:
+Request Founding Partner Access
+
+Individual card:
+Title: Individual
+Price: $129/mo
+Subtitle: Immediate access. No trial.
+Bullets:
+- 1 user included
+- Full platform access
+- Claim and evidence management
+- AI extraction and scoring
+- Adjuster intelligence
+- Carrier intelligence
+
+Button:
+Get Started
+
+Team card:
+Title: Team
+Price: $299/mo
+Subtitle: Includes 5 users. Additional seats $25/user/month.
+Bullets:
+- Everything in Individual
+- 5 users included
+- Additional seats $25/user/month
+- Team-level reporting
+- Shared claim library
+- Admin controls
+
+Button:
+Get Started
+
+Enterprise card:
+Title: Enterprise
+Price: Contact Sales
+Subtitle: Custom pricing for larger organizations.
+Bullets:
+- Custom seat count
+- Dedicated support
+- SLA guarantees
+- Custom integrations
+- Enterprise onboarding
+
+Button:
+Contact Sales
+
+Registration behavior:
+
+Founding Partner:
+- User cannot self-activate this plan.
+- Clicking Request Founding Partner Access opens a request form, not Stripe checkout.
+- Form fields:
+  full name
+  email
+  company
+  phone
+  reason for early partner access
+  expected monthly claim volume
+- On submit:
+  save request as founding_partner_request
+  send/admin surface notification
+  show message:
+  “Request received. If approved, you will receive access instructions.”
+- Do not activate account automatically.
+
+Individual:
+- Clicking Get Started opens registration with Individual preselected.
+- After registration, create Stripe Checkout session for $129/mo.
+- After successful payment, activate account.
+
+Team:
+- Clicking Get Started opens registration with Team preselected.
+- Seat count must default to 5.
+- Minimum seat count is 5.
+- Additional seats above 5 billed at $25/user/month.
+- After registration, create Stripe Checkout session for $299/mo plus additional seats.
+- After successful payment, activate account.
+
+Enterprise:
+- Clicking Contact Sales opens sales lead form.
+- Do not create Stripe Checkout.
+- Do not activate account automatically.
+
+Stripe requirements:
+Create or update Stripe products/prices:
+- STRIPE_PRICE_INDIVIDUAL_129
+- STRIPE_PRICE_TEAM_299
+- STRIPE_PRICE_ADDITIONAL_SEAT_25
+
+Do not create a Stripe checkout for Founding Partner unless admin later approves the request.
+
+Required backend routes:
+GET /api/billing/plans
+POST /api/register
+POST /api/billing/create-checkout-session
+POST /api/billing/stripe-webhook
+POST /api/founding-partner/request
+POST /api/enterprise/contact-sales
+
+User status rules:
+- pending_billing: registered but Stripe not completed
+- active: payment successful
+- trialing: active Stripe trial, only if manually approved Founding Partner later
+- pending_founding_partner_approval: Founding Partner request submitted
+- enterprise_lead: Enterprise sales request submitted
+- past_due: payment failed
+- canceled: subscription canceled
+
+Access control:
+Do not allow platform access unless:
+- user status is active
+- user status is trialing
+- user is Master Admin
+
+Required acceptance tests:
+1. Founding Partner button opens request form, not Stripe.
+2. Individual button opens registration with Individual preselected and charges $129/mo through Stripe.
+3. Team button opens registration with Team preselected, default 5 users, charges $299/mo.
+4. Team with 7 users charges $299/mo plus 2 additional seats at $25/user/month.
+5. Enterprise opens contact sales form, not Stripe.
+6. Canceled Stripe checkout leaves user pending_billing with no platform access.
+7. Successful Stripe checkout activates user and redirects to dashboard.
+
+This pricing must be enforced in backend billing logic, not just displayed on the frontend.
