@@ -214,6 +214,7 @@ export interface AdjusterMentionExtracted {
   roleLabel?: string;
   email?: string;
   phone?: string;
+  carrier?: string;
 }
 
 export interface ExtractionResult {

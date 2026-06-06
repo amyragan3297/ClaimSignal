@@ -717,14 +717,15 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       if (claimId && audioRecId && textContent && textContent.trim()) {
         const adjusterEntities = entities.filter(e => e.entityType === "adjuster_name");
         if (adjusterEntities.length > 0) {
+          const transcriptCarrier = matchedClaim?.carrier || undefined;
           const transcriptMentions: AdjusterMention[] = adjusterEntities.map(e => ({
             name: e.rawValue,
-            carrier: matchedClaim?.carrier || undefined,
+            carrier: transcriptCarrier,
           }));
           try {
             await extractAndLinkAdjustersForClaim(claimId, matchedClaim?.organizationId || organizationId, transcriptMentions, {
-              sourceType: "audio",
-              sourceAudioId: audioRecId,
+              sourceType: "transcript",
+              sourceTranscriptId: audioRecId,
             });
           } catch (adjErr: unknown) {
             console.error("[audio-transcript] adjuster linking non-fatal:", (adjErr as Error)?.message);
@@ -973,37 +974,38 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
                 frictionScore: Math.round(scores.claimFrictionScore),
               } as Partial<import("@shared/schema").InsertClaim>))
               .catch((scoreErr: unknown) => console.error("[scoring-auto] non-fatal (new claim):", (scoreErr as Error)?.message));
-
-            // Auto-link ALL adjusters from extracted data on new claim
-            {
-              const singleAdjName = coerceStr(llmExtraction?.adjusterName) || coerceStr(entities.find(e => e.entityType === "adjuster_name")?.rawValue);
-              const adjMentions: AdjusterMention[] = llmExtraction?.adjusterMentions?.length
-                ? llmExtraction.adjusterMentions
-                : singleAdjName
-                  ? [{
-                      name: singleAdjName,
-                      email: coerceStr(llmExtraction?.adjusterEmail) || undefined,
-                      phone: coerceStr(llmExtraction?.adjusterPhone) || undefined,
-                      carrier: coerceStr(llmExtraction?.carrier) || coerceStr(entities.find(e => e.entityType === "carrier_name")?.rawValue) || undefined,
-                    }]
-                  : [];
-              if (adjMentions.length > 0) {
-                try {
-                  const linked = await extractAndLinkAdjustersForClaim(matchResult.claim.id, organizationId, adjMentions, {
-                    sourceType: "document",
-                    sourceDocumentId: evidenceFile.id,
-                  });
-                  if (linked.length > 0) {
-                    adjusterAutoLinked = true;
-                    adjusterAutoLinkedName = adjMentions[0].name;
-                  }
-                } catch (adjErr: unknown) {
-                  console.error("[adjuster-extract] non-fatal:", (adjErr as Error)?.message);
-                }
-              }
-            }
           } else {
             console.log(`[upload] matched existing claim ${matchResult.claim.claimNumber} from "${req.file!.originalname}" matchedBy=${matchResult.matchedBy}`);
+          }
+
+          // Auto-link ALL adjusters from extracted data for both new and matched claims
+          {
+            const extractedCarrier = coerceStr(llmExtraction?.carrier) || coerceStr(entities.find(e => e.entityType === "carrier_name")?.rawValue) || undefined;
+            const singleAdjName = coerceStr(llmExtraction?.adjusterName) || coerceStr(entities.find(e => e.entityType === "adjuster_name")?.rawValue);
+            const adjMentions: AdjusterMention[] = llmExtraction?.adjusterMentions?.length
+              ? llmExtraction.adjusterMentions.map(m => ({ ...m, carrier: m.carrier || extractedCarrier || matchResult!.claim.carrier || undefined }))
+              : singleAdjName
+                ? [{
+                    name: singleAdjName,
+                    email: coerceStr(llmExtraction?.adjusterEmail) || undefined,
+                    phone: coerceStr(llmExtraction?.adjusterPhone) || undefined,
+                    carrier: extractedCarrier || matchResult.claim.carrier || undefined,
+                  }]
+                : [];
+            if (adjMentions.length > 0) {
+              try {
+                const linked = await extractAndLinkAdjustersForClaim(matchResult.claim.id, organizationId, adjMentions, {
+                  sourceType: "document",
+                  sourceDocumentId: evidenceFile.id,
+                });
+                if (linked.length > 0) {
+                  adjusterAutoLinked = true;
+                  adjusterAutoLinkedName = adjMentions[0].name;
+                }
+              } catch (adjErr: unknown) {
+                console.error("[adjuster-extract] non-fatal:", (adjErr as Error)?.message);
+              }
+            }
           }
         } catch (matchErr: unknown) {
           console.error("[upload] claim matching failed:", (matchErr as Error)?.message);

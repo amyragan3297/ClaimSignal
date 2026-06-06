@@ -1,0 +1,251 @@
+Update ClaimSignal pricing, registration, Stripe billing, access control, and admin notification routing.
+
+Do not redesign the UI.
+Do not add fake billing.
+Do not bypass Stripe.
+Do not use demo subscriptions.
+
+All admin notifications, founding partner requests, enterprise leads, billing alerts, contact form submissions, and access requests must route to:
+
+claimsignal1@gmail.com
+
+Use this email as the primary admin/business email across the platform.
+
+Pricing structure:
+
+1. Founding Partner
+Price: $79/month
+Availability: limited early access
+Limit: maximum 50 approved companies
+Trial: 14-day free trial
+Card required: yes
+Access: application and approval required
+Button: Request Founding Partner Access
+
+Benefits:
+- Locked pricing for life
+- Full platform access
+- Early feature access
+- Direct roadmap feedback opportunities
+- Priority support
+
+2. Individual
+Price: $129/month
+Users included: 1
+Trial: none
+Access: immediate after successful Stripe payment
+Button: Get Started
+
+Includes:
+- Full platform access
+- AI claim intelligence
+- Evidence management
+- Adjuster intelligence
+- Carrier intelligence
+- Timeline intelligence
+- Playbook search
+- Unlimited claim processing
+
+3. Team
+Price: $299/month
+Users included: 5
+Additional seats: $25/user/month
+Trial: none
+Access: immediate after successful Stripe payment
+Button: Get Started
+
+Includes:
+- Everything in Individual
+- Shared claim library
+- Team reporting
+- Team administration
+- User management
+- Internal collaboration
+
+4. Professional
+Price: $499/month
+Users included: 15
+Additional seats: $20/user/month
+Trial: none
+Access: immediate after successful Stripe payment
+Button: Get Started
+
+Includes:
+- Everything in Team
+- Advanced analytics
+- Executive dashboards
+- Multi-office reporting
+- Enhanced permissions
+- Priority support
+
+5. Enterprise
+Price: Contact Sales
+Trial: none
+Checkout: no self-service Stripe checkout
+Access: manual sales process only
+Button: Contact Sales
+
+Includes:
+- Custom user limits
+- Custom integrations
+- API access
+- Single Sign-On
+- Dedicated onboarding
+- Dedicated support
+- SLA agreements
+- Custom reporting
+- Carrier-level analytics
+- Franchise and multi-region management
+
+Registration and billing behavior:
+
+Founding Partner:
+- Clicking Request Founding Partner Access opens an application form.
+- Do not send user directly to Stripe.
+- Do not activate account automatically.
+- Save request as pending_application.
+- Send request notification to claimsignal1@gmail.com.
+
+Application form fields:
+- Full name
+- Company name
+- Email
+- Phone number
+- Estimated monthly claim volume
+- Reason for joining
+
+Admin approval:
+- Admin can approve or deny request.
+- If approved, system sends activation email.
+- Approved user may start Stripe checkout for $79/month with 14-day trial.
+- Trial requires card.
+- Account activates only after Stripe checkout succeeds.
+
+Individual:
+- Registration opens with Individual preselected.
+- Stripe checkout charges $129/month.
+- No trial.
+- Account activates after successful payment.
+
+Team:
+- Registration opens with Team preselected.
+- Seat count defaults to 5.
+- Minimum seat count is 5.
+- Stripe checkout charges $299/month.
+- Additional seats above 5 billed at $25/user/month.
+- Account activates after successful payment.
+
+Professional:
+- Registration opens with Professional preselected.
+- Seat count defaults to 15.
+- Minimum seat count is 15.
+- Stripe checkout charges $499/month.
+- Additional seats above 15 billed at $20/user/month.
+- Account activates after successful payment.
+
+Enterprise:
+- Clicking Contact Sales opens sales lead form.
+- Do not create Stripe checkout.
+- Do not activate account automatically.
+- Save lead as enterprise_lead.
+- Send notification to claimsignal1@gmail.com.
+
+Enterprise form fields:
+- Full name
+- Company name
+- Email
+- Phone number
+- Organization type
+- Estimated users
+- Estimated monthly claim volume
+- Integration needs
+- Message
+
+Required backend routes:
+GET /api/billing/plans
+POST /api/register
+POST /api/billing/create-checkout-session
+POST /api/billing/stripe-webhook
+POST /api/founding-partner/request
+POST /api/founding-partner/approve
+POST /api/founding-partner/deny
+POST /api/enterprise/contact-sales
+POST /api/contact
+POST /api/access/request
+
+Required environment variables:
+ADMIN_EMAIL=claimsignal1@gmail.com
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+STRIPE_PRICE_FOUNDING_PARTNER_79
+STRIPE_PRICE_INDIVIDUAL_129
+STRIPE_PRICE_TEAM_299
+STRIPE_PRICE_TEAM_ADDITIONAL_SEAT_25
+STRIPE_PRICE_PROFESSIONAL_499
+STRIPE_PRICE_PROFESSIONAL_ADDITIONAL_SEAT_20
+APP_URL
+
+Stripe webhook handling:
+Handle:
+- checkout.session.completed
+- customer.subscription.created
+- customer.subscription.updated
+- customer.subscription.deleted
+- invoice.payment_succeeded
+- invoice.payment_failed
+
+User status types:
+- pending_application
+- pending_billing
+- trialing
+- active
+- past_due
+- canceled
+- enterprise_lead
+
+Access control:
+Do not allow platform access unless:
+- user status is active
+- user status is trialing
+- user is Master Admin
+
+Canceled checkout:
+- user remains pending_billing
+- no platform access
+
+Failed payment:
+- user status becomes past_due
+- access restricted according to billing policy
+
+Successful payment:
+- user status becomes active
+- redirect to dashboard
+
+Required UI text positioning:
+ClaimSignal is not document storage software.
+ClaimSignal is an insurance claim intelligence platform that converts claim evidence, communications, estimates, audio recordings, inspections, and carrier documentation into structured operational intelligence.
+
+Use outcome-focused language:
+- Reduce claim administration time
+- Organize claim documentation automatically
+- Track adjuster behavior and claim patterns
+- Identify missed supplement opportunities
+- Build institutional claim intelligence
+- Improve claim outcomes
+- Reduce manual claim handling
+
+Acceptance tests:
+1. Founding Partner button opens request form, not Stripe.
+2. Founding Partner request sends notification to claimsignal1@gmail.com.
+3. Approved Founding Partner gets Stripe checkout for $79/month with 14-day card-required trial.
+4. Individual checkout charges $129/month.
+5. Team checkout charges $299/month for 5 users.
+6. Team with 7 users charges $299/month plus 2 additional seats at $25/user/month.
+7. Professional checkout charges $499/month for 15 users.
+8. Professional with 18 users charges $499/month plus 3 additional seats at $20/user/month.
+9. Enterprise button opens Contact Sales form, not Stripe.
+10. Enterprise lead sends notification to claimsignal1@gmail.com.
+11. Canceled Stripe checkout does not activate account.
+12. Successful Stripe checkout activates account and redirects to dashboard.
+
+Do not mark complete unless pricing display, registration dropdown, Stripe checkout, access control, and admin notifications all match this structure.
