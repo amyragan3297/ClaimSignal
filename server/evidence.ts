@@ -695,6 +695,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
 
     // Create audio recording record for audio uploads
     if (fileType === "audio") {
+      let audioRecId: string | undefined;
       try {
         const audioRec = await storage.createAudioRecording({
           organizationId,
@@ -706,9 +707,29 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
           transcriptStatus: textContent && textContent.trim().length > 0 ? "completed" : (isOpenAIConfigured() ? "failed" : "pending"),
           transcriptError: isOpenAIConfigured() && !textContent ? "Transcription failed or returned empty" : undefined,
         });
+        audioRecId = audioRec.id;
         console.log(`[audio-upload] created audioRecording id=${audioRec.id} for evidenceFile=${evidenceFile.id} status=${audioRec.transcriptStatus}`);
       } catch (audioRecErr: unknown) {
         console.error("[audio-upload] non-fatal creating audioRecordings:", (audioRecErr as Error)?.message);
+      }
+
+      // Auto-link adjusters found in the transcript to the associated claim.
+      if (claimId && audioRecId && textContent && textContent.trim()) {
+        const adjusterEntities = entities.filter(e => e.entityType === "adjuster_name");
+        if (adjusterEntities.length > 0) {
+          const transcriptMentions: AdjusterMention[] = adjusterEntities.map(e => ({
+            name: e.rawValue,
+            carrier: matchedClaim?.carrier || undefined,
+          }));
+          try {
+            await extractAndLinkAdjustersForClaim(claimId, matchedClaim?.organizationId || organizationId, transcriptMentions, {
+              sourceType: "audio",
+              sourceAudioId: audioRecId,
+            });
+          } catch (adjErr: unknown) {
+            console.error("[audio-transcript] adjuster linking non-fatal:", (adjErr as Error)?.message);
+          }
+        }
       }
     }
     
@@ -864,11 +885,11 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
             : [];
         if (adjMentions.length > 0) {
           try {
-            const count = await extractAndLinkAdjustersForClaim(claimId!, matchedClaim.organizationId, adjMentions, {
+            const linked = await extractAndLinkAdjustersForClaim(claimId!, matchedClaim.organizationId, adjMentions, {
               sourceType: "document",
               sourceDocumentId: evidenceFile.id,
             });
-            if (count > 0) {
+            if (linked.length > 0) {
               adjusterAutoLinked = true;
               adjusterAutoLinkedName = adjMentions[0].name;
             }
@@ -968,11 +989,11 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
                   : [];
               if (adjMentions.length > 0) {
                 try {
-                  const count = await extractAndLinkAdjustersForClaim(matchResult.claim.id, organizationId, adjMentions, {
+                  const linked = await extractAndLinkAdjustersForClaim(matchResult.claim.id, organizationId, adjMentions, {
                     sourceType: "document",
                     sourceDocumentId: evidenceFile.id,
                   });
-                  if (count > 0) {
+                  if (linked.length > 0) {
                     adjusterAutoLinked = true;
                     adjusterAutoLinkedName = adjMentions[0].name;
                   }

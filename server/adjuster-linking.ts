@@ -1,3 +1,4 @@
+import type { ClaimAdjuster } from "@shared/schema";
 import { storage } from "./storage";
 
 export interface AdjusterMention {
@@ -36,6 +37,27 @@ export function normalizeAdjusterName(raw: string): string {
   }
 
   return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Build a comparison key that ignores middle initials so that
+ * "Cody M. Vines", "Cody Vines", and "CODY VINES" all map to "cody vines".
+ * Used only for dedup lookups — the stored name is always the normalized form.
+ */
+function nameComparisonKey(name: string): string {
+  return normalizeAdjusterName(name)
+    .toLowerCase()
+    .replace(/\s+[a-z]\.\s+/g, " ")
+    .replace(/\s+[a-z]\s+(?=[a-z])/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeCarrierKey(carrier: string | null | undefined): string {
+  if (!carrier) return "";
+  const k = carrier.trim().toLowerCase();
+  if (k === "unknown" || k === "") return "";
+  return k;
 }
 
 type ClaimAdjusterRole =
@@ -86,21 +108,26 @@ export function mapRoleLabelToEnum(label: string | undefined): ClaimAdjusterRole
  * Idempotent: unique constraint on (claimId, adjusterId, roleOnClaim) means
  * duplicate calls for the same adjuster+role pair are silently ignored.
  *
- * Deduplication is name-normalized (handles ALL_CAPS, Last/First, etc.) so a
- * second document about the same adjuster never creates a duplicate profile.
+ * Deduplication rules:
+ *  - Names are first normalized (ALL_CAPS, Last/First, etc.) then compared via
+ *    a middle-initial-stripped key so "Cody Vines" == "Cody M. Vines".
+ *  - When both the existing profile and the new mention have a known carrier,
+ *    the carrier must also match. When either side is unknown/empty, name
+ *    comparison alone is sufficient.
  *
- * Returns the number of new adjuster-claim links created.
+ * Returns the list of newly created ClaimAdjuster link records
+ * (skips already-linked pairs; does not return the existing row for those).
  */
 export async function extractAndLinkAdjustersForClaim(
   claimId: string,
   orgId: string,
   mentions: AdjusterMention[],
   source: LinkSource,
-): Promise<number> {
-  if (!mentions || mentions.length === 0) return 0;
+): Promise<ClaimAdjuster[]> {
+  if (!mentions || mentions.length === 0) return [];
 
   const existingAdjs = await storage.getAdjusters(orgId);
-  let linkedCount = 0;
+  const linked: ClaimAdjuster[] = [];
 
   for (const mention of mentions) {
     const rawName = mention.name?.trim();
@@ -109,12 +136,17 @@ export async function extractAndLinkAdjustersForClaim(
     const normalized = normalizeAdjusterName(rawName);
     if (!normalized) continue;
 
-    const normalizedLower = normalized.toLowerCase();
+    const mentionKey = nameComparisonKey(normalized);
+    const mentionCarrier = normalizeCarrierKey(mention.carrier);
 
-    let adj = existingAdjs.find(
-      (a) => a.adjusterName != null &&
-        normalizeAdjusterName(a.adjusterName).toLowerCase() === normalizedLower
-    );
+    let adj = existingAdjs.find((a) => {
+      if (!a.adjusterName) return false;
+      const nameMatch = nameComparisonKey(a.adjusterName) === mentionKey;
+      if (!nameMatch) return false;
+      const existingCarrier = normalizeCarrierKey(a.carrierName);
+      if (existingCarrier && mentionCarrier) return existingCarrier === mentionCarrier;
+      return true;
+    });
 
     if (!adj) {
       try {
@@ -126,7 +158,7 @@ export async function extractAndLinkAdjustersForClaim(
           carrierName: mention.carrier?.trim() || "Unknown",
         });
         existingAdjs.push(adj);
-        console.log(`[adjuster-linking] created adjuster "${normalized}" in org ${orgId}`);
+        console.log(`[adjuster-linking] created adjuster "${normalized}" (carrier: ${adj.carrierName}) in org ${orgId}`);
       } catch (createErr: unknown) {
         console.error("[adjuster-linking] create non-fatal:", (createErr as Error)?.message);
         continue;
@@ -136,7 +168,7 @@ export async function extractAndLinkAdjustersForClaim(
     const roleOnClaim = mapRoleLabelToEnum(mention.roleLabel);
 
     try {
-      await storage.linkAdjusterToClaim({
+      const link = await storage.linkAdjusterToClaim({
         claimId,
         adjusterId: adj.id,
         organizationId: orgId,
@@ -147,7 +179,7 @@ export async function extractAndLinkAdjustersForClaim(
         sourceAudioId: source.sourceAudioId,
         confidenceScore: mention.confidenceScore ?? 1,
       });
-      linkedCount++;
+      linked.push(link);
       console.log(`[adjuster-linking] linked "${normalized}" (${roleOnClaim}) to claim ${claimId} via ${source.sourceType}`);
     } catch (linkErr: unknown) {
       const msg = (linkErr as Error)?.message ?? "";
@@ -157,5 +189,5 @@ export async function extractAndLinkAdjustersForClaim(
     }
   }
 
-  return linkedCount;
+  return linked;
 }
