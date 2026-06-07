@@ -524,11 +524,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAdjusters(orgId: string): Promise<Adjuster[]> {
-    return db.select().from(adjusters).where(eq(adjusters.organizationId, orgId));
+    return db.select().from(adjusters).where(
+      and(eq(adjusters.organizationId, orgId), sql`${adjusters.deletedAt} IS NULL`)
+    );
   }
 
   async getAllAdjustersAcrossTenants(): Promise<Adjuster[]> {
-    return db.select().from(adjusters);
+    return db.select().from(adjusters).where(sql`${adjusters.deletedAt} IS NULL`);
   }
 
   async getAdjuster(id: string, orgId: string): Promise<Adjuster | undefined> {
