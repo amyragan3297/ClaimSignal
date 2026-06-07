@@ -155,12 +155,37 @@ async function run() {
   // soft-deleted.  However, the same (name, carrier) pair can legitimately
   // appear in another org — aggregation is cross-tenant — so we must verify
   // that NO active adjuster anywhere still uses that pair before deleting.
+  //
+  // We also collect every distinct timePeriod present in the orphaned rows
+  // so Phase 3 can recompute ALL affected historical periods, not just the
+  // current month.
+  const affectedPeriods = new Set<string>();
+
   if (orphanedMetricKeys.length > 0) {
     console.log(`\nChecking ${orphanedMetricKeys.length} candidate (name, carrier) pair(s) for orphaned metrics…`);
 
     for (const { adjusterName, carrier } of orphanedMetricKeys) {
+      // Collect every timePeriod this (name, carrier) pair had metric rows for
+      // BEFORE any deletion decision.  This must happen unconditionally so that
+      // historical periods are recomputed even when the pair is still active in
+      // another org (and the rows are therefore kept, not deleted).
+      const periodRows = await db
+        .select({ timePeriod: adjusterAggregatedMetrics.timePeriod })
+        .from(adjusterAggregatedMetrics)
+        .where(
+          and(
+            eq(adjusterAggregatedMetrics.adjusterName, adjusterName),
+            eq(adjusterAggregatedMetrics.carrier, carrier),
+          ),
+        );
+
+      for (const { timePeriod } of periodRows) {
+        affectedPeriods.add(timePeriod);
+      }
+
       // Check if any active (non-soft-deleted) adjuster across ALL orgs still
-      // carries this (name, carrier) pair.
+      // carries this (name, carrier) pair.  If so, keep the metric rows —
+      // they will be refreshed via Phase 3 rather than deleted.
       const stillActive = await db
         .select({ id: adjusters.id })
         .from(adjusters)
@@ -174,7 +199,7 @@ async function run() {
         .limit(1);
 
       if (stillActive.length > 0) {
-        console.log(`  Skipping name="${adjusterName}" carrier="${carrier}" — still referenced by active adjuster id=${stillActive[0].id}`);
+        console.log(`  Keeping metric rows for name="${adjusterName}" carrier="${carrier}" — still referenced by active adjuster id=${stillActive[0].id} (will recompute ${periodRows.length} period(s))`);
         continue;
       }
 
@@ -193,16 +218,23 @@ async function run() {
     }
   }
 
-  // ── Phase 3: recompute current-period aggregated metrics ─────────────────
-  // This rebuilds the canonical adjuster's row for the current month using
-  // the full (post-merge) claim set.  Soft-deleted duplicates are excluded
-  // from the source query inside computeAggregatedMetrics(), so their claims
-  // are now attributed to the canonical and reflected correctly.
+  // ── Phase 3: recompute aggregated metrics for all affected time periods ───
+  // Always include the current month so the canonical adjuster's live row is
+  // up-to-date even when no orphaned metric rows existed for it.
+  // Historical periods are also recomputed so past claim counts are correct
+  // for the canonical adjuster (previously understated because the duplicate's
+  // claims were attributed to a now-deleted (name, carrier) pair).
   if (mergedCount > 0) {
-    const timePeriod = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-    console.log(`\nRecomputing aggregated metrics for time period "${timePeriod}"…`);
-    const { computed } = await computeAggregatedMetrics(timePeriod);
-    console.log(`  Recomputed ${computed} aggregated metric row(s).`);
+    const currentPeriod = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+    affectedPeriods.add(currentPeriod);
+
+    const periodsToRecompute = Array.from(affectedPeriods).sort();
+    console.log(`\nRecomputing aggregated metrics for ${periodsToRecompute.length} time period(s): ${periodsToRecompute.join(", ")}`);
+
+    for (const timePeriod of periodsToRecompute) {
+      const { computed } = await computeAggregatedMetrics(timePeriod);
+      console.log(`  [${timePeriod}] Recomputed ${computed} aggregated metric row(s).`);
+    }
   } else {
     console.log("\nNo merges performed — skipping metrics recompute.");
   }
