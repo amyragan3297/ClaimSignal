@@ -8,7 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Users, Building2, CreditCard, FileText, Shield, Loader2, Eye,
-  Archive, Trash2, RotateCcw, BarChart3, AlertCircle,
+  Archive, Trash2, RotateCcw, BarChart3, AlertCircle, GitMerge,
 } from "lucide-react";
 import { Redirect } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -290,6 +290,7 @@ export default function AdminPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"overview" | "governance">("overview");
   const [clearDemoConfirm, setClearDemoConfirm] = useState(false);
+  const [dedupeLog, setDedupeLog] = useState<string[] | null>(null);
 
   const { data: overview, isLoading: overviewLoading } = useQuery<AdminOverview>({
     queryKey: ["/api/admin/overview"],
@@ -331,6 +332,37 @@ export default function AdminPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Failed to clear demo data", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const dedupeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/dedupe-adjusters");
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message ?? "Deduplication failed");
+      }
+      return res.json() as Promise<{
+        totalActive: number;
+        duplicateGroups: number;
+        mergedCount: number;
+        orphanedMetricsDeleted: number;
+        metricsRecomputed: number;
+        log: string[];
+      }>;
+    },
+    onSuccess: (data) => {
+      setDedupeLog(data.log);
+      toast({
+        title: data.mergedCount > 0
+          ? `Dedup complete — merged ${data.mergedCount} duplicate(s)`
+          : "Dedup complete — no duplicates found",
+        description: `${data.totalActive} active adjusters, ${data.duplicateGroups} group(s) found`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/overview"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Deduplication failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -415,6 +447,65 @@ export default function AdminPage() {
                 <span className="text-sm text-muted-foreground">Canceled</span>
                 <Badge variant="destructive">{overview?.canceledCount ?? 0}</Badge>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Adjuster Deduplication */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+              <div className="flex items-center gap-2">
+                <GitMerge className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-base font-semibold">Adjuster Deduplication</CardTitle>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="button-run-adjuster-dedup"
+                disabled={dedupeMutation.isPending}
+                onClick={() => { setDedupeLog(null); dedupeMutation.mutate(); }}
+              >
+                {dedupeMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Running…</>
+                ) : (
+                  <><GitMerge className="h-4 w-4 mr-2" />Run Dedup</>
+                )}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Merges duplicate adjuster profiles within each organization using normalized name matching.
+                Safe to run at any time — already-merged records are skipped automatically.
+              </p>
+              {dedupeMutation.data && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <div className="rounded-md bg-muted/40 p-2 text-center">
+                    <div className="font-semibold">{dedupeMutation.data.totalActive}</div>
+                    <div className="text-xs text-muted-foreground">Active adjusters</div>
+                  </div>
+                  <div className="rounded-md bg-muted/40 p-2 text-center">
+                    <div className="font-semibold">{dedupeMutation.data.duplicateGroups}</div>
+                    <div className="text-xs text-muted-foreground">Duplicate groups</div>
+                  </div>
+                  <div className="rounded-md bg-muted/40 p-2 text-center">
+                    <div className="font-semibold">{dedupeMutation.data.mergedCount}</div>
+                    <div className="text-xs text-muted-foreground">Profiles merged</div>
+                  </div>
+                  <div className="rounded-md bg-muted/40 p-2 text-center">
+                    <div className="font-semibold">{dedupeMutation.data.metricsRecomputed}</div>
+                    <div className="text-xs text-muted-foreground">Metrics recomputed</div>
+                  </div>
+                </div>
+              )}
+              {dedupeLog && dedupeLog.length > 0 && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
+                    Operation log ({dedupeLog.length} lines)
+                  </summary>
+                  <pre className="mt-2 max-h-48 overflow-y-auto rounded bg-muted/40 p-2 text-muted-foreground whitespace-pre-wrap break-all">
+                    {dedupeLog.join("\n")}
+                  </pre>
+                </details>
+              )}
             </CardContent>
           </Card>
 

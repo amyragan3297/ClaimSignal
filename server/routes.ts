@@ -2658,6 +2658,20 @@ export async function registerRoutes(
     }
   });
 
+  // ── Adjuster Deduplication (Master only) ───────────────────────────────────
+  // Merges duplicate adjuster profiles within each org using normalized name
+  // matching. Idempotent — safe to run multiple times. Returns a structured
+  // result with counts and a full operation log.
+  app.post("/api/admin/dedupe-adjusters", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
+    try {
+      const { runAdjusterDedup } = await import("./dedupe-adjusters-util");
+      const result = await runAdjusterDedup();
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
   // ── Clear Demo Data (Master only) ──────────────────────────────────────────
   // Hard-deletes all records belonging to demo/test organizations
   // (any org whose users have @claimsignal.test emails or test@example.com),
