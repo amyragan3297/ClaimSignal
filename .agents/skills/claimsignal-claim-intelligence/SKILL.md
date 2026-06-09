@@ -18,7 +18,7 @@ description: >
 - User needs to build or update a claim timeline
 - User reports duplicate adjusters, claims, or aliases
 - User asks to reconcile claim data across multiple sources
-- User mentions specific claims like CLM-721631 or 604 Milton Road
+- User mentions claim intelligence, document extraction, or claims data cleanup
 
 ## Core Principle
 
@@ -147,13 +147,11 @@ If extraction is uncertain:
 
 **Do not guess.** A blank field with "Needs Review" is better than incorrect data.
 
-### 10. Special Claim Rules
+### 10. Training Example
 
-**CLM-721631 / 604 Milton Road:**
-- Group all related uploaded materials under this claim when evidence supports the connection
-- Known participants: Cody Vines, Edwinah Bopape (and variants), Vernon Hood
-- Known lifecycle: Denied → Approved → Closed
-- Cody Vines is the adjuster who overturned the denial to approval
+Use the following as a pattern for how the skill applies to any claim. The framework is the same for all claims; only the extracted data changes.
+
+**Example scenario:** A claim with a denial letter followed by an approval letter, involving multiple adjusters. The skill extracts the timeline, identifies the denial-overturned pattern, resolves adjuster aliases, and links all documents to the same claim record.
 
 ## Output Format
 
@@ -162,46 +160,33 @@ When extracting claim intelligence, produce structured data in this format:
 ```json
 {
   "claim": {
-    "claimNumber": "CLM-721631",
-    "propertyAddress": "604 Milton Road",
-    "insuredName": "Cody Vines",
-    "carrier": "Allstate Insurance Company",
-    "dateOfLoss": "2023-03-15",
-    "lossType": "hail",
-    "currentStatus": "closed",
+    "claimNumber": "<extracted claim number>",
+    "propertyAddress": "<extracted address>",
+    "insuredName": "<extracted insured name>",
+    "carrier": "<normalized carrier name>",
+    "dateOfLoss": "<YYYY-MM-DD>",
+    "lossType": "<hail | wind | water | fire | ...>",
+    "currentStatus": "<current status>",
     "statusHistory": [
-      { "status": "filed", "date": "2023-03-15", "source": "claim_form.pdf" },
-      { "status": "denied", "date": "2023-04-02", "source": "denial_letter.pdf" },
-      { "status": "approved", "date": "2023-05-10", "source": "approval_letter.pdf" },
-      { "status": "closed", "date": "2023-05-15", "source": "closing_notice.pdf" }
+      { "status": "filed", "date": "<date>", "source": "<file name>" },
+      { "status": "denied", "date": "<date>", "source": "<file name>" },
+      { "status": "approved", "date": "<date>", "source": "<file name>" },
+      { "status": "closed", "date": "<date>", "source": "<file name>" }
     ]
   },
   "adjusters": [
     {
-      "name": "Cody Vines",
-      "company": "Allstate Insurance Company",
-      "role": "primary_adjuster",
-      "involvement": "approved",
-      "notes": "Overturned denial to approval"
-    },
-    {
-      "name": "Edwinah Bopape",
-      "aliases": ["Edwina Bopape", "Edwina Opape", "Edwina"],
-      "company": "Allstate Insurance Company",
-      "role": "field_adjuster",
-      "involvement": "unknown"
-    },
-    {
-      "name": "Vernon Hood",
-      "company": "Unknown",
-      "role": "primary_adjuster",
-      "involvement": "unknown"
+      "name": "<adjuster name>",
+      "aliases": ["<variation 1>", "<variation 2>"],
+      "company": "<carrier or company>",
+      "role": "<primary_adjuster | field_adjuster | desk_adjuster | ...>",
+      "involvement": "<assigned | inspected | denied | approved | ...>",
+      "notes": "<context, e.g., overturned denial to approval>"
     }
   ],
-  "outcomePattern": "denial_overturned_to_approval",
+  "outcomePattern": "<denial_overturned_to_approval | reinspection_approval | supplement_approved | ...>",
   "sources": [
-    { "fileName": "denial_letter.pdf", "page": 1, "confidence": 0.95 },
-    { "fileName": "approval_letter.pdf", "page": 1, "confidence": 0.95 }
+    { "fileName": "<file name>", "page": 1, "confidence": 0.95 }
   ],
   "needsReview": false
 }
