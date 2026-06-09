@@ -28,6 +28,11 @@ interface InvestorMetrics {
   avgRevenuePerUser: number;
   topCarrier: string;
   topPlanType: string;
+  totalPotentialRecovery: number;
+  totalConfirmedRecovery: number;
+  underpaidCount: number;
+  depCount: number;
+  supplementCount: number;
 }
 
 export default function InvestorDashboardPage() {
@@ -117,6 +122,44 @@ export default function InvestorDashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Revenue Opportunity Section */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+          <CardTitle className="text-base font-semibold">Revenue Opportunity</CardTitle>
+          <Badge variant="outline" className="text-xs">
+            <DollarSign className="w-3 h-3 mr-1" />
+            Claim-Level Intelligence
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div>
+              <span className="text-sm text-muted-foreground">Total Potential Recovery</span>
+              <p className="text-2xl font-bold text-green-500">
+                {metrics?.totalPotentialRecovery ? `$${metrics.totalPotentialRecovery.toLocaleString()}` : "$0"}
+              </p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Confirmed Recovery</span>
+              <p className="text-2xl font-bold text-primary">
+                {metrics?.totalConfirmedRecovery ? `$${metrics.totalConfirmedRecovery.toLocaleString()}` : "$0"}
+              </p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Underpaid Claims</span>
+              <p className="text-2xl font-bold">{metrics?.underpaidCount ?? 0}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Depreciation Opportunities</span>
+              <p className="text-2xl font-bold">{metrics?.depCount ?? 0}</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Revenue opportunity is calculated from real claim data across the platform. Values represent outstanding amounts, recoverable depreciation, and pending supplements. This demonstrates the platform&apos;s value proposition to restoration contractors and public adjusters.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Insights Panel */}
       <div className="grid md:grid-cols-2 gap-4">

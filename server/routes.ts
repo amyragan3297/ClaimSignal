@@ -4115,15 +4115,90 @@ export async function registerRoutes(
       const users = isGlobal ? allUsers : allUsers.filter((u) => u.organizationId === orgId);
       const claims = isGlobal ? await storage.getAllClaimsAcrossTenants() : await storage.getClaims(orgId);
       const adjs = isGlobal ? await storage.getAllAdjustersAcrossTenants() : await storage.getAdjusters(orgId);
+      const allOrgs = isGlobal ? await storage.getAllOrganizations() : [];
+      const allBilling = isGlobal ? await storage.getAllBillingAccounts() : [];
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "INVESTOR_DASHBOARD_VIEWED", entityType: "platform", entityId: "investor-safe", ipAddress: getClientIp(req) });
+
+      // Compute revenue metrics
+      const planPrice: Record<string, number> = { founder: 79, individual: 149, pro: 149, team: 299, enterprise: 0 };
+      let totalRevenue = 0;
+      let mrr = 0;
+      let activeSubscriptions = 0;
+      let trialingSubscriptions = 0;
+      let canceledSubscriptions = 0;
+      const planCounts: Record<string, number> = {};
+      for (const b of allBilling) {
+        const plan = b.planType || "individual";
+        const price = planPrice[plan] || 0;
+        const seats = b.seatCount || 1;
+        const extraSeats = Math.max(0, seats - 5);
+        const monthly = price + (extraSeats * 25);
+        if (b.subscriptionStatus === "active") {
+          totalRevenue += monthly;
+          mrr += monthly;
+          activeSubscriptions++;
+        } else if (b.subscriptionStatus === "trialing") {
+          trialingSubscriptions++;
+        } else if (b.subscriptionStatus === "canceled") {
+          canceledSubscriptions++;
+        }
+        planCounts[plan] = (planCounts[plan] || 0) + 1;
+      }
+      const totalSubscriptions = allBilling.length;
+      const churnRate = totalSubscriptions > 0 ? canceledSubscriptions / totalSubscriptions : 0;
+      const avgRevenuePerUser = users.length > 0 ? Math.round(totalRevenue / users.length) : 0;
+      const topPlanType = Object.entries(planCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "N/A";
+
+      // Compute carrier distribution
+      const carrierCounts: Record<string, number> = {};
+      for (const c of claims) {
+        if (c.carrier) {
+          carrierCounts[c.carrier] = (carrierCounts[c.carrier] || 0) + 1;
+        }
+      }
+      const topCarrier = Object.entries(carrierCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "N/A";
+
+      // Compute total revenue opportunity across all claims
+      let totalPotentialRecovery = 0;
+      let underpaidCount = 0;
+      let depCount = 0;
+      let supplementCount = 0;
+      let confirmedRecovery = 0;
+      for (const c of claims) {
+        const rcv = (c.rcvAmount ?? 0);
+        const paid = (c.finalPaidAmount ?? 0);
+        const deductible = (c.deductible ?? 0);
+        const supplement = (c.supplementAmountTotal ?? 0);
+        const recoverableDep = (c.recoverableDepreciation ?? 0);
+        const outstanding = Math.max(0, rcv - paid - deductible);
+        if (outstanding > 1000) { totalPotentialRecovery += outstanding; underpaidCount++; }
+        if (recoverableDep > 0) { totalPotentialRecovery += recoverableDep; depCount++; }
+        if (supplement > 0 && c.supplementOutcome === "approved") { confirmedRecovery += supplement; }
+        if (supplement > 0 && c.supplementOutcome !== "approved") { totalPotentialRecovery += supplement; supplementCount++; }
+      }
+
       res.json({
         disclaimer: "Aggregate metrics only. No protected claim data included.",
         totalClaimsProcessed: claims.length,
         totalUsers: users.length,
+        totalOrgs: allOrgs.length,
         totalAdjustersTracked: adjs.length,
         platformAdoptionTrend: countLastNDays(users, "createdAt", 30) >= 1 ? "growing" : "stable",
         newUsersLast30Days: countLastNDays(users, "createdAt", 30),
         newClaimsLast30Days: countLastNDays(claims, "createdAt", 30),
+        totalRevenue,
+        mrr,
+        activeSubscriptions,
+        trialingSubscriptions,
+        churnRate,
+        avgRevenuePerUser,
+        topPlanType,
+        topCarrier,
+        totalPotentialRecovery,
+        totalConfirmedRecovery: confirmedRecovery,
+        underpaidCount,
+        depCount,
+        supplementCount,
       });
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
