@@ -2900,7 +2900,7 @@ export async function registerRoutes(
         userId: "pending", // placeholder, will be updated on actual user creation
         organizationId: "pending",
         status: "pending",
-        notes: `Name: ${data.fullName}, Company: ${data.companyName}, Email: ${data.email}, Interest: ${data.investmentInterest || "N/A"}, Reason: ${data.reasonForAccess || "N/A"}`,
+        notes: JSON.stringify({ fullName: data.fullName, email: data.email, companyName: data.companyName, phone: data.phone || "", investmentInterest: data.investmentInterest || "", reasonForAccess: data.reasonForAccess || "" }),
       });
       await sendAdminNotificationEmail({
         subject: "New Investor Access Request",
@@ -2919,6 +2919,92 @@ export async function registerRoutes(
       res.json({ success: true, id: (investor as Record<string, unknown>).id });
     } catch (err) {
       res.status(400).json({ message: (err as Error).message });
+    }
+  });
+
+  // —— Investor Access: Master Admin Endpoints ——
+
+  app.get("/api/admin/investor-access", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const requests = await storage.getAllInvestorAccess();
+      res.json(requests);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/admin/investor-access/:id/approve", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const id = String(req.params.id);
+      const { userId: actorId, role: actorRole } = req.auth!;
+
+      const all = await storage.getAllInvestorAccess();
+      const request = all.find((r) => r.id === id);
+      if (!request) return res.status(404).json({ message: "Request not found" });
+      if (request.status === "approved") return res.status(400).json({ message: "Already approved" });
+
+      // Parse contact info — JSON for new requests, regex fallback for legacy plain text
+      let contact: { fullName?: string; email?: string; companyName?: string } = {};
+      try {
+        contact = JSON.parse(request.notes || "{}");
+      } catch {
+        const emailMatch = (request.notes || "").match(/Email:\s*([^\s,]+)/);
+        const nameMatch = (request.notes || "").match(/Name:\s*([^,]+)/);
+        const companyMatch = (request.notes || "").match(/Company:\s*([^,]+)/);
+        contact = {
+          email: emailMatch?.[1] || "",
+          fullName: nameMatch?.[1]?.trim() || "Investor",
+          companyName: companyMatch?.[1]?.trim() || "Investor Access",
+        };
+      }
+
+      if (!contact.email) return res.status(400).json({ message: "No email found in request. Cannot create account." });
+
+      // If user already exists, just mark the request approved
+      const existingUser = await storage.getUserByEmail(contact.email);
+      if (existingUser) {
+        await storage.updateInvestorAccessById(id, { status: "approved", userId: existingUser.id, approvedBy: actorId, approvedAt: new Date() });
+        await storage.createAuditLog({ organizationId: existingUser.organizationId, actorUserId: actorId, actorRole, actionType: "INVESTOR_ACCESS_APPROVED", entityType: "investor_access", entityId: id, afterJson: { email: contact.email, approvedBy: actorId }, ipAddress: getClientIp(req) });
+        return res.json({ success: true, userId: existingUser.id, email: contact.email });
+      }
+
+      // Create org + investor user + billing account
+      const tempPassword = randomBytes(8).toString("hex");
+      const passwordHash = await bcrypt.hash(tempPassword, 12);
+      const org = await storage.createOrganization({ name: contact.companyName || "Investor Access", organizationType: "enterprise_operator" });
+      const newUser = await storage.createUser({ email: contact.email, passwordHash, fullName: contact.fullName || "Investor", organizationId: org.id, role: "investor" });
+      await storage.createBillingAccount({ organizationId: org.id, planType: "individual", subscriptionStatus: "active" });
+      await storage.updateInvestorAccessById(id, { status: "approved", userId: newUser.id, organizationId: org.id, approvedBy: actorId, approvedAt: new Date() });
+      await storage.createAuditLog({ organizationId: org.id, actorUserId: actorId, actorRole, actionType: "INVESTOR_ACCESS_APPROVED", entityType: "investor_access", entityId: id, afterJson: { email: contact.email, approvedBy: actorId }, ipAddress: getClientIp(req) });
+      res.json({ success: true, userId: newUser.id, email: contact.email, tempPassword });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/admin/investor-access/:id/deny", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const id = String(req.params.id);
+      const { userId: actorId, role: actorRole } = req.auth!;
+      const updated = await storage.updateInvestorAccessById(id, { status: "rejected" });
+      if (!updated) return res.status(404).json({ message: "Request not found" });
+      await storage.createAuditLog({ organizationId: "", actorUserId: actorId, actorRole, actionType: "INVESTOR_ACCESS_DENIED", entityType: "investor_access", entityId: id, afterJson: { deniedBy: actorId }, ipAddress: getClientIp(req) });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/admin/investor-access/:id/revoke", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const id = String(req.params.id);
+      const { userId: actorId, role: actorRole } = req.auth!;
+      const updated = await storage.updateInvestorAccessById(id, { status: "revoked" });
+      if (!updated) return res.status(404).json({ message: "Request not found" });
+      await storage.createAuditLog({ organizationId: "", actorUserId: actorId, actorRole, actionType: "INVESTOR_ACCESS_REVOKED", entityType: "investor_access", entityId: id, afterJson: { revokedBy: actorId }, ipAddress: getClientIp(req) });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
@@ -4193,7 +4279,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.get("/api/executive/investor-safe", requireAuth, async (req: AuthRequest, res: Response) => {
+  app.get("/api/executive/investor-safe", requireAuth, requireInvestorApproved, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
       if (!['master_admin', 'executive_admin', 'founder', 'investor'].includes(role)) return res.status(403).json({ message: "Access denied" });

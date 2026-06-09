@@ -365,6 +365,7 @@ export interface IStorage {
   getInvestorAccess(userId: string): Promise<InvestorAccess | undefined>;
   getAllInvestorAccess(): Promise<InvestorAccess[]>;
   updateInvestorAccess(userId: string, data: Partial<InvestorAccess>): Promise<InvestorAccess | undefined>;
+  updateInvestorAccessById(id: string, data: Partial<InvestorAccess>): Promise<InvestorAccess | undefined>;
   deleteUser(id: string): Promise<void>;
   deleteOrganization(id: string): Promise<void>;
   getUserByEmailWithPassword(email: string): Promise<User | undefined>;
@@ -1646,6 +1647,11 @@ export class DatabaseStorage implements IStorage {
 
   async updateInvestorAccess(userId: string, data: Partial<InvestorAccess>): Promise<InvestorAccess | undefined> {
     const [updated] = await db.update(investorAccess).set(data).where(eq(investorAccess.userId, userId)).returning();
+    return updated;
+  }
+
+  async updateInvestorAccessById(id: string, data: Partial<InvestorAccess>): Promise<InvestorAccess | undefined> {
+    const [updated] = await db.update(investorAccess).set(data).where(eq(investorAccess.id, id)).returning();
     return updated;
   }
 

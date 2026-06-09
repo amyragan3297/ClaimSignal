@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Users, Building2, CreditCard, FileText, Shield, Loader2, Eye,
   Archive, Trash2, RotateCcw, BarChart3, AlertCircle, GitMerge,
-  Crown, Plus,
+  Crown, Plus, Check,
 } from "lucide-react";
 import { Redirect } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -501,10 +501,236 @@ function FounderInvitationsTab() {
   );
 }
 
+interface InvestorAccessRecord {
+  id: string;
+  userId: string;
+  organizationId: string;
+  status: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  notes: string | null;
+  createdAt: string | null;
+}
+
+function InvestorRequestsTab() {
+  const { toast } = useToast();
+  const [approvedCredentials, setApprovedCredentials] = useState<{ email: string; tempPassword: string } | null>(null);
+
+  function parseNotes(notes: string | null): { fullName: string; email: string; companyName: string; investmentInterest?: string } {
+    if (!notes) return { fullName: "—", email: "—", companyName: "—" };
+    try {
+      const parsed = JSON.parse(notes);
+      return { fullName: parsed.fullName || "—", email: parsed.email || "—", companyName: parsed.companyName || "—", investmentInterest: parsed.investmentInterest || "" };
+    } catch {
+      const email = notes.match(/Email:\s*([^\s,]+)/)?.[1] || "—";
+      const fullName = notes.match(/Name:\s*([^,]+)/)?.[1]?.trim() || "—";
+      const companyName = notes.match(/Company:\s*([^,]+)/)?.[1]?.trim() || "—";
+      return { fullName, email, companyName };
+    }
+  }
+
+  const { data: requests, isLoading } = useQuery<InvestorAccessRecord[]>({
+    queryKey: ["/api/admin/investor-access"],
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/admin/investor-access/${id}/approve`, {});
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to approve");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/investor-access"] });
+      if (data.tempPassword) {
+        setApprovedCredentials({ email: data.email, tempPassword: data.tempPassword });
+      } else {
+        toast({ title: "Access approved", description: "Investor account is now active." });
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to approve", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const denyMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/admin/investor-access/${id}/deny`, {});
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to deny");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Request denied" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/investor-access"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to deny", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/admin/investor-access/${id}/revoke`, {});
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to revoke");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Access revoked" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/investor-access"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to revoke", description: err.message, variant: "destructive" });
+    },
+  });
+
+  function getStatusBadge(status: string) {
+    const map: Record<string, string> = {
+      pending: "bg-yellow-500/10 text-yellow-500",
+      approved: "bg-emerald-500/10 text-emerald-500",
+      rejected: "bg-red-500/10 text-red-500",
+      revoked: "bg-muted text-muted-foreground",
+    };
+    return map[status] || "bg-muted text-muted-foreground";
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold" data-testid="text-investor-requests-title">Investor Access Requests</h2>
+        <p className="text-sm text-muted-foreground">
+          Review and approve investor access requests. Approval creates a read-only investor account with no claim, PII, or document access.
+        </p>
+      </div>
+
+      {approvedCredentials && (
+        <Card className="border-emerald-500/30 bg-emerald-500/5">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-500" />
+              <span className="font-semibold text-sm text-emerald-500">Investor Account Created</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Share these credentials securely with the investor. The temporary password cannot be recovered after you dismiss this panel.
+            </p>
+            <div className="grid grid-cols-2 gap-4 font-mono text-sm bg-background/60 rounded-md p-3 border border-border/50">
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Email</span>
+                <span className="font-medium">{approvedCredentials.email}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block mb-1">Temporary Password</span>
+                <span className="font-medium text-emerald-500">{approvedCredentials.tempPassword}</span>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setApprovedCredentials(null)} data-testid="button-dismiss-credentials">
+              Dismiss
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-6 space-y-3">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Interest</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(requests || []).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      No investor access requests yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {(requests || []).map((record) => {
+                  const contact = parseNotes(record.notes);
+                  return (
+                    <TableRow key={record.id} data-testid={`row-investor-request-${record.id}`}>
+                      <TableCell className="font-medium">{contact.fullName}</TableCell>
+                      <TableCell className="text-muted-foreground">{contact.email}</TableCell>
+                      <TableCell>{contact.companyName}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{contact.investmentInterest || "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`capitalize text-xs ${getStatusBadge(record.status)}`}>
+                          {record.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {record.createdAt ? new Date(record.createdAt).toLocaleDateString() : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {record.status === "pending" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/10"
+                                onClick={() => approveMutation.mutate(record.id)}
+                                disabled={approveMutation.isPending}
+                                data-testid={`button-approve-investor-${record.id}`}
+                              >
+                                {approveMutation.isPending && approveMutation.variables === record.id
+                                  ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                  : <Check className="w-3 h-3 mr-1" />}
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => denyMutation.mutate(record.id)}
+                                disabled={denyMutation.isPending}
+                                data-testid={`button-deny-investor-${record.id}`}
+                              >
+                                Deny
+                              </Button>
+                            </>
+                          )}
+                          {record.status === "approved" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => revokeMutation.mutate(record.id)}
+                              disabled={revokeMutation.isPending}
+                              data-testid={`button-revoke-investor-${record.id}`}
+                            >
+                              Revoke
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { data: auth, refetch } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"overview" | "governance" | "founder-invitations">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "governance" | "founder-invitations" | "investor-requests">("overview");
   const [clearDemoConfirm, setClearDemoConfirm] = useState(false);
   const [dedupeLog, setDedupeLog] = useState<string[] | null>(null);
 
@@ -628,6 +854,15 @@ export default function AdminPage() {
             <Crown className="w-4 h-4" />
             Founder Invitations
           </Button>
+          <Button
+            variant={activeTab === "investor-requests" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveTab("investor-requests")}
+            data-testid="button-tab-investor-requests"
+          >
+            <BarChart3 className="w-4 h-4" />
+            Investor Requests
+          </Button>
         </div>
       </div>
 
@@ -635,6 +870,8 @@ export default function AdminPage() {
         <GovernanceHub />
       ) : activeTab === "founder-invitations" ? (
         <FounderInvitationsTab />
+      ) : activeTab === "investor-requests" ? (
+        <InvestorRequestsTab />
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
