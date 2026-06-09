@@ -234,10 +234,10 @@ export default function IntelligencePage() {
             <div>
               <p className="text-sm font-medium">Intelligence Engine Status</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Risk, friction, and escalation scores are computed with MVP rule-based models from your real claim data. AI narrative analysis (per claim), document extraction, and audio transcription run live via OpenAI. Aggregated carrier and adjuster patterns grow stronger as more claims and evidence are added.
+                Risk, friction, and escalation scores are computed from your real claim data. AI narrative analysis (per claim), document extraction, and audio transcription run live via OpenAI. Aggregated carrier and adjuster patterns grow stronger as more claims and evidence are added.
               </p>
             </div>
-            <Badge variant="outline" className="text-xs shrink-0">MVP Rule-Based</Badge>
+            <Badge variant="outline" className="text-xs shrink-0">AI-Powered</Badge>
           </div>
         </CardContent>
       </Card>

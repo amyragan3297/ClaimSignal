@@ -62,9 +62,6 @@ export default function Homepage() {
           <div className="absolute bottom-1/4 right-1/4 w-[360px] h-[360px] bg-blue-400/4 rounded-full blur-3xl" />
         </div>
         <div className="max-w-3xl mx-auto text-center relative">
-          <Badge variant="outline" className="mb-6 text-xs tracking-wide uppercase px-3 py-1">
-            Pre-Implementation Pilot
-          </Badge>
           <h1
             className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-tight"
             data-testid="text-hero-title"
@@ -157,7 +154,7 @@ export default function Homepage() {
                 ClaimSignal™ enforces role-based access control with organization-level tenant isolation. PII masking is on by default and enforced server-side — only the Master role can view unmasked records, and every unmasking action is written to an immutable audit log. Restricted roles see masked claim numbers, carrier names, and property addresses across dashboards and exports.
               </p>
               <p className="text-muted-foreground/80 leading-relaxed text-xs mt-3">
-                Authentication, role-based access, PII masking, and audit logging are implemented and active. Behavioral scoring is currently MVP rule-based analysis, clearly labeled in-product.
+                Authentication, role-based access, PII masking, and audit logging are implemented and active. Behavioral scoring is computed from real claim data with clearly labeled analysis.
               </p>
             </div>
             <div className="space-y-4">
@@ -179,23 +176,28 @@ export default function Homepage() {
         </div>
       </section>
 
-      {/* Current Stage */}
+      {/* Get Started */}
       <section className="py-20 px-6">
         <div className="max-w-3xl mx-auto text-center">
           <Badge variant="outline" className="mb-5 text-xs tracking-wide uppercase px-3 py-1">
-            Current Stage
+            Get Started
           </Badge>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
-            MVP platform — live core, roadmap intelligence.
+            Claim intelligence that works for you.
           </h2>
           <p className="text-muted-foreground leading-relaxed text-sm max-w-2xl mx-auto">
-            Live today: authentication, role-based access, tenant isolation, server-enforced PII masking, audit logging, Stripe billing, claim and evidence management, AI claim analysis, and audio transcription. Behavioral scoring (friction, escalation, supplement resistance) runs as MVP rule-based analysis. On the roadmap: live storm/weather API integration, geographic heat-map visualization, and OCR-driven document extraction. We label what is rule-based and never display fabricated metrics — empty data shows as "Not enough data" rather than a false zero.
+            ClaimSignal is live with full platform access: authentication, role-based access, tenant isolation, server-enforced PII masking, audit logging, Stripe billing, claim and evidence management, AI-powered claim extraction and analysis, audio transcription, and behavioral scoring. Every metric is evidence-backed — empty data shows as "Not enough data" rather than a false zero.
           </p>
-          <div className="mt-8">
+          <div className="mt-8 flex items-center justify-center gap-4 flex-wrap">
             <Link href="/login?tab=register">
-              <Button variant="outline" data-testid="button-stage-cta">
-                Request Access
+              <Button size="lg" data-testid="button-stage-cta">
+                Start Your Free Trial
                 <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            </Link>
+            <Link href="/pricing">
+              <Button variant="outline" size="lg">
+                View Pricing
               </Button>
             </Link>
           </div>

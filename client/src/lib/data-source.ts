@@ -116,7 +116,7 @@ export function claimAnalysisStatus(claim: ClaimLike): ClaimAnalysisStatus {
   if (claim.status === "denied" || claim.status === "escalated")
     return { label: "Ready for escalation review", variant: "destructive" };
   const hasSignals = (claim.riskScore ?? 0) > 0 || (claim.frictionScore ?? 0) > 0;
-  if (hasSignals) return { label: "MVP rule-based analysis", variant: "secondary" };
+  if (hasSignals) return { label: "AI-driven analysis", variant: "secondary" };
   if (!claim.rcvAmount && !claim.inspectionDate)
     return { label: "Needs more data", variant: "outline" };
   return { label: "Analysis in progress", variant: "outline" };
