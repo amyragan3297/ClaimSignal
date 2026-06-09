@@ -453,6 +453,26 @@ function parseExtractionResponse(raw: string): ExtractionResult {
     if (mentions.length > 0) result.adjusterMentions = mentions;
   }
 
+  // ── Guard: prevent adjuster names from contaminating homeowner/insured fields ──
+  const adjusterNames = new Set<string>(
+    [
+      result.adjusterName,
+      ...(result.adjusterMentions?.map((m) => m.name) ?? []),
+    ].filter((n): n is string => !!n)
+  );
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const isAdjusterName = (name: string | undefined) => {
+    if (!name) return false;
+    const n = norm(name);
+    return Array.from(adjusterNames).some((a) => norm(a) === n || n.includes(norm(a)) || norm(a).includes(n));
+  };
+  if (result.homeownerName && isAdjusterName(result.homeownerName)) {
+    delete (result as unknown as Record<string, unknown>).homeownerName;
+  }
+  if (result.insuredName && isAdjusterName(result.insuredName)) {
+    delete (result as unknown as Record<string, unknown>).insuredName;
+  }
+
   return result;
 }
 

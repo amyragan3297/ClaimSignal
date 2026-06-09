@@ -78,6 +78,10 @@ function countAiModulesDone(claim: ClaimLike): number {
   return AI_MODULE_NAMES.filter(m => done.includes(m)).length;
 }
 
+export function hasAiAnalysis(claim: ClaimLike): boolean {
+  return countAiModulesDone(claim) >= 6;
+}
+
 /**
  * Derive an honest analysis-status badge for a claim row. Distinguishes
  * full AI analysis (all 6 AI modules were persisted) from partial or rule-based.

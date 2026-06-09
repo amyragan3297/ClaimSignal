@@ -1599,7 +1599,7 @@ export default function ClaimDetailPage() {
           </CardTitle>
           <Button size="sm" variant="outline" disabled={aiMutation.isPending} onClick={() => aiMutation.mutate()} data-testid="button-generate-ai">
             {aiMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            {claim.aiAnalysisAt || aiResult ? "Regenerate" : "Generate Analysis"}
+            {hasAiAnalysis(claim) || aiResult ? "Regenerate" : "Generate Analysis"}
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">

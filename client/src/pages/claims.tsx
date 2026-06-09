@@ -1097,7 +1097,7 @@ export default function ClaimsPage() {
                                   data-testid={`menu-analyze-claim-${claim.id}`}
                                 >
                                   <Sparkles className="w-4 h-4 mr-2" />
-                                  {claim.aiAnalysisAt ? "Re-run AI Analysis" : "Run AI Analysis"}
+                                  {hasAiAnalysis(claim) ? "Re-run AI Analysis" : "Run AI Analysis"}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={e => { e.stopPropagation(); setConfirmDialog({ type: "archive", claim }); }}
