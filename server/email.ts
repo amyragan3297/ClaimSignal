@@ -130,3 +130,112 @@ export async function sendAdminNotificationEmail(opts: {
     text: opts.body,
   });
 }
+
+export async function sendSubscriptionConfirmationEmail(opts: {
+  to: string;
+  fullName: string;
+  planType: string;
+  planLabel: string;
+  trialEndDate?: string;
+}): Promise<void> {
+  const appUrl = process.env.APP_URL || `https://claimsignal1.com`;
+  const isTrial = opts.planType === "founder";
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Subscription Confirmed — ClaimSignal</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; padding: 32px 24px; }
+    .logo { text-align: center; margin-bottom: 32px; }
+    .logo h1 { color: #f59e0b; font-size: 24px; margin: 0; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; }
+    .heading { font-size: 20px; font-weight: 600; color: #f8fafc; margin: 0 0 16px; }
+    .subheading { color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+    .cta { display: inline-block; background: #f59e0b; color: #0f172a; text-decoration: none; font-weight: 600; padding: 14px 28px; border-radius: 8px; margin: 16px 0; font-size: 15px; }
+    .footer { text-align: center; color: #64748b; font-size: 12px; margin-top: 32px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo"><h1>CLAIMSIGNAL</h1></div>
+    <div class="card">
+      <p class="heading">Welcome, ${opts.fullName}</p>
+      <p class="subheading">
+        Your <strong>${opts.planLabel}</strong> subscription is confirmed.
+        ${isTrial ? `Your 14-day free trial is active and ends on <strong>${opts.trialEndDate}</strong>.` : "You now have full access to ClaimSignal."}
+      </p>
+      <p class="subheading" style="text-align: center;">
+        <a href="${appUrl}/dashboard" class="cta">Go to Dashboard</a>
+      </p>
+      <p class="subheading" style="font-size: 13px; margin-top: 16px;">
+        Questions? Reply to this email or contact us at <a href="mailto:${ADMIN_EMAIL}" style="color: #94a3b8;">${ADMIN_EMAIL}</a>.
+      </p>
+    </div>
+    <div class="footer"><p>ClaimSignal — Operational Intelligence Platform</p></div>
+  </div>
+</body>
+</html>
+`;
+
+  const text = `
+Welcome to ClaimSignal, ${opts.fullName}!
+
+Your ${opts.planLabel} subscription is confirmed.
+${isTrial ? `Your 14-day free trial ends on ${opts.trialEndDate}.` : "You now have full access to ClaimSignal."}
+
+Go to your dashboard: ${appUrl}/dashboard
+
+Questions? Contact us at ${ADMIN_EMAIL}.
+
+— ClaimSignal
+`;
+
+  await sendEmail({
+    to: opts.to,
+    subject: `Your ClaimSignal ${opts.planLabel} Subscription is Active`,
+    html,
+    text,
+  });
+}
+
+export async function sendPaymentFailedEmail(opts: {
+  to: string;
+  fullName: string;
+}): Promise<void> {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; padding: 32px 24px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; }
+    .heading { font-size: 20px; font-weight: 600; color: #f8fafc; margin: 0 0 16px; }
+    .subheading { color: #94a3b8; font-size: 14px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <p class="heading">Payment Failed</p>
+      <p class="subheading">
+        Hi ${opts.fullName}, we were unable to process your payment. Please update your payment method in your billing settings to avoid service interruption.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+  await sendEmail({
+    to: opts.to,
+    subject: "ClaimSignal Payment Failed — Please Update Your Card",
+    html,
+    text: `Hi ${opts.fullName},\n\nWe were unable to process your payment. Please update your payment method in your billing settings to avoid service interruption.\n\n— ClaimSignal`,
+  });
+}

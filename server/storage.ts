@@ -62,6 +62,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+  getOrganizationUsers(orgId: string): Promise<User[]>;
 
   createOrganization(org: InsertOrganization): Promise<Organization>;
   getOrganization(id: string): Promise<Organization | undefined>;
@@ -407,6 +408,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users);
+  }
+
+  async getOrganizationUsers(orgId: string): Promise<User[]> {
+    return db.select().from(users).where(eq(users.organizationId, orgId));
   }
 
   async createOrganization(org: InsertOrganization): Promise<Organization> {

@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import type { BillingAccount } from "@shared/schema";
 import { storage } from "./storage";
 import { log } from "./index";
+import { sendSubscriptionConfirmationEmail, sendPaymentFailedEmail, sendAdminNotificationEmail } from "./email";
 
 function getStripe(): Stripe | null {
   if (!process.env.STRIPE_SECRET_KEY) return null;
@@ -156,6 +157,7 @@ export async function handleWebhookEvent(
 
 async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
   const orgId = session.metadata?.org_id;
+  const userId = session.metadata?.user_id;
   if (!orgId) {
     log("Checkout session missing org_id metadata", "stripe");
     return;
@@ -174,6 +176,41 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
       updateData.planType = planType as BillingAccount["planType"];
     }
     await storage.updateBillingAccount(existing.id, updateData);
+  }
+
+  // Send confirmation email
+  if (userId) {
+    try {
+      const user = await storage.getUser(userId);
+      if (user) {
+        const planLabelMap: Record<string, string> = {
+          founder: "Founding Partner",
+          individual: "Individual",
+          pro: "Individual",
+          team: "Team",
+          enterprise: "Enterprise",
+        };
+        const planLabel = planLabelMap[planType || "individual"] || "Individual";
+        const trialEnd = planType === "founder"
+          ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+          : undefined;
+
+        await sendSubscriptionConfirmationEmail({
+          to: user.email,
+          fullName: user.fullName || "Founder",
+          planType: planType || "individual",
+          planLabel,
+          trialEndDate: trialEnd,
+        });
+
+        await sendAdminNotificationEmail({
+          subject: `New ClaimSignal Subscription — ${planLabel}`,
+          body: `User: ${user.fullName} (${user.email})\nPlan: ${planLabel}\nOrg ID: ${orgId}`,
+        });
+      }
+    } catch (err) {
+      log(`Failed to send subscription confirmation email: ${(err as Error).message}`, "stripe");
+    }
   }
 
   log(`Checkout complete for org ${orgId}, plan=${planType}`, "stripe");
@@ -244,6 +281,20 @@ async function handlePaymentFailed(invoice: Record<string, unknown>) {
     await storage.updateBillingAccount(existing.id, {
       subscriptionStatus: "past_due",
     });
+  }
+
+  // Notify user
+  try {
+    const users = await storage.getOrganizationUsers(orgId);
+    const primaryUser = users?.[0];
+    if (primaryUser) {
+      await sendPaymentFailedEmail({
+        to: primaryUser.email,
+        fullName: primaryUser.fullName || "User",
+      });
+    }
+  } catch (err) {
+    log(`Failed to send payment failed email: ${(err as Error).message}`, "stripe");
   }
 
   log(`Payment failed for org ${orgId}, subscription ${subscriptionId}`, "stripe");
