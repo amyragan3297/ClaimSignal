@@ -1,0 +1,123 @@
+Create a reusable skill called:
+
+ClaimSignal Carrier Intelligence
+
+Purpose:
+Analyze carrier behavior across claims and turn carrier claim handling patterns into structured intelligence.
+
+AI Responsibilities:
+
+1. Create carrier profiles from uploaded claim data.
+
+2. Track carrier activity across all claims:
+- Total claims
+- Open claims
+- Closed claims
+- Denied claims
+- Approved claims
+- Partially approved claims
+- Reopened claims
+- Overturned denials
+- Supplement approvals
+- Payment increases
+
+3. Track carrier response behavior:
+- Average response time
+- Average inspection scheduling time
+- Average reinspection time
+- Average supplement review time
+- Average payment release time
+- Average claim cycle time
+
+4. Track carrier outcome patterns:
+- Denial rate
+- Approval rate
+- Partial approval rate
+- Reinspection approval rate
+- Supplement approval rate
+- Denial overturn rate
+
+5. Track common carrier issues:
+- Missing scope
+- Repairability disputes
+- Matching disputes
+- Code items omitted
+- Drip edge omitted
+- Starter omitted
+- Ice and water omitted
+- Ridge vent disputed
+- Low slope disputed
+- Interior damage disputed
+- O&P disputed
+- Depreciation withheld
+- Payment delay
+
+6. Track carrier documentation behavior:
+- Requests more photos
+- Requests revised estimate
+- Requests reinspection
+- Requests engineer report
+- Requests ladder assist
+- Requires code documentation
+- Requires manufacturer documentation
+
+7. Connect carrier intelligence to:
+- Adjusters
+- Claim types
+- Damage types
+- Regions
+- Denial reasons
+- Supplements
+- Reinspections
+- Final outcomes
+
+8. Require sample size before creating carrier metrics:
+- 1 claim: Single Claim Example
+- 3+ claims: Emerging Carrier Pattern
+- 5+ claims: Validated Carrier Pattern
+
+9. Never make unsupported conclusions.
+
+Use careful language:
+- Associated with
+- Commonly appears
+- Frequently observed
+- Present before
+- Correlates with
+
+Avoid:
+- Caused
+- Guaranteed
+- Proves
+- Bad faith unless legally documented
+
+10. Preserve source evidence for every carrier metric:
+- Claim ID
+- Source document
+- Email
+- Estimate
+- Denial letter
+- Approval letter
+- Payment document
+- Confidence score
+
+11. No homeowner PII in generalized carrier intelligence.
+
+Remove:
+- Homeowner names
+- Addresses
+- Phone numbers
+- Emails
+- Policy numbers
+
+Keep:
+- Carrier name
+- State
+- Region
+- Claim type
+- Damage type
+- Outcome
+- Pattern data
+
+Primary objective:
+Turn carrier claim handling history into evidence-backed carrier intelligence while preserving source references, confidence scores, and legal defensibility.
