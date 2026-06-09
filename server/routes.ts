@@ -45,12 +45,18 @@ import {
   requireActiveSubscription,
   requirePlatformOwner,
   requireSuperAdmin,
+  requireMasterDelete,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  requireRole,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  requireInvestorApproved,
   blockDuringImpersonation,
   createAuthSession,
   refreshAuthSession,
   setRefreshTokenCookie,
   clearRefreshTokenCookie,
   getClientIp,
+  trackLoginActivity,
 } from "./auth";
 
 const ADMIN_NOTIFICATION_EMAIL = "claimsignal1@gmail.com";
@@ -197,6 +203,14 @@ export async function registerRoutes(
         { ipAddress: getClientIp(req), userAgent: req.headers["user-agent"] }
       );
 
+      await trackLoginActivity({
+        userId: user.id,
+        email: user.email,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+        success: true,
+      });
+
       setRefreshTokenCookie(res, refreshToken);
       res.json({ accessToken, user: sanitizeUser(user), orgId: org.id });
     } catch (err) {
@@ -209,11 +223,13 @@ export async function registerRoutes(
       const data = loginSchema.parse(req.body);
       const user = await storage.getUserByEmail(data.email);
       if (!user) {
+        await trackLoginActivity({ email: data.email, ipAddress: getClientIp(req), userAgent: req.headers["user-agent"], success: false, failureReason: "User not found" });
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
       const valid = await bcrypt.compare(data.password, user.passwordHash);
       if (!valid) {
+        await trackLoginActivity({ userId: user.id, email: user.email, ipAddress: getClientIp(req), userAgent: req.headers["user-agent"], success: false, failureReason: "Invalid password" });
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
@@ -230,6 +246,14 @@ export async function registerRoutes(
         entityType: "user",
         entityId: user.id,
         ipAddress: getClientIp(req),
+      });
+
+      await trackLoginActivity({
+        userId: user.id,
+        email: user.email,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+        success: true,
       });
 
       setRefreshTokenCookie(res, refreshToken);
@@ -261,9 +285,18 @@ export async function registerRoutes(
 
   app.post("/api/auth/logout", requireAuth, async (req: AuthRequest, res) => {
     try {
+      const userId = req.auth?.userId;
+      const email = req.auth?.email || "";
       if (req.auth?.sessionId) {
         await storage.revokeSession(req.auth.sessionId);
       }
+      await trackLoginActivity({
+        userId,
+        email,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+        success: true,
+      });
       clearRefreshTokenCookie(res);
       res.json({ message: "Logged out" });
     } catch {
@@ -282,6 +315,16 @@ export async function registerRoutes(
       const billing = await storage.getBillingAccountByOrg(org.id);
       const founderAgreement = await storage.getFounderAgreement(org.id);
 
+      const roleRedirects: Record<string, string> = {
+        super_admin: "/master",
+        admin: "/admin",
+        carrier_analyst: "/executive",
+        founder: "/founder",
+        team_owner: "/team-admin",
+        standard: "/dashboard",
+        investor: "/investor",
+      };
+
       res.json({
         user: sanitizeUser(user),
         org,
@@ -289,6 +332,7 @@ export async function registerRoutes(
         founderAgreement: founderAgreement || null,
         isPlatformOwner: !!user.isPlatformOwner || user.role === "super_admin",
         isImpersonation: req.auth!.isImpersonation,
+        redirectTo: roleRedirects[user.role] || "/dashboard",
       });
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
@@ -2532,6 +2576,15 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/login-activity", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
+    try {
+      const logs = await storage.getLoginAttempts();
+      res.json(logs);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
   app.post("/api/admin/impersonate/:userId", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
     try {
       const targetUser = await storage.getUser(req.params.userId as string);
@@ -2877,7 +2930,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.delete("/api/claims/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+  app.delete("/api/claims/:id/permanent", requireAuth, requireMasterDelete, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
       await storage.permanentDeleteClaim(req.params.id as string, undefined);
@@ -2921,7 +2974,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.delete("/api/adjusters/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+  app.delete("/api/adjusters/:id/permanent", requireAuth, requireMasterDelete, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
       await storage.permanentDeleteAdjuster(req.params.id as string, undefined);
@@ -2965,7 +3018,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.delete("/api/clients/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+  app.delete("/api/clients/:id/permanent", requireAuth, requireMasterDelete, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
       await storage.permanentDeleteClient(req.params.id as string, undefined);
@@ -3006,7 +3059,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.delete("/api/evidence/files/:id/permanent", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
+  app.delete("/api/evidence/files/:id/permanent", requireAuth, requireMasterDelete, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
       await storage.permanentDeleteEvidenceFile(req.params.id as string, undefined);
@@ -3047,7 +3100,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.delete("/api/audio/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+  app.delete("/api/audio/:id/permanent", requireAuth, requireMasterDelete, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
       await storage.permanentDeleteAudioRecording(req.params.id as string, undefined);
@@ -3087,7 +3140,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.delete("/api/communications/:id/permanent", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+  app.delete("/api/communications/:id/permanent", requireAuth, requireMasterDelete, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
       await storage.permanentDeleteEmail(req.params.id as string, orgId);
@@ -3206,7 +3259,7 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
-  app.delete("/api/escalations/:escId", requireAuth, requireActiveSubscription, requireSuperAdmin, async (req: AuthRequest, res: Response) => {
+  app.delete("/api/escalations/:escId", requireAuth, requireMasterDelete, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
       const escId = String(req.params.escId);

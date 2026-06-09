@@ -44,6 +44,7 @@ export default function LoginPage() {
     try {
       setLoginLoading(true);
       await login(data.email, data.password);
+      // Role-based redirect is handled inside login(); if not redirected, go to dashboard
       setLocation("/dashboard");
     } catch (err) {
       toast({ title: "Login failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });

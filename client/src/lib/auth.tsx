@@ -23,6 +23,7 @@ interface AuthData {
   founderAgreement: FounderAgreement | null;
   isPlatformOwner: boolean;
   isImpersonation: boolean;
+  redirectTo: string | null;
 }
 
 interface AuthContextType {
@@ -72,14 +73,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await apiRequest("POST", "/api/auth/login", { email, password });
     const result = await res.json();
     setAccessToken(result.accessToken);
-    await fetchMe();
+    const meRes = await apiRequest("GET", "/api/auth/me");
+    const me = await meRes.json();
+    setData(me);
+    if (me.redirectTo && me.redirectTo !== "/dashboard") {
+      setLocation(me.redirectTo);
+    }
   };
 
   const register = async (input: { email: string; password: string; fullName: string; orgName: string; planType?: string }) => {
     const res = await apiRequest("POST", "/api/auth/register", input);
     const result = await res.json();
     setAccessToken(result.accessToken);
-    await fetchMe();
+    const meRes = await apiRequest("GET", "/api/auth/me");
+    const me = await meRes.json();
+    setData(me);
+    if (me.redirectTo && me.redirectTo !== "/dashboard") {
+      setLocation(me.redirectTo);
+    }
   };
 
   const logout = async () => {

@@ -1594,11 +1594,6 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
-    const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
-    return updated;
-  }
-
   async compUser(userId: string, _comped: boolean, _compedBy?: string): Promise<User | undefined> {
     // Note: comped status is tracked via metadata in a separate table or field
     // For now, soft-comp via user status update

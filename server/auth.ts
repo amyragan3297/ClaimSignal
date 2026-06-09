@@ -17,6 +17,7 @@ function getJwtSecret(): string {
 
 export interface JWTPayload {
   userId: string;
+  email: string;
   organizationId: string;
   role: string;
   isPlatformOwner: boolean;
@@ -74,6 +75,7 @@ export async function createAuthSession(
 
   const payload: JWTPayload = {
     userId,
+    email: user.email,
     organizationId,
     role: user.role,
     isPlatformOwner: !!user.isPlatformOwner || user.role === "super_admin",
@@ -115,6 +117,7 @@ export async function refreshAuthSession(
 
   const payload: JWTPayload = {
     userId: session.userId,
+    email: user.email,
     organizationId: session.organizationId,
     role: user.role,
     isPlatformOwner: !!user.isPlatformOwner || user.role === "super_admin",

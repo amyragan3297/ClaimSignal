@@ -1,0 +1,162 @@
+Implement the remaining ClaimSignal platform gaps in the following priority order.
+
+PHASE 1 — PLATFORM ACCESS
+
+1. Add investor role to user_role enum.
+
+2. Create Investor Dashboard.
+
+Investor dashboard includes:
+- Total users
+- Total organizations
+- Total claims analyzed
+- Total documents analyzed
+- Revenue summaries
+- Carrier summaries
+- Adjuster summaries
+- Growth metrics
+- Executive summaries
+
+Investor dashboard is read only.
+
+No access to:
+- Homeowner names
+- Addresses
+- Claim documents
+- Internal notes
+- Policy numbers
+- Claim level financial details
+
+3. Wire trackLoginActivity into all authentication routes.
+
+Track:
+- Login
+- Logout
+- Failed login
+- Password reset
+- Role changes
+
+4. Implement role-based dashboard redirects.
+
+Master Admin:
+claimsignal1@gmail.com
+→ /master
+
+Executive Admin
+→ /executive
+
+Founder
+→ /founder
+
+Team Admin
+→ /team-admin
+
+Team Member
+→ /claims
+
+Individual User
+→ /dashboard
+
+Investor
+→ /investor
+
+5. Apply requireMasterDelete middleware to all delete routes.
+
+Only claimsignal1@gmail.com may permanently delete records.
+
+All other users may archive only.
+
+PHASE 2 — IDENTITY RESOLUTION
+
+Implement AI identity resolution engine.
+
+Requirements:
+
+AI must normalize names before creating new people.
+
+Examples:
+- Edwinah Bopape
+- Edwina Bopape
+- Eswinah Bopape
+
+Potentially same person.
+
+AI should evaluate:
+
+- Name similarity
+- OCR substitutions
+- Email matches
+- Carrier matches
+- Claim matches
+- Address matches
+- Timeline overlap
+
+Do NOT create duplicate people when confidence exceeds threshold.
+
+Auto merge threshold:
+85%
+
+Below 85%:
+Send to Identity Resolution Queue.
+
+Master Admin reviews queue.
+
+Never delete source evidence.
+
+Store:
+- Original extracted value
+- Normalized value
+- Confidence score
+- Source document
+
+PHASE 3 — ADJUSTER INTELLIGENCE
+
+Build missing metrics:
+
+- Denial rate
+- Approval rate
+- Reinspection rate
+- Supplement acceptance rate
+- Response time
+- Claim cycle time
+
+Minimum sample size:
+3 claims before rates appear.
+
+Pattern labels:
+1 claim = Example
+3+ claims = Emerging Pattern
+5+ claims = Validated Pattern
+
+PHASE 4 — CARRIER INTELLIGENCE
+
+Build carrier profiles.
+
+Track:
+- Response times
+- Approval rates
+- Denial rates
+- Reinspection rates
+- Supplement approval rates
+- Common missing scope items
+- Common documentation requests
+
+AI should automatically learn patterns from claim outcomes.
+
+PHASE 5 — REVENUE INTELLIGENCE
+
+Build revenue intelligence engine.
+
+Track:
+- Underpayments
+- Missing scope
+- Supplement opportunities
+- Depreciation recovery
+- Recoverable revenue
+- Revenue by carrier
+- Revenue by adjuster
+- Revenue by claim
+
+Generate AI revenue opportunities automatically.
+
+Provide implementation summary when complete.

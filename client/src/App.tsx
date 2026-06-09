@@ -29,6 +29,7 @@ import PricingPage from "@/pages/pricing";
 import FoundingPartnerApplyPage from "@/pages/founding-partner-apply";
 import EnterpriseContactPage from "@/pages/enterprise-contact";
 import IdentityResolutionPage from "@/pages/identity-resolution";
+import InvestorPage from "@/pages/investor";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -55,6 +56,11 @@ function AppRoutes() {
         <Route path="/identity-resolution" component={IdentityResolutionPage} />
         <Route path="/legal/founder" component={FounderLegalPage} />
         <Route path="/admin" component={AdminPage} />
+        <Route path="/master" component={AdminPage} />
+        <Route path="/executive" component={AdminPage} />
+        <Route path="/founder" component={DashboardPage} />
+        <Route path="/team-admin" component={DashboardPage} />
+        <Route path="/investor" component={InvestorPage} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
