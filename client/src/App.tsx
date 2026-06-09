@@ -35,6 +35,7 @@ import FoundingPartnerApplyPage from "@/pages/founding-partner-apply";
 import EnterpriseContactPage from "@/pages/enterprise-contact";
 import FounderAccessPage from "@/pages/founder-access";
 import InvestorAccessPage from "@/pages/investor-access";
+import InvestorPage from "@/pages/investor";
 import TermsPage from "@/pages/terms";
 import IdentityResolutionPage from "@/pages/identity-resolution";
 import RevenueIntelligencePage from "@/pages/revenue-intelligence";
@@ -89,6 +90,7 @@ function Router() {
       <Route path="/enterprise-contact" component={EnterpriseContactPage} />
       <Route path="/founder-access" component={FounderAccessPage} />
       <Route path="/investor-access" component={InvestorAccessPage} />
+      <Route path="/investor-relations" component={InvestorPage} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/login" component={LoginPage} />
       <Route>

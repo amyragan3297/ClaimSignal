@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Check, BarChart3, Eye, Lock } from "lucide-react";
+import { ArrowLeft, Loader2, Check, BarChart3, Eye } from "lucide-react";
 import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -98,43 +98,51 @@ export default function InvestorAccessPage() {
         </div>
 
         {mode === "info" && (
-          <Card>
-            <CardContent className="p-6 space-y-6">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-emerald-500">
-                  <Eye className="w-4 h-4" />
-                  <span className="font-semibold text-sm">Investor Portal</span>
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-6 space-y-5">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-500">
+                    <Eye className="w-4 h-4" />
+                    <span className="font-semibold text-sm">Investor Portal</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    The Investor Portal provides read-only access to aggregate platform metrics,
+                    growth trends, and operational intelligence. No homeowner PII, claim documents,
+                    or private notes are ever exposed.
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  The Investor Portal provides read-only access to aggregate platform metrics,
-                  growth trends, and operational intelligence. No homeowner PII, claim documents,
-                  or private notes are ever exposed.
-                </p>
-                <ul className="text-sm space-y-1 text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <Eye className="w-3 h-3 text-emerald-500" /> Aggregate KPIs and trends
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Eye className="w-3 h-3 text-emerald-500" /> Platform growth metrics
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Eye className="w-3 h-3 text-emerald-500" /> No PII, no claim details
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Lock className="w-3 h-3 text-emerald-500" /> Master Admin approval required
-                  </li>
-                </ul>
-              </div>
-              <div className="space-y-3">
-                <Button className="w-full" onClick={() => setMode("login")} data-testid="button-investor-login">
-                  Investor Login
-                </Button>
-                <Button variant="outline" className="w-full" onClick={() => setMode("request")} data-testid="button-investor-request">
-                  Request Investor Access
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-border/50 p-3 space-y-1">
+                    <p className="text-sm font-medium">Market Opportunity</p>
+                    <p className="text-xs text-muted-foreground">Property claims industry processes $80B+ annually with minimal technology adoption.</p>
+                  </div>
+                  <div className="rounded-lg border border-border/50 p-3 space-y-1">
+                    <p className="text-sm font-medium">Product Moat</p>
+                    <p className="text-xs text-muted-foreground">Six proprietary intelligence layers with no direct competitors in the market.</p>
+                  </div>
+                  <div className="rounded-lg border border-border/50 p-3 space-y-1">
+                    <p className="text-sm font-medium">Revenue Model</p>
+                    <p className="text-xs text-muted-foreground">Multi-tier SaaS with high-margin subscriptions and expansion revenue.</p>
+                  </div>
+                  <div className="rounded-lg border border-border/50 p-3 space-y-1">
+                    <p className="text-sm font-medium">Platform Metrics</p>
+                    <p className="text-xs text-muted-foreground">MRR, ARPU, churn, and claim recovery value across the platform.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Button className="w-full" onClick={() => setMode("login")} data-testid="button-investor-login">
+                    Investor Login
+                  </Button>
+                  <Button variant="outline" className="w-full" onClick={() => setMode("request")} data-testid="button-investor-request">
+                    Request Investor Access
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {mode === "login" && (

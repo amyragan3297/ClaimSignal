@@ -609,7 +609,7 @@ export default function ClaimDetailPage() {
             <h1 className="text-xl font-bold tracking-tight" data-testid="text-claim-title">
               {claim.claimNumber}
             </h1>
-            <p className="text-sm text-muted-foreground">{claim.insuredName || "Homeowner not extracted"}</p>
+            <p className="text-sm text-muted-foreground">{claim.homeownerName || "Homeowner not extracted"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -733,7 +733,7 @@ export default function ClaimDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <InfoRow label="Claim Number" value={claim.claimNumber} testId="detail-claim-number" />
-            <InfoRow label="Insured Name" value={claim.insuredName || "Homeowner not extracted"} testId="detail-insured-name" />
+            <InfoRow label="Homeowner Name" value={claim.homeownerName || "Homeowner not extracted"} testId="detail-homeowner-name" />
             <InfoRow label="Loss Type" value={claim.lossType || "\u2014"} testId="detail-loss-type" />
             <InfoRow label="Status" value={claim.status.replace("_", " ")} testId="detail-status" />
             {claim.frictionScore !== null && claim.frictionScore !== undefined && (

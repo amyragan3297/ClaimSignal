@@ -46,12 +46,19 @@ export default function InvestorPage() {
             <Shield className="w-6 h-6 text-primary" />
             <span className="text-lg font-semibold tracking-tight">ClaimSignal&#8482;</span>
           </div>
-          <Link href="/">
-            <Button variant="ghost" size="sm" data-testid="button-back-home">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/login">
+              <Button variant="ghost" size="sm" data-testid="button-investor-login">
+                Log In
+              </Button>
+            </Link>
+            <Link href="/">
+              <Button variant="ghost" size="sm" data-testid="button-back-home">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Home
+              </Button>
+            </Link>
+          </div>
         </div>
       </nav>
 

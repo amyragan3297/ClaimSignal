@@ -617,7 +617,7 @@ function CreateClaimDialog({
                     const f = extractionFields;
                     form.setValue("claimNumber", f.claimNumber || "");
                     form.setValue("carrier", f.carrier || "");
-                    form.setValue("homeownerName", f.homeownerName || f.insuredName || "");
+                    form.setValue("homeownerName", f.homeownerName || "");
                     form.setValue("insuredName", f.insuredName || "");
                     form.setValue("propertyAddress", f.propertyAddress || "");
                     form.setValue("policyNumber", f.policyNumber || "");

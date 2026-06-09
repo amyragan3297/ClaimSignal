@@ -848,7 +848,7 @@ export default function EvidencePage() {
   if (matchingFileExtraction) {
     const e = matchingFileExtraction;
     if (e.claimNumber) extractionClues.push({ label: "Claim #", value: e.claimNumber });
-    if (e.homeownerName || e.insuredName) extractionClues.push({ label: "Homeowner", value: (e.homeownerName || e.insuredName)! });
+    if (e.homeownerName) extractionClues.push({ label: "Homeowner", value: e.homeownerName });
     if (e.carrier) extractionClues.push({ label: "Carrier", value: e.carrier });
     if (e.propertyAddress) extractionClues.push({ label: "Address", value: e.propertyAddress });
     if (e.dateOfLoss) extractionClues.push({ label: "Date of Loss", value: e.dateOfLoss });

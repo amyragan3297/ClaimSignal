@@ -1182,7 +1182,7 @@ router.get("/files/:id/match-suggestions", async (req: AuthRequest, res: Respons
         reasons: r.reasons,
         claimNumber: view.claimNumber,
         carrier: claim.carrier,
-        homeownerName: view.homeownerName || view.insuredName || null,
+        homeownerName: view.homeownerName || null,
         propertyLocation: [view.propertyAddress || view.address, claim.city, claim.state].filter(Boolean).join(", ") || null,
         status: claim.status,
         dateOfLoss: claim.dateOfLoss,
