@@ -96,11 +96,12 @@ export default function FoundingPartnerApplyPage() {
             <img src={logoImg} alt="ClaimSignal" className="h-20 w-auto object-contain" />
           </div>
           <h1 className="text-xl font-bold tracking-tight">Founding Partner Program</h1>
-          <p className="text-sm text-muted-foreground mt-1">$79/mo locked forever &middot; Limited to 100 partners</p>
+          <p className="text-sm text-muted-foreground mt-1">$79/mo locked forever &middot; Limited availability</p>
           <div className="mt-3 text-sm text-muted-foreground space-y-1 max-w-sm mx-auto">
             <p>14-day free trial included</p>
             <p>Full platform access &middot; Founder-only features</p>
             <p>Shape the future of ClaimSignal</p>
+            <p>Invitation-only program</p>
           </div>
         </div>
 

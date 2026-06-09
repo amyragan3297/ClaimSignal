@@ -136,7 +136,7 @@ export async function registerRoutes(
       if (planType === "founder") {
         const founderCount = await storage.getFounderSubscriptionCount();
         if (founderCount >= 100) {
-          return res.status(400).json({ message: "Founder tier unavailable - all spots are taken" });
+          return res.status(400).json({ message: "Founder tier unavailable - limited spots remaining" });
         }
       }
 
@@ -2441,7 +2441,7 @@ export async function registerRoutes(
       if (planType === "founder") {
         const founderCount = await storage.getFounderSubscriptionCount();
         if (founderCount >= 100) {
-          return res.status(400).json({ message: "Founder tier unavailable - all spots are taken" });
+          return res.status(400).json({ message: "Founder tier unavailable - limited spots remaining" });
         }
       }
 
@@ -2591,7 +2591,7 @@ export async function registerRoutes(
 
       const founderCount = await storage.getFounderSubscriptionCount();
       if (founderCount >= 100) {
-        return res.status(400).json({ message: "Founder tier unavailable — all spots are taken" });
+        return res.status(400).json({ message: "Founder tier unavailable — limited spots remaining" });
       }
 
       const inviteCode = generateInviteCode();
@@ -2756,7 +2756,7 @@ export async function registerRoutes(
 
       const founderCount = await storage.getFounderSubscriptionCount();
       if (founderCount >= 100) {
-        return res.status(400).json({ message: "Founder tier unavailable — all spots are taken" });
+        return res.status(400).json({ message: "Founder tier unavailable — limited spots remaining" });
       }
 
       const existingUser = await storage.getUserByEmail(email);
