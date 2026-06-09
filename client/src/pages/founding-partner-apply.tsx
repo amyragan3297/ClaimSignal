@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -25,6 +25,9 @@ const applySchema = z.object({
 });
 
 export default function FoundingPartnerApplyPage() {
+  useEffect(() => {
+    document.title = "Apply for Founding Partner Access | ClaimSignal";
+  }, []);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);

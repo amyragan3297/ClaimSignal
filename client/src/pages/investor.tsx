@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,9 @@ const highlights = [
 ];
 
 export default function InvestorPage() {
+  useEffect(() => {
+    document.title = "Investor Relations | ClaimSignal";
+  }, []);
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b border-border/50 bg-background/80 backdrop-blur-xl">

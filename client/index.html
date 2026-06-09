@@ -3,23 +3,85 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="theme-color" content="#0f172a" />
     <title>ClaimSignal — Property Insurance Claims Intelligence Platform</title>
     <meta name="description" content="Operational intelligence for property insurance claims. Friction scoring, adjuster analytics, escalation modeling, and audit-ready claim infrastructure for restoration contractors and public adjusters." />
+    <link rel="canonical" href="https://claimsignal1.com/" />
+
+    <!-- Open Graph -->
     <meta property="og:site_name" content="ClaimSignal" />
     <meta property="og:title" content="ClaimSignal — Property Insurance Claims Intelligence" />
     <meta property="og:description" content="Operational intelligence for property insurance claims. Friction scoring, adjuster analytics, and escalation modeling." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://claimsignal1.com" />
     <meta property="og:image" content="https://claimsignal1.com/og-image.png" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@ClaimSignal" />
     <meta name="twitter:title" content="ClaimSignal — Property Insurance Claims Intelligence" />
-    <meta name="twitter:description" content="Operational intelligence for property insurance claims." />
+    <meta name="twitter:description" content="Operational intelligence for property insurance claims. Friction scoring, adjuster analytics, and escalation modeling for contractors and public adjusters." />
     <meta name="twitter:image" content="https://claimsignal1.com/og-image.png" />
+
+    <!-- Favicon -->
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+
+    <!-- Fonts — async non-blocking load -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'" />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+    </noscript>
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://claimsignal1.com/#organization",
+          "name": "ClaimSignal",
+          "url": "https://claimsignal1.com",
+          "logo": "https://claimsignal1.com/favicon.png",
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "claimsignal1@gmail.com",
+            "contactType": "customer support"
+          },
+          "description": "Operational intelligence platform for property insurance claims. Friction scoring, adjuster analytics, escalation modeling, and audit-ready claim infrastructure."
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://claimsignal1.com/#website",
+          "url": "https://claimsignal1.com",
+          "name": "ClaimSignal",
+          "publisher": { "@id": "https://claimsignal1.com/#organization" },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://claimsignal1.com/platform-overview",
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://claimsignal1.com/#app",
+          "name": "ClaimSignal",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "offers": {
+            "@type": "Offer",
+            "price": "79",
+            "priceCurrency": "USD"
+          },
+          "description": "Property insurance claims intelligence platform with friction scoring, adjuster analytics, and AI-powered document extraction."
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

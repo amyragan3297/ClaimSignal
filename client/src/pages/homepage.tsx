@@ -1,9 +1,13 @@
+import { useEffect } from "react";
 import { Link } from "wouter";
 import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 
 export default function Homepage() {
+  useEffect(() => {
+    document.title = "ClaimSignal — Property Insurance Claims Intelligence Platform";
+  }, []);
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Nav */}

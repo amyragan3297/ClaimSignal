@@ -1,8 +1,12 @@
+import { useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 export default function TermsPage() {
+  useEffect(() => {
+    document.title = "Terms of Service | ClaimSignal";
+  }, []);
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-2xl py-12">

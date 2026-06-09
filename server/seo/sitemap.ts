@@ -16,6 +16,16 @@ function url(loc: string, priority: string, changefreq: string): string {
 export function generateSitemap(): string {
   const urls: string[] = [];
 
+  // ── Marketing & public pages ──────────────────────────────────────────────
+  urls.push(url("/", "1.0", "weekly"));
+  urls.push(url("/pricing", "0.9", "monthly"));
+  urls.push(url("/platform-overview", "0.8", "monthly"));
+  urls.push(url("/founding-partner-apply", "0.7", "monthly"));
+  urls.push(url("/enterprise-contact", "0.7", "monthly"));
+  urls.push(url("/investor-relations", "0.5", "monthly"));
+  urls.push(url("/terms", "0.3", "yearly"));
+
+  // ── SSR content pages ─────────────────────────────────────────────────────
   urls.push(url("/learn", "0.9", "weekly"));
   for (const t of TERMS) {
     urls.push(url(`/learn/${t.slug}`, "0.8", "monthly"));

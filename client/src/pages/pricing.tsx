@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,9 @@ const planCardBg: Record<string, string> = {
 };
 
 export default function PricingPage() {
+  useEffect(() => {
+    document.title = "Pricing Plans | ClaimSignal";
+  }, []);
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Nav */}

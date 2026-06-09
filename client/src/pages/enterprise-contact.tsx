@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,6 +27,9 @@ const contactSchema = z.object({
 });
 
 export default function EnterpriseContactPage() {
+  useEffect(() => {
+    document.title = "Enterprise Contact | ClaimSignal";
+  }, []);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);

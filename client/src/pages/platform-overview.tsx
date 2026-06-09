@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "wouter";
 import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,9 @@ const platformCards = [
 ];
 
 export default function PlatformOverviewPage() {
+  useEffect(() => {
+    document.title = "Platform Overview | ClaimSignal";
+  }, []);
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Nav */}

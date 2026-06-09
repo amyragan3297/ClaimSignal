@@ -22,7 +22,52 @@ export function registerSeoRoutes(app: Express): void {
   app.get("/robots.txt", (_req, res) => {
     res.setHeader("Content-Type", "text/plain");
     res.setHeader("Cache-Control", CACHE_STATIC);
-    res.send(`User-agent: *\nAllow: /\nSitemap: https://claimsignal1.com/sitemap.xml\n`);
+    res.send([
+      "User-agent: *",
+      // Marketing & public pages
+      "Allow: /$",
+      "Allow: /pricing",
+      "Allow: /platform-overview",
+      "Allow: /founding-partner-apply",
+      "Allow: /enterprise-contact",
+      "Allow: /investor-relations",
+      "Allow: /terms",
+      "Allow: /login",
+      // SSR content pages
+      "Allow: /learn",
+      "Allow: /learn/",
+      "Allow: /carriers",
+      "Allow: /carriers/",
+      // Disallow API and all authenticated app routes
+      "Disallow: /api/",
+      "Disallow: /dashboard",
+      "Disallow: /founder",
+      "Disallow: /executive",
+      "Disallow: /team-admin",
+      "Disallow: /individual",
+      "Disallow: /investor",
+      "Disallow: /admin",
+      "Disallow: /master",
+      "Disallow: /billing",
+      "Disallow: /brand-assets",
+      "Disallow: /identity-resolution",
+      "Disallow: /revenue",
+      "Disallow: /storm-events",
+      "Disallow: /signal-engine",
+      "Disallow: /audio",
+      "Disallow: /communications",
+      "Disallow: /playbooks",
+      "Disallow: /risk-map",
+      "Disallow: /adjusters",
+      "Disallow: /intelligence",
+      "Disallow: /carrier-intelligence",
+      "Disallow: /legal/",
+      "Disallow: /investor-access",
+      "Disallow: /founder-access",
+      "",
+      "Sitemap: https://claimsignal1.com/sitemap.xml",
+      "",
+    ].join("\n"));
   });
 
   // ── Glossary ───────────────────────────────────────────────────────────────
