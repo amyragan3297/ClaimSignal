@@ -1059,7 +1059,7 @@ export default function ClaimsPage() {
                             })()}
                           </div>
                           <p className="text-sm text-muted-foreground truncate" data-testid={`text-homeowner-${claim.id}`}>
-                            {[claim.homeownerName, claim.carrier].filter(Boolean).join(" · ") || "—"}
+                            {[claim.homeownerName, claim.carrier].filter(Boolean).join(" · ") || "Homeowner not extracted"}
                           </p>
                           {claim.propertyAddress && (
                             <p className="text-xs text-muted-foreground/70 truncate mt-0.5" data-testid={`text-address-${claim.id}`}>
@@ -1212,7 +1212,7 @@ export default function ClaimsPage() {
                               )}
                             </div>
                             <p className="text-sm text-muted-foreground truncate">
-                              {[claim.homeownerName, claim.carrier].filter(Boolean).join(" · ") || "—"}
+                              {[claim.homeownerName, claim.carrier].filter(Boolean).join(" · ") || "Homeowner not extracted"}
                             </p>
                             {claim.propertyAddress && (
                               <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{claim.propertyAddress}</p>

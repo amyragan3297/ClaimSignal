@@ -169,6 +169,7 @@ export const claims = pgTable("claims", {
   aiClaimSummary: text("ai_claim_summary"),
   aiAnalysisJson: json("ai_analysis_json"),
   aiAnalysisAt: timestamp("ai_analysis_at"),
+  aiModulesCompleted: json("ai_modules_completed"),
   adjusterFrictionScore: real("adjuster_friction_score"),
   supplementProbabilityScore: real("supplement_probability_score"),
   ircComplianceRiskScore: real("irc_compliance_risk_score"),

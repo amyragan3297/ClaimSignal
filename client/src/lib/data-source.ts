@@ -51,6 +51,7 @@ export function formatMetric(
 
 export interface ClaimLike {
   aiAnalysisAt?: string | Date | null;
+  aiModulesCompleted?: string[] | unknown;
   riskScore?: number | null;
   frictionScore?: number | null;
   status?: string | null;
@@ -63,18 +64,33 @@ export interface ClaimAnalysisStatus {
   variant: "default" | "secondary" | "destructive" | "outline";
 }
 
+const AI_MODULE_NAMES = [
+  "claim_extraction",
+  "financial_extraction",
+  "code_analysis",
+  "timeline_generation",
+  "risk_scoring",
+  "weather_analysis",
+];
+
+function countAiModulesDone(claim: ClaimLike): number {
+  const done = Array.isArray(claim.aiModulesCompleted) ? claim.aiModulesCompleted : [];
+  return AI_MODULE_NAMES.filter(m => done.includes(m)).length;
+}
+
 /**
  * Derive an honest analysis-status badge for a claim row. Distinguishes
- * full AI analysis (an LLM run was persisted) from rule-based signals
- * computed from available fields, and flags thin / missing data.
+ * full AI analysis (all 6 AI modules were persisted) from partial or rule-based.
  */
 export function claimAnalysisStatus(claim: ClaimLike): ClaimAnalysisStatus {
-  if (claim.aiAnalysisAt) return { label: "AI analysis complete", variant: "default" };
+  const doneCount = countAiModulesDone(claim);
+  if (doneCount >= 6) return { label: "AI analysis complete", variant: "default" };
+  if (doneCount > 0) return { label: "Partial analysis", variant: "secondary" };
   if (claim.status === "denied" || claim.status === "escalated")
     return { label: "Ready for escalation review", variant: "destructive" };
   const hasSignals = (claim.riskScore ?? 0) > 0 || (claim.frictionScore ?? 0) > 0;
   if (hasSignals) return { label: "MVP rule-based analysis", variant: "secondary" };
   if (!claim.rcvAmount && !claim.inspectionDate)
     return { label: "Needs more data", variant: "outline" };
-  return { label: "AI analysis pending", variant: "outline" };
+  return { label: "Analysis in progress", variant: "outline" };
 }

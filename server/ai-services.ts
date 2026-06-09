@@ -340,7 +340,8 @@ Rules you must follow exactly:
 3. "propertyAddress" must contain ONLY the street address (e.g. "123 Main St" or "456 Oak Ave Apt 2"). Never include city, state, zip, date of loss, carrier name, policy number, or any other information in this field. If you cannot extract a clean street address, omit this field entirely.
 4. All date fields (dateOfLoss, inspectionDate, etc.) must be in YYYY-MM-DD format only. Convert any MM/DD/YYYY or spelled-out dates to YYYY-MM-DD before returning. If you cannot determine a date with confidence, omit that field.
 5. Numeric fields (rcv, acv, deductible, etc.) must be plain decimal strings, e.g. "18500.00". No currency symbols or commas.
-6. "adjusterMentions" must list EVERY insurance adjuster mentioned in the document. Use the raw role label exactly as it appears (e.g. "Desk Adjuster", "Field Adjuster", "CAT Adjuster"). Do NOT include homeowners, contractors, public adjusters, roofing staff, or the insured party — only carrier-side adjusters. If there is only one adjuster, still include them in the array. Set "adjusterName" and "adjusterEmail"/"adjusterPhone" to the primary adjuster's values for backward compatibility.`;
+6. "adjusterMentions" must list EVERY insurance adjuster mentioned in the document. Use the raw role label exactly as it appears (e.g. "Desk Adjuster", "Field Adjuster", "CAT Adjuster"). Do NOT include homeowners, contractors, public adjusters, roofing staff, or the insured party — only carrier-side adjusters. If there is only one adjuster, still include them in the array. Set "adjusterName" and "adjusterEmail"/"adjusterPhone" to the primary adjuster's values for backward compatibility.
+7. "homeownerName" and "insuredName" must contain ONLY the homeowner or insured party. NEVER put an adjuster name in these fields — adjuster names belong only in "adjusterName" and "adjusterMentions".`;
 
 const EXTRACTION_SCHEMA = `{
   "claimNumber": "claim number string",

@@ -873,7 +873,17 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
 
       if (Object.keys(claimUpdate).length > 0) {
         try {
-          await storage.updateClaim(claimId, matchedClaim.organizationId, claimUpdate as Partial<import("@shared/schema").InsertClaim>);
+          // Determine which AI modules were completed
+          const existingModules = (matchedClaim as Record<string, unknown>).aiModulesCompleted as string[] | null | undefined;
+          const newModules = Array.isArray(existingModules) ? [...existingModules] : [];
+          if (llmExtraction && !newModules.includes("claim_extraction")) newModules.push("claim_extraction");
+          const hasFinancial = ("rcvAmount" in claimUpdate || "acvAmount" in claimUpdate || "deductible" in claimUpdate || "supplementAmountTotal" in claimUpdate || "claimAmount" in claimUpdate || "approvedAmount" in claimUpdate || "finalPaidAmount" in claimUpdate);
+          if (hasFinancial && !newModules.includes("financial_extraction")) newModules.push("financial_extraction");
+
+          await storage.updateClaim(claimId, matchedClaim.organizationId, {
+            ...claimUpdate,
+            aiModulesCompleted: newModules,
+          } as Partial<import("@shared/schema").InsertClaim>);
           autoAppliedFields = Object.keys(claimUpdate);
           console.log(`[ai-auto-apply] applied ${autoAppliedFields.length} fields to claim ${claimId} from "${req.file!.originalname}": ${autoAppliedFields.join(", ")}`);
           if (debugExtraction) {

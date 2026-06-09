@@ -61,6 +61,12 @@ import {
 
 const ADMIN_NOTIFICATION_EMAIL = "claimsignal1@gmail.com";
 
+function markAiModule(modules: unknown, module: string): string[] {
+  const done = Array.isArray(modules) ? [...modules] : [];
+  if (!done.includes(module)) done.push(module);
+  return done;
+}
+
 async function sendAdminNotificationEmail(opts: { subject: string; body: string }): Promise<void> {
   try {
     const nodemailer = await import("nodemailer");
@@ -1195,6 +1201,10 @@ export async function registerRoutes(
         sourceAudioId: req.body?.sourceAudioId ?? null,
         sourceTranscriptId: req.body?.sourceTranscriptId ?? null,
       });
+      // Mark timeline generation module
+      await storage.updateClaim(claim.id, orgId, {
+        aiModulesCompleted: markAiModule(claim.aiModulesCompleted, "timeline_generation"),
+      });
       // AUDIT uses the upload/action date (now), NOT the extracted event dates.
       await storage.createAuditLog({
         organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
@@ -1682,6 +1692,7 @@ export async function registerRoutes(
         aiClaimSummary: analysis.narrative,
         aiAnalysisJson: analysis as unknown as Record<string, unknown>,
         aiAnalysisAt: generatedAt,
+        aiModulesCompleted: markAiModule(claim.aiModulesCompleted, "code_analysis"),
       });
 
       await storage.createAuditLog({
@@ -1825,6 +1836,11 @@ export async function registerRoutes(
         return res.json({ available: false, reason: "Insufficient location or date-of-loss data to resolve weather." });
       }
       const { weather } = weatherResult;
+
+      // Mark weather analysis module
+      await storage.updateClaim(claim.id, orgId, {
+        aiModulesCompleted: markAiModule(claim.aiModulesCompleted, "weather_analysis"),
+      });
 
       // Audit cross-tenant access (master_admin viewing another org's claim).
       if (claim.organizationId !== orgId) {
@@ -3916,6 +3932,10 @@ export async function registerRoutes(
       const carrierSignal = claim.carrier
         ? (computeCarrierIntelligence(allOrgClaims.filter(c => c.carrier === claim.carrier)).find(() => true) ?? null)
         : null;
+      // Mark risk scoring module
+      await storage.updateClaim(claimId, orgId, {
+        aiModulesCompleted: markAiModule(claim.aiModulesCompleted, "risk_scoring"),
+      });
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "CLAIM_INTELLIGENCE_DASHBOARD_VIEWED", entityType: "claim", entityId: claimId, ipAddress: getClientIp(req) });
       res.json({ healthScore, riskSignals, alerts, executiveSummary: summary, carrierSignal, documentCount: docs.length, escalationCount: escs.length });
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
