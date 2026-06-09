@@ -50,6 +50,54 @@ Before merging person records, confirm at least two independent signals:
 
 **Counter-example:** Two "John Smith" records on different claims with different carriers should never be merged, even if both are "field adjusters."
 
+### Rule 2B: Alias & OCR Matching for Adjuster Names
+
+A misspelled name does not automatically mean a different person. Before creating a new adjuster record, compare the extracted name against existing claim participants and adjuster profiles.
+
+**Check for these match signals:**
+
+- Similar spelling (Levenshtein distance < 3 for first name)
+- Partial name match (first name only, last name only, initials)
+- OCR substitutions (e.g., "O" vs "B", "I" vs "l")
+- Same carrier
+- Same claim number
+- Same property address
+- Same email thread or email address
+- Same document set
+- Same timeline window
+- Same role or similar role
+- Adjuster context keywords nearby (adjuster, field adjuster, claim representative, examiner, desk adjuster, supervisor, team lead, Allstate, State Farm, USAA, ALFA)
+
+**Examples of possible same-person matches:**
+- Edwinah Bopape, Edwina Bopape, Edwina Opape, Eswinah Bopape, Edwina, E. Bopape
+- These are the same person when supported by shared claim, carrier, address, or document context.
+
+**Matching logic:**
+1. Same claim number + same carrier = high confidence
+2. Same address + same carrier = high confidence
+3. Same email thread or address = very high confidence
+4. Same document set = medium confidence
+5. Adjuster context keywords nearby = medium confidence
+6. If spelling is similar but claim context is different = do not auto-merge
+7. If confidence >= 90% and claim context matches = auto-link as alias
+8. If confidence 75-89% = flag as "Possible Alias / Needs Review"
+9. If confidence < 75% = create separate record, preserve extracted text
+
+**Required fields for alias records:**
+- `canonical_name` — the preferred name
+- `extracted_name` — the raw text from the source
+- `aliases` — array of known variations
+- `carrier` — carrier context
+- `claim_id` — claim context
+- `role` — adjuster role
+- `source_document` — source file
+- `source_location` — page or position
+- `confidence_score` — 0.0 to 1.0
+- `needs_review` — true if flagged
+- `alias_reason` — why this is considered an alias
+
+**Important:** Name similarity alone is not enough to merge globally. The system must use claim context, carrier context, document context, and timeline context before merging. Never delete the original extracted name — store it as `extracted_text` with source evidence.
+
 ### Rule 3: Verify Strong Claim Matching Before Merging Claims
 
 A claim merge requires one of these combinations:
