@@ -1,0 +1,115 @@
+Critical Data Privacy and Entity Classification Rule
+
+The following names, companies, and internal business contacts are NOT homeowners, NOT claims, and MUST NEVER appear as homeowner records, claim records, or public intelligence records unless explicitly classified by the user.
+
+Examples include:
+
+- Jeremy Timko
+- Travis Peete
+- Catherine
+- Chris
+- Jessica
+- Rob
+- Brad
+- Kenzie
+- Ashley
+- Aerial AI Solutions
+- AAIS
+- Pay It Forward Processing
+- Revolution Roofing
+- Internal company personnel
+- Employers
+- Former employers
+- Business contacts
+- Vendors
+- Investors
+- Employees
+- Managers
+- Executives
+
+Required Behavior:
+
+1. Entity Classification
+
+Every detected name must first be classified as one of:
+
+- Homeowner
+- Adjuster
+- Carrier Representative
+- Contractor
+- Company
+- Employee
+- Manager
+- Executive
+- Vendor
+- Engineer
+- Attorney
+- Public Adjuster
+- Investor
+- Other Person
+
+Do not default to Homeowner.
+
+2. Claim Creation Requirements
+
+A claim record may only be created when the system identifies:
+
+- Property address
+- Homeowner
+- Loss event
+- Carrier information
+- Claim evidence
+
+A person's name alone is never sufficient.
+
+3. Internal Company Data Protection
+
+Internal company names and personnel must not be converted into:
+
+- Homeowners
+- Claims
+- Adjuster records
+- Carrier records
+
+unless explicitly confirmed.
+
+4. Data Masking
+
+The following categories must be masked from all intelligence reporting except Master Admin:
+
+- Former employers
+- Internal company personnel
+- Internal business contacts
+- Private organizations
+- Non-claim individuals
+
+5. Historical Cleanup
+
+Scan all existing records.
+
+Identify:
+- Misclassified homeowners
+- Misclassified claims
+- Misclassified adjusters
+- Misclassified companies
+
+Generate a cleanup report.
+
+Flag records for Master Admin review.
+
+Do not automatically merge or delete records.
+
+6. Master Admin Authority
+
+Only claimsignal1@gmail.com may:
+
+- Approve cleanup actions
+- Reclassify entities
+- Merge identities
+- Permanently delete records
+
+7. Intelligence Integrity Rule
+
+Carrier Intelligence, Adjuster Intelligence, Revenue Intelligence, Executive Intelligence, and Playbook Intelligence must only use verified claim entities.
+
+Unverified names must be excluded from analytics until classified.
