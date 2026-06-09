@@ -381,7 +381,7 @@ function FounderInvitationsTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold" data-testid="text-founder-invitations-title">Founder Invitations</h2>
-          <p className="text-sm text-muted-foreground">Create and manage invitation-only founder access. Max 3 founder slots.</p>
+          <p className="text-sm text-muted-foreground">Create and manage invitation-only founder access. Limited availability.</p>
         </div>
         <Button size="sm" onClick={() => setShowCreate(true)} data-testid="button-create-invitation">
           <Plus className="w-4 h-4 mr-1" />
