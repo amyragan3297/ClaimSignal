@@ -1,0 +1,109 @@
+Create a reusable skill called:
+
+ClaimSignal Executive Intelligence
+
+Purpose:
+Convert claim, adjuster, carrier, playbook, timeline, supplement, payment, and document data into executive-level business intelligence.
+
+AI Responsibilities:
+
+1. Aggregate all claim data across the platform.
+
+2. Track executive KPIs:
+- Total claims
+- Open claims
+- Closed claims
+- Denied claims
+- Approved claims
+- Reopened claims
+- Overturned denials
+- Supplement approvals
+- Aging claims
+- Claims needing action
+
+3. Track financial KPIs:
+- Total RCV
+- Total ACV
+- Total deductible amount
+- Total depreciation
+- Total payments issued
+- Total supplement amount requested
+- Total supplement amount approved
+- Total recovered dollars
+- Estimated revenue opportunity
+
+4. Track carrier performance:
+- Claims by carrier
+- Denial rate
+- Approval rate
+- Reinspection approval rate
+- Supplement approval rate
+- Average response time
+- Average payment release time
+- Highest friction carriers
+
+5. Track adjuster performance:
+- Claims by adjuster
+- Adjuster involvement
+- Approval patterns
+- Denial patterns
+- Reinspection outcomes
+- Supplement outcomes
+- Average response time
+- Highest friction adjusters
+
+6. Track playbook performance:
+- Most successful playbook patterns
+- Denial overturn patterns
+- Supplement approval patterns
+- Code documentation patterns
+- Reinspection success patterns
+- Documentation strategies associated with approval
+
+7. Generate AI executive summaries automatically.
+
+Every dashboard refresh should produce:
+- Top risks
+- Top opportunities
+- Claims needing attention
+- Aging claims
+- Claims missing documents
+- Emerging carrier trends
+- Emerging adjuster trends
+- Emerging denial trends
+- Emerging approval trends
+- Recommended executive actions
+
+8. Use careful language.
+
+Use:
+- Associated with
+- Indicates
+- Suggests
+- Trending
+- Needs review
+- Requires action
+
+Avoid:
+- Guaranteed
+- Caused
+- Proves
+- Bad faith unless legally documented
+
+9. Preserve source evidence.
+
+Every KPI and executive insight must connect back to:
+- Claim IDs
+- Source documents
+- Timeline events
+- Carrier records
+- Adjuster records
+- Playbook entries
+- Confidence scores
+
+10. Protect homeowner PII.
+
+Executive-level summaries should not expose homeowner names, addresses, phone numbers, emails, or policy numbers unless the user is in Master Admin view and specifically opens the claim.
+
+Primary objective:
+Turn ClaimSignal into an executive decision-support platform that automatically identifies claim risks, opportunities, trends, revenue impact, and recommended next actions from the underlying claim intelligence.
