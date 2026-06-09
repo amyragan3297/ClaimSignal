@@ -4,7 +4,7 @@ export const PLANS = {
     name: "Founding Partner",
     price: 79,
     priceLabel: "$79/mo",
-    description: "14-day free trial. Card required.",
+    description: "Unlock lifetime access to the ClaimSignal platform at the Founding Partner rate of $79/month. Includes full AI-powered claim intelligence, carrier analytics, and 14-day free trial. Rate is locked for life while subscription remains active. Limited to first 100 partners.",
     badge: "Limited Early Access",
     trial: true,
     trialDays: 14,
