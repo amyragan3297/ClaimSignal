@@ -58,36 +58,12 @@ import {
   getClientIp,
   trackLoginActivity,
 } from "./auth";
-
-const ADMIN_NOTIFICATION_EMAIL = "claimsignal1@gmail.com";
+import { sendAdminNotificationEmail, sendFounderInvitationEmail } from "./email";
 
 function markAiModule(modules: unknown, module: string): string[] {
   const done = Array.isArray(modules) ? [...modules] : [];
   if (!done.includes(module)) done.push(module);
   return done;
-}
-
-async function sendAdminNotificationEmail(opts: { subject: string; body: string }): Promise<void> {
-  try {
-    const nodemailer = await import("nodemailer");
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER || ADMIN_NOTIFICATION_EMAIL,
-        pass: process.env.SMTP_PASS || "",
-      },
-    });
-    await transporter.sendMail({
-      from: `"ClaimSignal" <${ADMIN_NOTIFICATION_EMAIL}>`,
-      to: ADMIN_NOTIFICATION_EMAIL,
-      subject: opts.subject,
-      text: opts.body,
-    });
-  } catch (err) {
-    console.warn("[email] Admin notification failed:", (err as Error).message);
-  }
 }
 
 const CLAIM_NUMERIC_FIELDS = [
@@ -2640,6 +2616,16 @@ export async function registerRoutes(
         entityId: (invitation as Record<string, unknown>).id as string,
         afterJson: { email, inviteCode, expiresAt },
         ipAddress: getClientIp(req),
+      });
+
+      await sendFounderInvitationEmail({
+        to: email,
+        fullName,
+        inviteCode,
+        companyName,
+        expiresAt,
+      }).catch((err) => {
+        console.warn("[email] Failed to send founder invitation email:", (err as Error).message);
       });
 
       res.json({ success: true, invitation });
