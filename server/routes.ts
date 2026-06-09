@@ -3,7 +3,7 @@ import { type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
-import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema, type TimelineEvent, type InsertClaim, foundingPartnerRequestSchema, founderAccessRequestSchema, investorAccessRequestSchema, enterpriseContactSchema, insertRevenueOpportunitySchema } from "@shared/schema";
+import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema, type TimelineEvent, type InsertClaim, foundingPartnerRequestSchema, investorAccessRequestSchema, enterpriseContactSchema, insertRevenueOpportunitySchema } from "@shared/schema";
 import { applyPiiMasking, canViewUnmasked, sanitizeSharedClaimList, sanitizePlaybookList, sanitizePlaybookRecord, toPlaybookAggregate, isMaster } from "./masking";
 import { computeCarrierIntelligence } from "./carrier-intelligence";
 import { computeAdjusterScorecard } from "./adjuster-scorecard";
@@ -30,7 +30,7 @@ import { extractAndLinkAdjustersForClaim, type AdjusterMention } from "./adjuste
 import { getClaimWeather, geocodeZip, geocodeCity } from "./weather";
 import { findDuplicateClaims } from "./claim-matching";
 import express from "express";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { isDemoSeedingAllowed, resolveSeedMasterCredentials } from "./config";
 import { db } from "./db";
 import { eq, inArray } from "drizzle-orm";
@@ -2581,32 +2581,59 @@ export async function registerRoutes(
     }
   });
 
-  // —— Founder Access Request (public) ——
-  app.post("/api/founder-access/request", async (req, res) => {
+  // —— Founder Access: Invitation-Only System ——
+
+  function generateInviteCode(): string {
+    return "CSF-" + randomBytes(4).toString("hex").toUpperCase();
+  }
+
+  // 1. Master Admin creates an invitation
+  app.post("/api/admin/founder-invitations", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
     try {
-      const data = founderAccessRequestSchema.parse(req.body);
-      const request = await storage.createFoundingPartnerRequest(data);
-      await sendAdminNotificationEmail({
-        subject: "New Founder Access Request",
-        body: `Founder Access Request Received\n\nName: ${data.fullName}\nEmail: ${data.email}\nCompany: ${data.companyName}\nPhone: ${data.phone || "N/A"}\nEstimated Monthly Claims: ${data.estimatedMonthlyClaimVolume || "N/A"}\nReason: ${data.reasonForJoining || "N/A"}\nInvite Code: ${data.inviteCode || "None"}`,
+      const { fullName, email, companyName, phone } = req.body;
+      if (!fullName || !email || !companyName) {
+        return res.status(400).json({ message: "fullName, email, and companyName are required" });
+      }
+      const existing = await storage.getFoundingPartnerRequestByEmail(email);
+      if (existing) return res.status(400).json({ message: "Invitation already exists for this email" });
+
+      const founderCount = await storage.getFounderSubscriptionCount();
+      if (founderCount >= 3) {
+        return res.status(400).json({ message: "Founder tier unavailable — all 3 spots are taken" });
+      }
+
+      const inviteCode = generateInviteCode();
+      const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const invitation = await storage.createFoundingPartnerRequest({
+        fullName,
+        email,
+        companyName,
+        phone,
+        status: "invited",
+        inviteCode,
+        createdBy: req.auth!.userId,
+        expiresAt,
       });
+
       await storage.createAuditLog({
         organizationId: "",
-        actorUserId: "",
-        actorRole: "system",
-        actionType: "FOUNDER_REQUEST_SUBMITTED",
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "FOUNDER_INVITATION_CREATED",
         entityType: "founder_access_request",
-        entityId: (request as Record<string, unknown>).id as string,
-        afterJson: { email: data.email, inviteCode: data.inviteCode || null },
+        entityId: (invitation as Record<string, unknown>).id as string,
+        afterJson: { email, inviteCode, expiresAt },
         ipAddress: getClientIp(req),
       });
-      res.json({ success: true, id: (request as Record<string, unknown>).id });
+
+      res.json({ success: true, invitation });
     } catch (err) {
-      res.status(400).json({ message: (err as Error).message });
+      res.status(500).json({ message: (err as Error).message });
     }
   });
 
-  app.get("/api/admin/founder-access/requests", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
+  // 2. Master Admin lists all invitations
+  app.get("/api/admin/founder-invitations", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
     try {
       const requests = await storage.getFoundingPartnerRequests();
       res.json(requests);
@@ -2615,12 +2642,15 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/founder-access/:id/approve", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+  // 3. Master Admin pre-approves an invitation (skips email verification)
+  app.post("/api/admin/founder-invitations/:id/approve", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
     try {
       const id = String(req.params.id);
       const request = await storage.getFoundingPartnerRequestById(id);
-      if (!request) return res.status(404).json({ message: "Request not found" });
-      if (request.status !== "pending") return res.status(400).json({ message: "Request already processed" });
+      if (!request) return res.status(404).json({ message: "Invitation not found" });
+      if (request.status !== "invited" && request.status !== "pending") {
+        return res.status(400).json({ message: "Invitation already processed" });
+      }
 
       const approved = await storage.updateFoundingPartnerRequest(id, {
         status: "approved",
@@ -2632,7 +2662,7 @@ export async function registerRoutes(
         organizationId: "",
         actorUserId: req.auth!.userId,
         actorRole: req.auth!.role,
-        actionType: "FOUNDER_REQUEST_APPROVED",
+        actionType: "FOUNDER_INVITATION_APPROVED",
         entityType: "founder_access_request",
         entityId: id,
         afterJson: { email: request.email, approvedBy: req.auth!.userId },
@@ -2645,32 +2675,149 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/founder-access/:id/reject", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+  // 4. Master Admin revokes an invitation
+  app.post("/api/admin/founder-invitations/:id/revoke", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
     try {
       const id = String(req.params.id);
       const request = await storage.getFoundingPartnerRequestById(id);
-      if (!request) return res.status(404).json({ message: "Request not found" });
-      if (request.status !== "pending") return res.status(400).json({ message: "Request already processed" });
+      if (!request) return res.status(404).json({ message: "Invitation not found" });
 
-      const rejected = await storage.updateFoundingPartnerRequest(id, {
-        status: "rejected",
-        approvedBy: req.auth!.userId,
-        approvedAt: new Date(),
-        notes: req.body.notes || "Rejected by Master Admin",
+      const revoked = await storage.updateFoundingPartnerRequest(id, {
+        status: "expired",
+        notes: req.body.notes || "Revoked by Master Admin",
       });
 
       await storage.createAuditLog({
         organizationId: "",
         actorUserId: req.auth!.userId,
         actorRole: req.auth!.role,
-        actionType: "FOUNDER_REQUEST_REJECTED",
+        actionType: "FOUNDER_INVITATION_REVOKED",
         entityType: "founder_access_request",
         entityId: id,
-        afterJson: { email: request.email, rejectedBy: req.auth!.userId, notes: req.body.notes || null },
+        afterJson: { email: request.email, revokedBy: req.auth!.userId },
         ipAddress: getClientIp(req),
       });
 
-      res.json({ success: true, request: rejected });
+      res.json({ success: true, request: revoked });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // 5. Public: verify invitation code
+  app.post("/api/founder-access/verify", async (req, res) => {
+    try {
+      const { inviteCode, email } = req.body;
+      if (!inviteCode || !email) {
+        return res.status(400).json({ message: "Invite code and email are required" });
+      }
+      const invitation = await storage.getFoundingPartnerRequestByInviteCode(inviteCode);
+      if (!invitation) return res.status(404).json({ message: "Invalid invitation code" });
+      if (invitation.status === "expired") return res.status(400).json({ message: "Invitation has expired" });
+      if (invitation.status === "redeemed") return res.status(400).json({ message: "Invitation already redeemed" });
+      if (invitation.status === "rejected") return res.status(400).json({ message: "Invitation was rejected" });
+      if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(400).json({ message: "Email does not match invitation" });
+      }
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        return res.status(400).json({ message: "Invitation has expired" });
+      }
+      res.json({
+        valid: true,
+        invitation: {
+          fullName: invitation.fullName,
+          email: invitation.email,
+          companyName: invitation.companyName,
+        },
+      });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // 6. Public: redeem invitation (create account + org + billing)
+  app.post("/api/founder-access/redeem", async (req, res) => {
+    try {
+      const { inviteCode, email, password, fullName, companyName } = req.body;
+      if (!inviteCode || !email || !password || !fullName || !companyName) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+      const invitation = await storage.getFoundingPartnerRequestByInviteCode(inviteCode);
+      if (!invitation) return res.status(404).json({ message: "Invalid invitation code" });
+      if (invitation.status === "expired") return res.status(400).json({ message: "Invitation has expired" });
+      if (invitation.status === "redeemed") return res.status(400).json({ message: "Invitation already redeemed" });
+      if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(400).json({ message: "Email does not match invitation" });
+      }
+      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
+        return res.status(400).json({ message: "Invitation has expired" });
+      }
+
+      const founderCount = await storage.getFounderSubscriptionCount();
+      if (founderCount >= 3) {
+        return res.status(400).json({ message: "Founder tier unavailable — all 3 spots are taken" });
+      }
+
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) return res.status(400).json({ message: "Email already registered" });
+
+      const passwordHash = await bcrypt.hash(password, 12);
+      const org = await storage.createOrganization({ name: companyName, organizationType: "contractor" });
+      const user = await storage.createUser({
+        email,
+        passwordHash,
+        fullName,
+        organizationId: org.id,
+        role: "founder",
+        founderFlag: true,
+        founderLockedRate: true,
+      });
+
+      const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      await storage.createBillingAccount({
+        organizationId: org.id,
+        planType: "founder",
+        subscriptionStatus: "trialing",
+        trialStartDate: new Date(),
+        trialEndDate: trialEnd,
+      });
+
+      await storage.updateFoundingPartnerRequest(invitation.id as string, {
+        status: "redeemed",
+        redeemedAt: new Date(),
+        redeemedBy: user.id,
+      });
+
+      await storage.createAuditLog({
+        organizationId: org.id,
+        actorUserId: user.id,
+        actorRole: "founder",
+        actionType: "FOUNDER_INVITATION_REDEEMED",
+        entityType: "founder_access_request",
+        entityId: invitation.id as string,
+        afterJson: { email, orgId: org.id },
+        ipAddress: getClientIp(req),
+      });
+
+      const { refreshToken } = await createAuthSession(
+        user.id, org.id,
+        { ipAddress: getClientIp(req), userAgent: req.headers["user-agent"] }
+      );
+
+      await trackLoginActivity({
+        userId: user.id,
+        email: user.email,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers["user-agent"] || "",
+        success: true,
+      });
+
+      setRefreshTokenCookie(res, refreshToken);
+      res.json({
+        success: true,
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, organizationId: org.id },
+        redirect: "/founder",
+      });
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
     }

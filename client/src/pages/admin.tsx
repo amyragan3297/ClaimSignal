@@ -4,11 +4,14 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Users, Building2, CreditCard, FileText, Shield, Loader2, Eye,
   Archive, Trash2, RotateCcw, BarChart3, AlertCircle, GitMerge,
+  Crown, Copy, CheckCircle, Plus,
 } from "lucide-react";
 import { Redirect } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -285,10 +288,254 @@ function GovernanceHub() {
   );
 }
 
+interface FounderInvitation {
+  id: string;
+  fullName: string;
+  email: string;
+  companyName: string;
+  status: string;
+  inviteCode: string | null;
+  createdAt: string | null;
+  expiresAt: string | null;
+  redeemedAt: string | null;
+  approvedAt: string | null;
+  notes: string | null;
+}
+
+function FounderInvitationsTab() {
+  const { toast } = useToast();
+  const [showCreate, setShowCreate] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const { data: invitations, isLoading } = useQuery<FounderInvitation[]>({
+    queryKey: ["/api/admin/founder-invitations"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { fullName: string; email: string; companyName: string; phone?: string }) => {
+      const res = await apiRequest("POST", "/api/admin/founder-invitations", data);
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to create invitation");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Invitation created", description: "The founder invitation has been sent." });
+      setShowCreate(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/founder-invitations"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to create invitation", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/admin/founder-invitations/${id}/approve`, {});
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to approve");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Invitation approved" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/founder-invitations"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to approve", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/admin/founder-invitations/${id}/revoke`, {});
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to revoke");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Invitation revoked" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/founder-invitations"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to revoke", description: err.message, variant: "destructive" });
+    },
+  });
+
+  function copyCode(code: string, id: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+    toast({ title: "Copied invitation code" });
+  }
+
+  function getStatusBadge(status: string) {
+    const map: Record<string, string> = {
+      pending: "bg-yellow-500/10 text-yellow-500",
+      invited: "bg-blue-500/10 text-blue-500",
+      approved: "bg-emerald-500/10 text-emerald-500",
+      redeemed: "bg-primary/10 text-primary",
+      rejected: "bg-red-500/10 text-red-500",
+      expired: "bg-muted text-muted-foreground",
+    };
+    return map[status] || "bg-muted text-muted-foreground";
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold" data-testid="text-founder-invitations-title">Founder Invitations</h2>
+          <p className="text-sm text-muted-foreground">Create and manage invitation-only founder access. Max 3 founder slots.</p>
+        </div>
+        <Button size="sm" onClick={() => setShowCreate(true)} data-testid="button-create-invitation">
+          <Plus className="w-4 h-4 mr-1" />
+          Create Invitation
+        </Button>
+      </div>
+
+      {showCreate && (
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <h3 className="font-semibold text-sm">Create Founder Invitation</h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                createMutation.mutate({
+                  fullName: String(fd.get("fullName")),
+                  email: String(fd.get("email")),
+                  companyName: String(fd.get("companyName")),
+                  phone: String(fd.get("phone") || ""),
+                });
+              }}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="inv-name">Full Name</Label>
+                <Input id="inv-name" name="fullName" placeholder="John Smith" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inv-email">Email</Label>
+                <Input id="inv-email" name="email" type="email" placeholder="john@company.com" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inv-company">Organization Name</Label>
+                <Input id="inv-company" name="companyName" placeholder="Acme Restoration" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inv-phone">Phone (optional)</Label>
+                <Input id="inv-phone" name="phone" placeholder="(555) 123-4567" />
+              </div>
+              <div className="md:col-span-2 flex gap-2">
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create Invitation
+                </Button>
+                <Button variant="ghost" onClick={() => setShowCreate(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-6 space-y-3">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Invite Code</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(invitations || []).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      No founder invitations yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {(invitations || []).map((inv) => (
+                  <TableRow key={inv.id} data-testid={`row-invitation-${inv.id}`}>
+                    <TableCell className="font-medium">{inv.fullName}</TableCell>
+                    <TableCell>{inv.email}</TableCell>
+                    <TableCell>{inv.companyName}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getStatusBadge(inv.status)}>
+                        {inv.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {inv.inviteCode ? (
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs bg-muted px-2 py-1 rounded">{inv.inviteCode}</code>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="w-6 h-6"
+                            onClick={() => copyCode(inv.inviteCode!, inv.id)}
+                          >
+                            {copiedId === inv.id ? (
+                              <CheckCircle className="w-3 h-3 text-emerald-500" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        {(inv.status === "invited" || inv.status === "pending") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => approveMutation.mutate(inv.id)}
+                            disabled={approveMutation.isPending}
+                            data-testid={`button-approve-${inv.id}`}
+                          >
+                            Approve
+                          </Button>
+                        )}
+                        {inv.status !== "redeemed" && inv.status !== "expired" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => revokeMutation.mutate(inv.id)}
+                            disabled={revokeMutation.isPending}
+                            data-testid={`button-revoke-${inv.id}`}
+                          >
+                            Revoke
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { data: auth, refetch } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"overview" | "governance">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "governance" | "founder-invitations">("overview");
   const [clearDemoConfirm, setClearDemoConfirm] = useState(false);
   const [dedupeLog, setDedupeLog] = useState<string[] | null>(null);
 
@@ -403,11 +650,22 @@ export default function AdminPage() {
             <Shield className="w-4 h-4" />
             Governance
           </Button>
+          <Button
+            variant={activeTab === "founder-invitations" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveTab("founder-invitations")}
+            data-testid="button-tab-founder-invitations"
+          >
+            <Crown className="w-4 h-4" />
+            Founder Invitations
+          </Button>
         </div>
       </div>
 
       {activeTab === "governance" ? (
         <GovernanceHub />
+      ) : activeTab === "founder-invitations" ? (
+        <FounderInvitationsTab />
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

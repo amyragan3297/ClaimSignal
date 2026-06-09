@@ -322,8 +322,12 @@ export interface IStorage {
   updateEvidenceFileIntelligence(id: string, orgId: string, intelligenceJson: unknown, reviewStatus: string): Promise<void>;
 
   // Pricing & Registration
-  createFoundingPartnerRequest(data: { fullName: string; email: string; companyName: string; phone?: string; estimatedMonthlyClaimVolume?: string; reasonForJoining?: string }): Promise<unknown>;
+  createFoundingPartnerRequest(data: { fullName: string; email: string; companyName: string; phone?: string; estimatedMonthlyClaimVolume?: string; reasonForJoining?: string; inviteCode?: string; createdBy?: string; expiresAt?: Date; status?: string }): Promise<unknown>;
   getFoundingPartnerRequests(): Promise<unknown[]>;
+  getFoundingPartnerRequestById(id: string): Promise<unknown | undefined>;
+  getFoundingPartnerRequestByInviteCode(inviteCode: string): Promise<unknown | undefined>;
+  getFoundingPartnerRequestByEmail(email: string): Promise<unknown | undefined>;
+  updateFoundingPartnerRequest(id: string, data: Partial<typeof foundingPartnerRequests.$inferSelect>): Promise<unknown>;
   createEnterpriseContactLead(data: { fullName: string; companyName: string; email: string; phone?: string; organizationType?: string; estimatedUsers?: number; estimatedMonthlyClaimVolume?: string; integrationNeeds?: string; message?: string }): Promise<unknown>;
   getEnterpriseContactLeads(): Promise<unknown[]>;
 
@@ -1485,7 +1489,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // —— Pricing & Registration ——
-  async createFoundingPartnerRequest(data: { fullName: string; email: string; companyName: string; phone?: string; estimatedMonthlyClaimVolume?: string; reasonForJoining?: string; inviteCode?: string }) {
+  async createFoundingPartnerRequest(data: { fullName: string; email: string; companyName: string; phone?: string; estimatedMonthlyClaimVolume?: string; reasonForJoining?: string; inviteCode?: string; createdBy?: string; expiresAt?: Date; status?: string }) {
     const [created] = await db.insert(foundingPartnerRequests).values(data).returning();
     return created;
   }
@@ -1496,6 +1500,16 @@ export class DatabaseStorage implements IStorage {
 
   async getFoundingPartnerRequestById(id: string) {
     const [record] = await db.select().from(foundingPartnerRequests).where(eq(foundingPartnerRequests.id, id));
+    return record;
+  }
+
+  async getFoundingPartnerRequestByInviteCode(inviteCode: string) {
+    const [record] = await db.select().from(foundingPartnerRequests).where(eq(foundingPartnerRequests.inviteCode, inviteCode));
+    return record;
+  }
+
+  async getFoundingPartnerRequestByEmail(email: string) {
+    const [record] = await db.select().from(foundingPartnerRequests).where(eq(foundingPartnerRequests.email, email));
     return record;
   }
 

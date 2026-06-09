@@ -7,21 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Check, Lock, Crown, Sparkles } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Lock, Crown, Sparkles, Mail } from "lucide-react";
 import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 
-const requestSchema = z.object({
+const redeemSchema = z.object({
   fullName: z.string().min(2, "Full name required"),
   email: z.string().email("Valid email required"),
-  companyName: z.string().min(2, "Company name required"),
-  phone: z.string().optional(),
-  estimatedMonthlyClaimVolume: z.string().optional(),
-  reasonForJoining: z.string().optional(),
-  inviteCode: z.string().optional(),
+  companyName: z.string().min(2, "Organization name required"),
+  inviteCode: z.string().min(6, "Invite code required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 const loginSchema = z.object({
@@ -32,14 +29,16 @@ const loginSchema = z.object({
 export default function FounderAccessPage() {
   const { toast } = useToast();
   const { login } = useAuth();
-  const [loading, setLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [mode, setMode] = useState<"info" | "login" | "request">("info");
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemed, setRedeemed] = useState(false);
+  const [, setVerified] = useState(false);
+  const [, setVerifiedData] = useState<{ fullName: string; email: string; companyName: string } | null>(null);
+  const [mode, setMode] = useState<"info" | "login" | "redeem">("info");
 
-  const requestForm = useForm<z.infer<typeof requestSchema>>({
-    resolver: zodResolver(requestSchema),
-    defaultValues: { fullName: "", email: "", companyName: "", phone: "", estimatedMonthlyClaimVolume: "", reasonForJoining: "", inviteCode: "" },
+  const redeemForm = useForm<z.infer<typeof redeemSchema>>({
+    resolver: zodResolver(redeemSchema),
+    defaultValues: { fullName: "", email: "", companyName: "", inviteCode: "", password: "" },
   });
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
@@ -47,20 +46,47 @@ export default function FounderAccessPage() {
     defaultValues: { email: "", password: "" },
   });
 
-  async function onRequestSubmit(data: z.infer<typeof requestSchema>) {
+  async function onVerifyAndRedeem(data: z.infer<typeof redeemSchema>) {
     try {
-      setLoading(true);
-      const res = await apiRequest("POST", "/api/founder-access/request", data);
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Request failed");
+      setRedeeming(true);
+
+      // Step 1: Verify invitation
+      const verifyRes = await apiRequest("POST", "/api/founder-access/verify", {
+        inviteCode: data.inviteCode,
+        email: data.email,
+      });
+      if (!verifyRes.ok) {
+        const err = await verifyRes.json();
+        throw new Error(err.message || "Invalid invitation code");
       }
-      setSubmitted(true);
-      toast({ title: "Request submitted", description: "Your Founder access request is pending review." });
+      const verifyJson = await verifyRes.json();
+      setVerified(true);
+      setVerifiedData(verifyJson.invitation);
+
+      // Step 2: Redeem invitation
+      const redeemRes = await apiRequest("POST", "/api/founder-access/redeem", {
+        inviteCode: data.inviteCode,
+        email: data.email,
+        password: data.password,
+        fullName: data.fullName,
+        companyName: data.companyName,
+      });
+      if (!redeemRes.ok) {
+        const err = await redeemRes.json();
+        throw new Error(err.message || "Redemption failed");
+      }
+      const redeemJson = await redeemRes.json();
+      setRedeemed(true);
+      toast({ title: "Welcome, Founder", description: "Your account is ready. Redirecting to dashboard..." });
+      window.location.href = redeemJson.redirect || "/founder";
     } catch (err) {
-      toast({ title: "Submission failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
+      toast({
+        title: "Redemption failed",
+        description: err instanceof Error ? err.message : "An error occurred",
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false);
+      setRedeeming(false);
     }
   }
 
@@ -70,7 +96,11 @@ export default function FounderAccessPage() {
       await login(data.email, data.password);
       toast({ title: "Welcome back", description: "Redirecting to Founder dashboard..." });
     } catch (err) {
-      toast({ title: "Login failed", description: err instanceof Error ? err.message : "Invalid credentials", variant: "destructive" });
+      toast({
+        title: "Login failed",
+        description: err instanceof Error ? err.message : "Invalid credentials",
+        variant: "destructive",
+      });
     } finally {
       setLoginLoading(false);
     }
@@ -127,15 +157,16 @@ export default function FounderAccessPage() {
                 </ul>
               </div>
               <div className="space-y-3">
-                <Button className="w-full" onClick={() => setMode("login")} data-testid="button-founder-login">
-                  Founder Login
+                <Button className="w-full" onClick={() => setMode("redeem")} data-testid="button-founder-redeem">
+                  <Mail className="w-4 h-4 mr-2" />
+                  Redeem Invitation
                 </Button>
-                <Button variant="outline" className="w-full" onClick={() => setMode("request")} data-testid="button-founder-request">
-                  Request Founder Access
+                <Button variant="outline" className="w-full" onClick={() => setMode("login")} data-testid="button-founder-login">
+                  Founder Login
                 </Button>
               </div>
               <p className="text-xs text-center text-muted-foreground">
-                Already have an invite code? Use the login form above.
+                Don&apos;t have an invitation? Founder access is invitation-only.
               </p>
             </CardContent>
           </Card>
@@ -166,44 +197,42 @@ export default function FounderAccessPage() {
           </Card>
         )}
 
-        {mode === "request" && !submitted && (
+        {mode === "redeem" && !redeemed && (
           <Card>
             <CardContent className="p-6 space-y-4">
-              <h2 className="text-lg font-semibold">Request Founder Access</h2>
+              <h2 className="text-lg font-semibold">Redeem Founder Invitation</h2>
               <p className="text-sm text-muted-foreground">
-                Submit your details. Master Admin approval is required.
+                Enter your invitation details to create your Founder account.
               </p>
-              <form onSubmit={requestForm.handleSubmit(onRequestSubmit)} className="space-y-4">
+              <form onSubmit={redeemForm.handleSubmit(onVerifyAndRedeem)} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="req-name">Full Name</Label>
-                  <Input id="req-name" placeholder="John Smith" {...requestForm.register("fullName")} />
-                  {requestForm.formState.errors.fullName && <p className="text-xs text-destructive">{requestForm.formState.errors.fullName.message}</p>}
+                  <Label htmlFor="redeem-code">Invitation Code</Label>
+                  <Input id="redeem-code" placeholder="CSF-XXXXXXXX" data-testid="input-redeem-code" {...redeemForm.register("inviteCode")} />
+                  {redeemForm.formState.errors.inviteCode && <p className="text-xs text-destructive">{redeemForm.formState.errors.inviteCode.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="req-email">Email</Label>
-                  <Input id="req-email" type="email" placeholder="you@company.com" {...requestForm.register("email")} />
-                  {requestForm.formState.errors.email && <p className="text-xs text-destructive">{requestForm.formState.errors.email.message}</p>}
+                  <Label htmlFor="redeem-name">Full Name</Label>
+                  <Input id="redeem-name" placeholder="John Smith" data-testid="input-redeem-name" {...redeemForm.register("fullName")} />
+                  {redeemForm.formState.errors.fullName && <p className="text-xs text-destructive">{redeemForm.formState.errors.fullName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="req-company">Company Name</Label>
-                  <Input id="req-company" placeholder="Acme Restoration" {...requestForm.register("companyName")} />
-                  {requestForm.formState.errors.companyName && <p className="text-xs text-destructive">{requestForm.formState.errors.companyName.message}</p>}
+                  <Label htmlFor="redeem-email">Email</Label>
+                  <Input id="redeem-email" type="email" placeholder="you@company.com" data-testid="input-redeem-email" {...redeemForm.register("email")} />
+                  {redeemForm.formState.errors.email && <p className="text-xs text-destructive">{redeemForm.formState.errors.email.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="req-phone">Phone (optional)</Label>
-                  <Input id="req-phone" placeholder="(555) 123-4567" {...requestForm.register("phone")} />
+                  <Label htmlFor="redeem-company">Organization Name</Label>
+                  <Input id="redeem-company" placeholder="Acme Restoration" data-testid="input-redeem-company" {...redeemForm.register("companyName")} />
+                  {redeemForm.formState.errors.companyName && <p className="text-xs text-destructive">{redeemForm.formState.errors.companyName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="req-code">Invite Code (optional)</Label>
-                  <Input id="req-code" placeholder="If you have one" {...requestForm.register("inviteCode")} />
+                  <Label htmlFor="redeem-password">Password</Label>
+                  <Input id="redeem-password" type="password" placeholder="Min 8 characters" data-testid="input-redeem-password" {...redeemForm.register("password")} />
+                  {redeemForm.formState.errors.password && <p className="text-xs text-destructive">{redeemForm.formState.errors.password.message}</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="req-reason">Why do you want Founder access?</Label>
-                  <Textarea id="req-reason" placeholder="Tell us about your interest..." {...requestForm.register("reasonForJoining")} />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading} data-testid="button-founder-request-submit">
-                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Submit Request
+                <Button type="submit" className="w-full" disabled={redeeming} data-testid="button-redeem-submit">
+                  {redeeming && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create Account &amp; Continue
                 </Button>
               </form>
               <Button variant="ghost" className="w-full text-sm" onClick={() => setMode("info")}>
@@ -213,18 +242,18 @@ export default function FounderAccessPage() {
           </Card>
         )}
 
-        {mode === "request" && submitted && (
+        {mode === "redeem" && redeemed && (
           <Card>
             <CardContent className="p-6 text-center space-y-6">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
                 <Check className="w-8 h-8 text-primary" />
               </div>
-              <h2 className="text-xl font-bold">Request Received</h2>
+              <h2 className="text-xl font-bold">Welcome, Founder</h2>
               <p className="text-muted-foreground">
-                Your Founder access request is pending Master Admin approval. You will be notified via email.
+                Your Founder account is ready. You will be redirected to your dashboard.
               </p>
-              <Button variant="outline" onClick={() => setMode("info")}>
-                Back to Founder Access
+              <Button variant="outline" onClick={() => window.location.href = "/founder"}>
+                Go to Dashboard
               </Button>
             </CardContent>
           </Card>
