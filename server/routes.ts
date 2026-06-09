@@ -2009,12 +2009,21 @@ export async function registerRoutes(
 
       const screening = Array.from(new Map([...matched, ...commonCodes].map((c) => [c.id, c])).values());
 
+      // Also include code references extracted from uploaded documents via AI
+      const claimIntelligence = await storage.getSupplementIntelligence(claim.id, claim.organizationId || orgId);
+      const extractedCodeRefs = [...new Set(
+        claimIntelligence
+          .filter((si) => si.ircCodeReference?.trim())
+          .map((si) => si.ircCodeReference!.trim()),
+      )];
+
       res.json({
-        available: screening.length > 0,
+        available: screening.length > 0 || extractedCodeRefs.length > 0,
         state,
         city,
         claimType: claim.claimType || claim.lossType || "unknown",
         codes: screening,
+        extractedCodeRefs,
         permitNote: `Permit requirements vary by jurisdiction. Contact ${city || "your local"} building department for exact permit rules.`,
       });
     } catch (err) {

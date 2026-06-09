@@ -66,7 +66,7 @@ export async function createCheckoutSession(
     return { error: `${planType} price ID not configured` };
   }
 
-  const appUrl = process.env.APP_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+  const appUrl = process.env.APP_URL || "https://claimsignal1.com";
 
   const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
     metadata: {

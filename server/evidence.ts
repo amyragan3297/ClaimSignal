@@ -960,6 +960,30 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       } catch (clearErr: unknown) {
         console.error("[ai-analysis-clear] non-fatal:", (clearErr as Error)?.message);
       }
+
+      // Persist every IRC / building code reference extracted by the LLM so they
+      // appear in the Code & Permit Screening card without manual entry.
+      if (llmExtraction?.codeItems?.length) {
+        for (const codeRef of llmExtraction.codeItems) {
+          const ref = codeRef?.trim();
+          if (!ref) continue;
+          try {
+            await storage.createSupplementIntelligence({
+              claimId,
+              organizationId: matchedClaim.organizationId,
+              ircCodeReference: ref,
+              triggerDetected: true,
+              confidenceScore: llmExtraction.confidence ?? 0.8,
+            });
+            console.log(`[code-extract] recorded code reference "${ref}" for claim ${claimId}`);
+          } catch (codeErr: unknown) {
+            const msg = (codeErr as Error)?.message ?? "";
+            if (!msg.includes("unique") && !msg.includes("23505")) {
+              console.error("[code-extract] non-fatal:", msg);
+            }
+          }
+        }
+      }
     }
 
     // When the upload isn't pre-linked to a claim, run the normalized

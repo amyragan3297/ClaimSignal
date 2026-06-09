@@ -21,6 +21,7 @@ export interface ClaimWeather {
   weatherCode: number | null;
   isHail: boolean;
   summary: string;
+  source: "noaa" | "open-meteo";
 }
 
 // WMO weather codes that indicate hail events
@@ -42,8 +43,12 @@ const cToF = (c: number) => Math.round((c * 9) / 5 + 32);
 const kmhToMph = (k: number) => Math.round(k * 0.621371);
 const mmToIn = (mm: number) => Math.round(mm * 0.0393701 * 100) / 100;
 const cmToIn = (cm: number) => Math.round(cm * 0.393701 * 100) / 100;
+const fToC = (f: number): number => Math.round((f - 32) * 5 / 9 * 10) / 10;
+const inToMm = (i: number): number => Math.round(i * 25.4 * 10) / 10;
+const inToCm = (i: number): number => Math.round(i * 2.54 * 10) / 10;
+const mphToKmh = (m: number): number => Math.round(m * 1.60934);
 
-function buildSummary(w: Omit<ClaimWeather, "summary">): string {
+function buildSummary(w: Omit<ClaimWeather, "summary" | "source">): string {
   const parts: string[] = [];
   if (w.weatherCode != null && WEATHER_CODE_LABELS[w.weatherCode]) parts.push(WEATHER_CODE_LABELS[w.weatherCode]);
   if (w.isHail) parts.push("hail recorded");
@@ -74,6 +79,34 @@ export interface GeoResult { lat: number; lon: number; label: string; }
 // In-memory geocode caches — avoids repeated external API calls within a server session
 const _zipCache = new Map<string, GeoResult | null>();
 const _cityCache = new Map<string, GeoResult | null>();
+
+/**
+ * Extract ZIP, city, and state from a raw US property address string.
+ * Handles formats like "123 Oak Ave, Dallas, TX 75201" or "456 Main St, Nashville TN 37201".
+ */
+function parseAddressForGeo(address: string): { zip?: string; city?: string; state?: string } {
+  const zipMatch = address.match(/\b(\d{5})(?:-\d{4})?\b/);
+  const zip = zipMatch?.[1];
+
+  // Match ", TX 75201" or ", TX" at end
+  const stateZipMatch = address.match(/,\s*([A-Z]{2})\s+\d{5}/);
+  const stateEndMatch = address.match(/,\s*([A-Z]{2})\s*$/);
+  const state = (stateZipMatch ?? stateEndMatch)?.[1];
+
+  let city: string | undefined;
+  if (state) {
+    // Find where the state abbreviation begins and take the segment before it
+    const statePos = address.search(/,\s*[A-Z]{2}(?:\s+\d{5})?(?:\s*$|,)/);
+    if (statePos > 0) {
+      const before = address.substring(0, statePos).trim();
+      const parts = before.split(/,\s*/);
+      const raw = parts[parts.length - 1]?.trim();
+      if (raw && raw.length > 1 && !/^\d+/.test(raw)) city = raw;
+    }
+  }
+
+  return { zip, state, city };
+}
 
 // US ZIP code → coordinates via the keyless zippopotam.us API.
 export async function geocodeZip(zip: string): Promise<GeoResult | null> {
@@ -123,7 +156,6 @@ export async function geocodeCity(city: string, state?: string | null): Promise<
       if (match) {
         chosen = match;
       } else {
-        // State didn't match any result — prefer a US result rather than a global fallback
         const usOnly = results.find((r) => r.country_code === "US");
         if (usOnly) chosen = usOnly;
       }
@@ -142,10 +174,114 @@ export async function geocodeCity(city: string, state?: string | null): Promise<
   }
 }
 
+// ── NOAA Climate Data Online (CDO) API ───────────────────────────────────────
+// Requires a free API token from https://www.ncei.noaa.gov/cdo-web/token
+// Set NOAA_CDO_TOKEN env var to enable. Falls back to Open-Meteo when absent.
+const NOAA_CDO_BASE = "https://www.ncei.noaa.gov/cdo-web/api/v2";
+
+async function fetchNoaaWeather(lat: number, lon: number, dateStr: string): Promise<{ weather: ClaimWeather } | null> {
+  const token = process.env.NOAA_CDO_TOKEN;
+  if (!token) return null;
+
+  interface NoaaStation { id: string; name: string; }
+  interface NoaaStationResp { results?: NoaaStation[]; }
+
+  // Find nearest GHCND stations within ~1.5 degrees
+  const pad = 1.5;
+  const extent = `${(lat - pad).toFixed(4)},${(lon - pad).toFixed(4)},${(lat + pad).toFixed(4)},${(lon + pad).toFixed(4)}`;
+
+  let stations: NoaaStation[] = [];
+  try {
+    const stRes = await fetch(
+      `${NOAA_CDO_BASE}/stations?datasetid=GHCND&extent=${extent}&limit=10`,
+      { headers: { token } },
+    );
+    if (!stRes.ok) return null;
+    const stData = await stRes.json() as NoaaStationResp;
+    stations = stData.results ?? [];
+  } catch {
+    return null;
+  }
+
+  if (stations.length === 0) return null;
+
+  // Data types: TMAX/TMIN=tenths °F, PRCP=hundredths in, SNOW=tenths in,
+  // AWND=tenths mph, WSF2=fastest 2-min wind tenths mph, WT04/05=hail flags
+  const datatypes = "TMAX,TMIN,PRCP,SNOW,AWND,WSF2,WT04,WT05,WT11";
+
+  interface NoaaDataRow { datatype: string; value: number; }
+  interface NoaaDataResp { results?: NoaaDataRow[]; }
+
+  for (const station of stations.slice(0, 5)) {
+    try {
+      const dataRes = await fetch(
+        `${NOAA_CDO_BASE}/data?datasetid=GHCND&stationid=${encodeURIComponent(station.id)}&startdate=${dateStr}&enddate=${dateStr}&datatypeid=${datatypes}&units=standard&limit=25`,
+        { headers: { token } },
+      );
+      if (!dataRes.ok) continue;
+      const dataJson = await dataRes.json() as NoaaDataResp;
+      const rows = dataJson.results ?? [];
+      if (rows.length === 0) continue;
+
+      const get = (type: string): number | null => {
+        const r = rows.find((row) => row.datatype === type);
+        return r != null ? r.value : null;
+      };
+
+      const tMaxRaw = get("TMAX"); // tenths °F
+      const tMinRaw = get("TMIN");
+      const precipRaw = get("PRCP"); // hundredths inches
+      const snowRaw = get("SNOW");  // tenths inches
+      const awndRaw = get("AWND"); // tenths mph
+      const wsf2Raw = get("WSF2"); // tenths mph (fastest 2-min wind)
+      const wt04 = get("WT04");   // ice pellets / small hail
+      const wt05 = get("WT05");   // hail
+      const wt11 = get("WT11");   // high/damaging winds
+
+      const tMaxF = tMaxRaw != null ? tMaxRaw / 10 : null;
+      const tMinF = tMinRaw != null ? tMinRaw / 10 : null;
+      const precipIn = precipRaw != null ? precipRaw / 100 : null;
+      const snowIn = snowRaw != null ? snowRaw / 10 : null;
+      const windGustMph = wsf2Raw != null ? wsf2Raw / 10 : null;
+      const windSpeedMph = awndRaw != null ? awndRaw / 10 : (wt11 != null ? null : null);
+      const isHail = (wt04 != null && wt04 >= 1) || (wt05 != null && wt05 >= 1);
+
+      const base: Omit<ClaimWeather, "summary" | "source"> = {
+        location: station.name,
+        date: dateStr,
+        latitude: lat,
+        longitude: lon,
+        tempMaxF: tMaxF != null ? Math.round(tMaxF) : null,
+        tempMinF: tMinF != null ? Math.round(tMinF) : null,
+        tempMaxC: tMaxF != null ? fToC(tMaxF) : null,
+        tempMinC: tMinF != null ? fToC(tMinF) : null,
+        precipitationIn: precipIn != null ? Math.round(precipIn * 100) / 100 : null,
+        precipitationMm: precipIn != null ? inToMm(precipIn) : null,
+        rainMm: precipIn != null ? inToMm(precipIn) : null,
+        snowfallIn: snowIn != null ? Math.round(snowIn * 10) / 10 : null,
+        snowfallCm: snowIn != null ? inToCm(snowIn) : null,
+        windGustMaxMph: windGustMph != null ? Math.round(windGustMph) : null,
+        windGustMaxKmh: windGustMph != null ? mphToKmh(windGustMph) : null,
+        windSpeedMaxMph: windSpeedMph != null ? Math.round(windSpeedMph) : null,
+        windSpeedMaxKmh: windSpeedMph != null ? mphToKmh(windSpeedMph) : null,
+        weatherCode: null,
+        isHail,
+      };
+
+      console.log(`[noaa] fetched weather for ${dateStr} from station "${station.name}" — hail=${isHail}`);
+      return { weather: { ...base, summary: buildSummary(base), source: "noaa" } };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 /**
- * Fetch historical weather for a claim's date of loss and location using the
- * keyless Open-Meteo archive + geocoding APIs. Returns null when the claim has
- * insufficient location/date data or the location can't be resolved.
+ * Fetch historical weather for a claim's date of loss and location.
+ * Priority: NOAA CDO (when NOAA_CDO_TOKEN set) → Open-Meteo archive API.
+ * Location resolution: explicit zipCode/city/state fields → parsed from propertyAddress.
  */
 export async function getClaimWeather(claim: Claim): Promise<{ weather: ClaimWeather; reason?: string } | null> {
   const lossDate = claim.dateOfLoss || claim.lossDate;
@@ -154,31 +290,41 @@ export async function getClaimWeather(claim: Claim): Promise<{ weather: ClaimWea
   if (isNaN(date.getTime())) return null;
   const dateStr = date.toISOString().slice(0, 10);
 
-  // Resolve coordinates: prefer ZIP (most precise + keyless), fall back to city + state.
-  let geo: GeoResult | null = null;
-  if (claim.zipCode && claim.zipCode.trim()) {
-    geo = await geocodeZip(claim.zipCode);
-  }
-  if (!geo && claim.city) {
-    geo = await geocodeCity(claim.city, claim.state);
-  }
-  if (!geo) {
-    return null;
+  // Resolve location fields — explicit fields first, then parse from propertyAddress
+  let zipSource = claim.zipCode?.trim() || null;
+  let citySource = claim.city?.trim() || null;
+  let stateSource = claim.state?.trim() || null;
+
+  if (!zipSource && !citySource && claim.propertyAddress?.trim()) {
+    const parsed = parseAddressForGeo(claim.propertyAddress);
+    zipSource = parsed.zip || null;
+    citySource = parsed.city || null;
+    stateSource = parsed.state || null;
+    if (zipSource || citySource) {
+      console.log(`[weather] parsed location from propertyAddress: zip=${zipSource} city=${citySource} state=${stateSource}`);
+    }
   }
 
+  // Geocode: prefer ZIP (most precise), fall back to city + state
+  let geo: GeoResult | null = null;
+  if (zipSource) geo = await geocodeZip(zipSource);
+  if (!geo && citySource) geo = await geocodeCity(citySource, stateSource);
+  if (!geo) return null;
+
+  // Try NOAA CDO first (authoritative US station records)
+  const noaaResult = await fetchNoaaWeather(geo.lat, geo.lon, dateStr);
+  if (noaaResult) return noaaResult;
+
+  // Fall back to Open-Meteo keyless archive API
   const dailyVars = "temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,snowfall_sum,wind_gusts_10m_max,wind_speed_10m_max,weather_code";
   const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${geo.lat}&longitude=${geo.lon}&start_date=${dateStr}&end_date=${dateStr}&daily=${dailyVars}&timezone=auto`;
   interface MeteoDaily { time?: unknown[]; temperature_2m_max?: (number|null)[]; temperature_2m_min?: (number|null)[]; precipitation_sum?: (number|null)[]; rain_sum?: (number|null)[]; snowfall_sum?: (number|null)[]; wind_gusts_10m_max?: (number|null)[]; wind_speed_10m_max?: (number|null)[]; weather_code?: (number|null)[]; }
   interface MeteoData { daily?: MeteoDaily; }
   const res = await fetch(url);
-  if (!res.ok) {
-    return null;
-  }
+  if (!res.ok) return null;
   const data = await res.json() as MeteoData;
   const d = data?.daily;
-  if (!d || !Array.isArray(d.time) || d.time.length === 0) {
-    return null;
-  }
+  if (!d || !Array.isArray(d.time) || d.time.length === 0) return null;
 
   const pick = (arr: (number | null)[] | undefined): number | null => (Array.isArray(arr) && arr[0] != null ? Number(arr[0]) : null);
 
@@ -190,7 +336,7 @@ export async function getClaimWeather(claim: Claim): Promise<{ weather: ClaimWea
   const windSpeedMaxKmh = pick(d.wind_speed_10m_max);
   const weatherCode = pick(d.weather_code);
 
-  const base: Omit<ClaimWeather, "summary"> = {
+  const base: Omit<ClaimWeather, "summary" | "source"> = {
     location: geo.label,
     date: dateStr,
     latitude: geo.lat,
@@ -211,5 +357,5 @@ export async function getClaimWeather(claim: Claim): Promise<{ weather: ClaimWea
     weatherCode,
     isHail: weatherCode != null && HAIL_CODES.has(weatherCode),
   };
-  return { weather: { ...base, summary: buildSummary(base) } };
+  return { weather: { ...base, summary: buildSummary(base), source: "open-meteo" } };
 }
