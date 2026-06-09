@@ -33,6 +33,9 @@ import {
   type ScoringWeight, type InsertScoringWeight,
   type IntelligenceEvent, type InsertIntelligenceEvent,
   type RevenueOpportunity, type InsertRevenueOpportunity,
+  type EntityClassification, type InsertEntityClassification,
+  type PrivacyGuardLog, type InsertPrivacyGuardLog,
+  type EntityCleanupFlag, type InsertEntityCleanupFlag,
   organizations, users, userSessions, billingAccounts,
   claims, claimVersions, adjusters, claimAdjusters,
   foundingPartnerRequests, enterpriseContactLeads,
@@ -44,6 +47,7 @@ import {
   supplementIntelligence, adjusterIrcBehavior, communicationSignals, playbookInsights,
   scoringWeights, intelligenceEvents, stormEvents,
   revenueOpportunities,
+  entityClassifications, privacyGuardLogs, entityCleanupFlags,
   type Escalation, type InsertEscalation, escalations,
   identityProfiles, identityAliases, identityMatches, identityReviewQueue,
   type LoginAttempt, type InsertLoginAttempt, type InvestorAccess, type InsertInvestorAccess,
@@ -360,6 +364,19 @@ export interface IStorage {
   getUserByEmailWithPassword(email: string): Promise<User | undefined>;
   updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
   compUser(userId: string, comped: boolean, compedBy?: string): Promise<User | undefined>;
+
+  // Entity Classification & Privacy Guard
+  createEntityClassification(data: InsertEntityClassification): Promise<EntityClassification>;
+  getEntityClassifications(orgId?: string, claimId?: string): Promise<EntityClassification[]>;
+  getEntityClassificationByName(normalizedName: string): Promise<EntityClassification | undefined>;
+  updateEntityClassification(id: string, data: Partial<EntityClassification>): Promise<EntityClassification | undefined>;
+
+  createPrivacyGuardLog(data: InsertPrivacyGuardLog): Promise<PrivacyGuardLog>;
+  getPrivacyGuardLogs(limit?: number): Promise<PrivacyGuardLog[]>;
+
+  createEntityCleanupFlag(data: InsertEntityCleanupFlag): Promise<EntityCleanupFlag>;
+  getEntityCleanupFlags(status?: string, severity?: string): Promise<EntityCleanupFlag[]>;
+  updateEntityCleanupFlag(id: string, data: Partial<EntityCleanupFlag>): Promise<EntityCleanupFlag | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1643,6 +1660,66 @@ export class DatabaseStorage implements IStorage {
 
   async getAllRevenueOpportunitiesAcrossTenants(): Promise<RevenueOpportunity[]> {
     return db.select().from(revenueOpportunities).orderBy(desc(revenueOpportunities.createdAt));
+  }
+
+  // Entity Classification & Privacy Guard
+  async createEntityClassification(data: InsertEntityClassification): Promise<EntityClassification> {
+    const [created] = await db.insert(entityClassifications).values(data).returning();
+    return created;
+  }
+
+  async getEntityClassifications(orgId?: string, claimId?: string): Promise<EntityClassification[]> {
+    if (claimId) {
+      return db.select().from(entityClassifications).where(eq(entityClassifications.claimId, claimId)).orderBy(desc(entityClassifications.createdAt));
+    }
+    if (orgId) {
+      return db.select().from(entityClassifications).where(eq(entityClassifications.classifiedBy, orgId)).orderBy(desc(entityClassifications.createdAt));
+    }
+    return db.select().from(entityClassifications).orderBy(desc(entityClassifications.createdAt));
+  }
+
+  async getEntityClassificationByName(normalizedName: string): Promise<EntityClassification | undefined> {
+    const [record] = await db.select().from(entityClassifications).where(eq(entityClassifications.normalizedName, normalizedName));
+    return record;
+  }
+
+  async updateEntityClassification(id: string, data: Partial<EntityClassification>): Promise<EntityClassification | undefined> {
+    const [updated] = await db.update(entityClassifications).set({ ...data, updatedAt: new Date() }).where(eq(entityClassifications.id, id)).returning();
+    return updated;
+  }
+
+  async createPrivacyGuardLog(data: InsertPrivacyGuardLog): Promise<PrivacyGuardLog> {
+    const [created] = await db.insert(privacyGuardLogs).values(data).returning();
+    return created;
+  }
+
+  async getPrivacyGuardLogs(limit: number = 500): Promise<PrivacyGuardLog[]> {
+    return db.select().from(privacyGuardLogs).orderBy(desc(privacyGuardLogs.createdAt)).limit(limit);
+  }
+
+  async createEntityCleanupFlag(data: InsertEntityCleanupFlag): Promise<EntityCleanupFlag> {
+    const [created] = await db.insert(entityCleanupFlags).values(data).returning();
+    return created;
+  }
+
+  async getEntityCleanupFlags(status?: string, severity?: string): Promise<EntityCleanupFlag[]> {
+    if (status && severity) {
+      return db.select().from(entityCleanupFlags).where(
+        and(eq(entityCleanupFlags.status, status), eq(entityCleanupFlags.severity, severity))
+      ).orderBy(desc(entityCleanupFlags.createdAt));
+    }
+    if (status) {
+      return db.select().from(entityCleanupFlags).where(eq(entityCleanupFlags.status, status)).orderBy(desc(entityCleanupFlags.createdAt));
+    }
+    if (severity) {
+      return db.select().from(entityCleanupFlags).where(eq(entityCleanupFlags.severity, severity)).orderBy(desc(entityCleanupFlags.createdAt));
+    }
+    return db.select().from(entityCleanupFlags).orderBy(desc(entityCleanupFlags.createdAt));
+  }
+
+  async updateEntityCleanupFlag(id: string, data: Partial<EntityCleanupFlag>): Promise<EntityCleanupFlag | undefined> {
+    const [updated] = await db.update(entityCleanupFlags).set({ ...data, reviewedAt: data.reviewedAt ?? new Date() }).where(eq(entityCleanupFlags.id, id)).returning();
+    return updated;
   }
 }
 

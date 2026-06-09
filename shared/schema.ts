@@ -1083,3 +1083,70 @@ export const investorAccess = pgTable("investor_access", {
 export const insertInvestorAccessSchema = createInsertSchema(investorAccess).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
 export type InvestorAccess = typeof investorAccess.$inferSelect;
 export type InsertInvestorAccess = z.infer<typeof insertInvestorAccessSchema>;
+
+// ── Entity Classification & Privacy Guard ──
+export const entityClassificationEnum = pgEnum("entity_classification", [
+  "homeowner", "adjuster", "carrier_representative", "contractor", "company",
+  "employee", "manager", "executive", "vendor", "engineer", "attorney",
+  "public_adjuster", "investor", "other_person", "organization", "employer",
+  "business_contact", "internal_reference",
+]);
+
+export const entityClassifications = pgTable("entity_classifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull(),
+  entityType: entityClassificationEnum("entity_type").notNull().default("other_person"),
+  classificationReason: text("classification_reason"),
+  sourceDocumentId: varchar("source_document_id"),
+  claimId: varchar("claim_id"),
+  isProtected: boolean("is_protected").notNull().default(false),
+  protectedReason: text("protected_reason"),
+  classifiedBy: varchar("classified_by"),
+  classifiedAt: timestamp("classified_at").defaultNow(),
+  confidenceScore: real("confidence_score"),
+  status: text("status").notNull().default("pending_review"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEntityClassificationSchema = createInsertSchema(entityClassifications).omit({ id: true, createdAt: true, updatedAt: true, classifiedAt: true });
+export type EntityClassification = typeof entityClassifications.$inferSelect;
+export type InsertEntityClassification = z.infer<typeof insertEntityClassificationSchema>;
+
+export const privacyGuardLogs = pgTable("privacy_guard_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  entityName: text("entity_name").notNull(),
+  attemptedAction: text("attempted_action").notNull(),
+  attemptedRecordType: text("attempted_record_type").notNull(),
+  blockedReason: text("blocked_reason").notNull(),
+  sourceDocumentId: varchar("source_document_id"),
+  claimId: varchar("claim_id"),
+  userId: varchar("user_id"),
+  userRole: text("user_role"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPrivacyGuardLogSchema = createInsertSchema(privacyGuardLogs).omit({ id: true, createdAt: true });
+export type PrivacyGuardLog = typeof privacyGuardLogs.$inferSelect;
+export type InsertPrivacyGuardLog = z.infer<typeof insertPrivacyGuardLogSchema>;
+
+export const entityCleanupFlags = pgTable("entity_cleanup_flags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recordType: text("record_type").notNull(),
+  recordId: varchar("record_id").notNull(),
+  recordField: text("record_field"),
+  detectedValue: text("detected_value").notNull(),
+  flagReason: text("flag_reason").notNull(),
+  severity: text("severity").notNull().default("medium"),
+  status: text("status").notNull().default("pending_review"),
+  reviewedBy: varchar("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewAction: text("review_action"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertEntityCleanupFlagSchema = createInsertSchema(entityCleanupFlags).omit({ id: true, createdAt: true, reviewedAt: true });
+export type EntityCleanupFlag = typeof entityCleanupFlags.$inferSelect;
+export type InsertEntityCleanupFlag = z.infer<typeof insertEntityCleanupFlagSchema>;

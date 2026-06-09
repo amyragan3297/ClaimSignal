@@ -30,7 +30,7 @@ The following names, companies, and contacts are **NEVER** homeowners, claims, o
 | Kenzie | |
 | Ashley | |
 
-Also protected: Internal company personnel, employers, former employers, business contacts, vendors, investors, employees, managers, executives.
+Also protected: UAH, I²C, and any internal company personnel, employers, former employers, business contacts, vendors, investors, employees, managers, executives, partners, universities, government agencies.
 
 ## 1. Entity Classification (Required Before Any Record Creation)
 
@@ -65,7 +65,49 @@ A claim record may **only** be created when the system identifies **all** of:
 
 **If any requirement is missing, flag for review instead of creating a claim.**
 
-## 3. Internal Company Data Protection
+## 3. Non-Claim Entity Exclusion Rules
+
+The following must **never** automatically create claims, adjusters, carriers, intelligence records, or homeowner profiles:
+
+- Employers
+- Former employers
+- Internal employees
+- Executives
+- Partners
+- Investors
+- Vendors
+- Universities
+- Government agencies
+- HR records
+- Payroll records
+- Employment agreements
+- Business emails
+- Legal correspondence unrelated to an insurance claim
+
+These records must be classified as one of:
+
+- `organization` — Business or institutional entity
+- `employer` — Current or past employer
+- `employee` — Internal staff member
+- `vendor` — Third-party service provider
+- `business_contact` — Business partner or contact
+- `internal_reference` — Internal-only reference
+
+### Exclusion from Intelligence Engines
+
+Entities with the above types must be **excluded** from:
+
+- Claim Intelligence
+- Adjuster Intelligence
+- Carrier Intelligence
+- Revenue Intelligence
+- Executive Intelligence
+- Playbook Intelligence
+- Public Reporting
+
+**Unless manually approved by the Master Admin (`claimsignal1@gmail.com`).**
+
+## 4. Internal Company Data Protection
 
 Internal company names and personnel must **never** be converted into:
 
@@ -76,7 +118,7 @@ Internal company names and personnel must **never** be converted into:
 
 **Unless** explicitly confirmed by the Master Admin (`claimsignal1@gmail.com`).
 
-## 4. Data Masking for Intelligence Reporting
+## 5. Data Masking for Intelligence Reporting
 
 The following categories must be **masked** from all intelligence reporting (Carrier, Adjuster, Revenue, Executive, Playbook) except Master Admin:
 
@@ -88,7 +130,7 @@ The following categories must be **masked** from all intelligence reporting (Car
 
 **Master Admin sees everything unmasked.**
 
-## 5. Historical Cleanup Scanner
+## 6. Historical Cleanup Scanner
 
 When scanning existing records, generate a cleanup report that identifies:
 
@@ -99,7 +141,7 @@ When scanning existing records, generate a cleanup report that identifies:
 
 **Flag records for Master Admin review. Do NOT automatically merge or delete.**
 
-## 6. Master Admin Authority
+## 7. Master Admin Authority
 
 Only `claimsignal1@gmail.com` may:
 
@@ -108,13 +150,13 @@ Only `claimsignal1@gmail.com` may:
 - Merge identities
 - Permanently delete records
 
-## 7. Intelligence Integrity
+## 8. Intelligence Integrity
 
 All intelligence engines (Carrier, Adjuster, Revenue, Executive, Playbook) must **only** use verified claim entities.
 
 **Unverified names must be excluded from analytics until classified.**
 
-## 8. Protected Name Detection
+## 9. Protected Name Detection
 
 Before creating any record, check against the protected list. If a match is found:
 
@@ -123,7 +165,7 @@ Before creating any record, check against the protected list. If a match is foun
 3. **Flag** for Master Admin review
 4. **Continue** processing other entities
 
-## 9. AI Extraction Pipeline Guard
+## 10. AI Extraction Pipeline Guard
 
 When using AI to extract entities from documents:
 
@@ -133,7 +175,7 @@ When using AI to extract entities from documents:
 - Validate all extracted names against the protected list
 - Flag ambiguous names for human review
 
-## 10. Verification Checklist
+## 11. Verification Checklist
 
 Before any claim or adjuster record is persisted:
 

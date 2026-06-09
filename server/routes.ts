@@ -610,8 +610,32 @@ export async function registerRoutes(
   app.post("/api/claims", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
+      const normalized = normalizeClaimInput(req.body);
+
+      // Entity Privacy Guard: validate claim creation gate
+      const { evaluateClaimCreationGate, logPrivacyGuardBlock } = await import("./entity-privacy");
+      const gate = evaluateClaimCreationGate({
+        propertyAddress: normalized.propertyAddress,
+        homeownerName: normalized.homeownerName,
+        lossType: normalized.lossType,
+        dateOfLoss: normalized.dateOfLoss,
+        carrierName: normalized.carrierName,
+        hasEvidence: true,
+      });
+      if (!gate.allowed) {
+        await logPrivacyGuardBlock(
+          normalized.homeownerName || "unknown",
+          "claim_create",
+          "claim",
+          gate.reason || "Claim creation gate failed",
+          req.auth!.userId,
+          req.auth!.role,
+        );
+        return res.status(400).json({ message: gate.reason });
+      }
+
       const claim = await storage.createClaim({
-        ...normalizeClaimInput(req.body),
+        ...normalized,
         organizationId: orgId,
       });
 
@@ -2696,6 +2720,99 @@ export async function registerRoutes(
     try {
       const logs = await storage.getLoginAttempts();
       res.json(logs);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // ── Entity Classification & Privacy Guard Routes ──
+
+  app.post("/api/admin/entity-cleanup/scan", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const { runEntityCleanupScan } = await import("./entity-privacy");
+      const result = await runEntityCleanupScan();
+      await storage.createAuditLog({
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "ENTITY_CLEANUP_SCAN",
+        entityType: "entity_cleanup",
+        entityId: "scan",
+        afterJson: { totalFlags: result.totalFlags },
+      });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.get("/api/admin/entity-cleanup/flags", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const severity = req.query.severity as string | undefined;
+      const flags = await storage.getEntityCleanupFlags(status, severity);
+      res.json(flags);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/admin/entity-cleanup/flags/:id/review", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const { status, reviewAction, reviewNotes } = req.body;
+      const updated = await storage.updateEntityCleanupFlag(req.params.id as string, {
+        status,
+        reviewAction,
+        reviewNotes,
+        reviewedBy: req.auth!.userId,
+      });
+      if (!updated) return res.status(404).json({ message: "Flag not found" });
+      await storage.createAuditLog({
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "ENTITY_CLEANUP_REVIEW",
+        entityType: "entity_cleanup_flag",
+        entityId: req.params.id as string,
+        afterJson: { status, reviewAction, reviewNotes },
+      });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.get("/api/admin/privacy-guard/logs", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 500;
+      const logs = await storage.getPrivacyGuardLogs(limit);
+      res.json(logs);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/admin/entity-classifications", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const { name, entityType, classificationReason, sourceDocumentId, claimId, confidenceScore } = req.body;
+      const { classifyEntity } = await import("./entity-privacy");
+      const result = await classifyEntity(name, entityType, {
+        classificationReason,
+        sourceDocumentId,
+        claimId,
+        classifiedBy: req.auth!.userId,
+        confidenceScore,
+      });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.get("/api/admin/entity-classifications", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const claimId = req.query.claimId as string | undefined;
+      const orgId = req.query.orgId as string | undefined;
+      const records = await storage.getEntityClassifications(orgId, claimId);
+      res.json(records);
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
     }

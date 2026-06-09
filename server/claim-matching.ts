@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { isMaster } from "./masking";
 import { type Claim, type InsertClaim } from "@shared/schema";
+import { evaluateClaimCreationGate, logPrivacyGuardBlock } from "./entity-privacy";
 
 export interface MatchResult {
   claim: Claim;
@@ -20,6 +21,7 @@ export interface ExtractionData {
   carrier?: string | null;
   homeownerName?: string | null;
   insuredName?: string | null;
+  lossType?: string | null;
   propertyAddress?: string | null;
   address?: string | null;
   city?: string | null;
@@ -235,6 +237,30 @@ export async function findOrCreateClaimFromExtraction(
   }
 
   // No match — create a new claim
+  // Privacy Guard: validate claim creation gate before auto-creating
+  const gate = evaluateClaimCreationGate({
+    propertyAddress: extraction.propertyAddress,
+    homeownerName: extraction.homeownerName || extraction.insuredName,
+    lossType: null,
+    dateOfLoss: extraction.dateOfLoss ? String(extraction.dateOfLoss) : null,
+    carrierName: extraction.carrier,
+    hasEvidence: true,
+  });
+  if (!gate.allowed) {
+    const blockedName = extraction.homeownerName || extraction.insuredName || "unknown";
+    await logPrivacyGuardBlock(
+      blockedName,
+      "auto_claim_create",
+      "claim",
+      gate.reason || "Auto claim creation gate failed",
+      opts.userId,
+      opts.role,
+      opts.fileId,
+    );
+    console.log(`[claim-matching] BLOCKED auto claim creation: ${gate.reason}`);
+    throw new Error(gate.reason);
+  }
+
   const newClaim = await storage.createClaim(buildClaimFromExtraction(extraction, organizationId));
   console.log(`[claim-matching] CREATED new claim ${newClaim.id} (claimNum=${newClaim.claimNumber})`);
 
@@ -260,6 +286,7 @@ export function buildClaimFromExtraction(
     policyNumber: extraction.policyNumber || null,
     homeownerName: extraction.homeownerName || null,
     insuredName: extraction.insuredName || null,
+    lossType: extraction.lossType || null,
     carrier: extraction.carrier || null,
     propertyAddress: extraction.propertyAddress || null,
     address: extraction.address || null,

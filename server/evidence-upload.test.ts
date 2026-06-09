@@ -35,7 +35,17 @@ async function run() {
   installStorageStubs();
 
   // Point the OpenAI integration at our local fake so extraction is hermetic.
-  const fakeOpenAI = await startFakeOpenAI({ claimNumber: "ABC-12345", confidence: 0.9 });
+  // Include all required fields for claim creation gate (homeownerName, dateOfLoss, carrier, propertyAddress, lossType).
+  const fakeOpenAI = await startFakeOpenAI({
+    claimNumber: "ABC-12345",
+    confidence: 0.9,
+    homeownerName: "John Smith",
+    insuredName: "John Smith",
+    dateOfLoss: "01/15/2025",
+    carrier: "Acme Insurance",
+    propertyAddress: "123 Main St",
+    lossType: "Wind/Hail",
+  });
   const fakeAddr = fakeOpenAI.address();
   const aiPort = typeof fakeAddr === "object" && fakeAddr !== null ? fakeAddr.port : 0;
   process.env.AI_INTEGRATIONS_OPENAI_API_KEY = "test-key";

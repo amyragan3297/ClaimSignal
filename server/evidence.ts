@@ -952,6 +952,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         carrier: coerceStr(llmExtraction?.carrier) || coerceStr(entities.find(e => e.entityType === "carrier_name")?.rawValue),
         homeownerName: coerceStr(llmExtraction?.homeownerName) || coerceStr(entities.find(e => e.entityType === "insured_name")?.rawValue),
         insuredName: coerceStr(llmExtraction?.insuredName) || coerceStr(entities.find(e => e.entityType === "insured_name")?.rawValue),
+        lossType: coerceStr(llmExtraction?.lossType),
         propertyAddress: coerceStr(llmExtraction?.propertyAddress) || coerceStr(entities.find(e => e.entityType === "property_address")?.rawValue),
         address: coerceStr(llmExtraction?.propertyAddress),
         city: coerceStr(llmExtraction?.city),

@@ -161,6 +161,23 @@ export async function extractAndLinkAdjustersForClaim(
     const normalized = normalizeAdjusterName(rawName);
     if (!normalized) continue;
 
+    // Privacy Guard: never link protected entities as adjusters
+    const { isProtectedEntity, logPrivacyGuardBlock } = await import("./entity-privacy");
+    if (isProtectedEntity(normalized)) {
+      console.log(`[adjuster-linking] BLOCKED protected entity "${normalized}" from being linked as adjuster`);
+      await logPrivacyGuardBlock(
+        normalized,
+        "adjuster_link",
+        "adjuster",
+        `Protected entity "${normalized}" cannot be linked as adjuster`,
+        undefined,
+        undefined,
+        source.sourceDocumentId,
+        claimId,
+      );
+      continue;
+    }
+
     // Never classify homeowners/contractors/roofing staff/users as adjusters
     if (isNonAdjusterRole(mention.roleLabel)) {
       console.log(`[adjuster-linking] skipped non-adjuster role "${mention.roleLabel}" for "${normalized}"`);

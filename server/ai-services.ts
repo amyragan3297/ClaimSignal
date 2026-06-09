@@ -290,6 +290,7 @@ export interface ExtractionResult {
   policyNumber?: string;
   homeownerName?: string;
   insuredName?: string;
+  lossType?: string;
   adjusterName?: string;
   adjusterEmail?: string;
   adjusterPhone?: string;
@@ -346,6 +347,7 @@ const EXTRACTION_SCHEMA = `{
   "policyNumber": "policy number string",
   "homeownerName": "homeowner full name",
   "insuredName": "insured party full name",
+  "lossType": "type of loss e.g. Wind/Hail, Fire, Water, Theft, etc.",
   "adjusterName": "primary adjuster full name (backward compat — also include in adjusterMentions)",
   "adjusterEmail": "primary adjuster email",
   "adjusterPhone": "primary adjuster phone number",
@@ -403,7 +405,7 @@ function parseExtractionResponse(raw: string): ExtractionResult {
   };
 
   const textFields: Array<keyof ExtractionResult> = [
-    "claimNumber", "policyNumber", "homeownerName", "insuredName",
+    "claimNumber", "policyNumber", "homeownerName", "insuredName", "lossType",
     "adjusterName", "adjusterEmail", "adjusterPhone", "iaFirm", "carrier", "vendor",
     "propertyAddress", "city", "state", "zipCode",
     "dateOfLoss", "inspectionDate", "estimateDate", "denialDate", "approvalDate", "paymentDate",
