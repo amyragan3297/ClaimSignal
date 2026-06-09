@@ -30,7 +30,6 @@ import {
   Lock,
   Users,
   AlertTriangle,
-  FileSearch,
   CloudLightning,
   Brain,
   Zap,
@@ -154,7 +153,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <SidebarMenu>
                   {navItem("Dashboard", dashboardPath, LayoutDashboard)}
                   {!isExecutive && navItem("Claims", "/claims", FileText)}
-                  {!isExecutive && navItem("Evidence", "/evidence", FileSearch)}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

@@ -2011,11 +2011,11 @@ export async function registerRoutes(
 
       // Also include code references extracted from uploaded documents via AI
       const claimIntelligence = await storage.getSupplementIntelligence(claim.id, claim.organizationId || orgId);
-      const extractedCodeRefs = [...new Set(
+      const extractedCodeRefs = Array.from(new Set(
         claimIntelligence
           .filter((si) => si.ircCodeReference?.trim())
           .map((si) => si.ircCodeReference!.trim()),
-      )];
+      ));
 
       res.json({
         available: screening.length > 0 || extractedCodeRefs.length > 0,
@@ -3605,6 +3605,26 @@ export async function registerRoutes(
       await storage.createAuditLog({
         organizationId: orgId, actorUserId: req.auth!.userId, actorRole: req.auth!.role,
         actionType: "CLIENT_PERMANENTLY_DELETED", entityType: "client", entityId: req.params.id as string, ipAddress: getClientIp(req),
+      });
+      res.json({ deleted: true });
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
+  });
+
+  // Remove a document from a claim — any authenticated user can remove their own org's files
+  app.delete("/api/evidence/files/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const isSuperAdmin = req.auth!.role === "master_admin";
+      const ok = await storage.archiveEvidenceFile(req.params.id as string, isSuperAdmin ? undefined : orgId);
+      if (!ok) return res.status(404).json({ message: "File not found" });
+      await storage.createAuditLog({
+        organizationId: orgId,
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "EVIDENCE_REMOVED_FROM_CLAIM",
+        entityType: "evidence_file",
+        entityId: req.params.id as string,
+        ipAddress: getClientIp(req),
       });
       res.json({ deleted: true });
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }

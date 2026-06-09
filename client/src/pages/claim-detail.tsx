@@ -232,7 +232,9 @@ export default function ClaimDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files", claimId] });
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/timeline", claimId] });
-      toast({ title: "Document uploaded" });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId, "irc-screening"] });
+      toast({ title: "Document uploaded", description: "AI is extracting data — claim will update automatically." });
       setUploadingFiles(false);
     },
     onError: (err: Error) => {
@@ -285,23 +287,6 @@ export default function ClaimDetailPage() {
     enabled: !!claimId,
   });
 
-  const applyExtractionMutation = useMutation({
-    mutationFn: async (fileId: string) => {
-      const res = await apiRequest("POST", `/api/evidence/files/${fileId}/apply-extraction`, {
-        claimId: claimId || undefined,
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/claims", claimId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/evidence/files", claimId] });
-      toast({ title: "Extraction applied to claim" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Failed to apply extraction", description: err.message, variant: "destructive" });
-    },
-  });
-
   const _renameFileMutation = useMutation({
     mutationFn: async ({ fileId, fileName }: { fileId: string; fileName: string }) => {
       const res = await apiRequest("PATCH", `/api/evidence/files/${fileId}`, { fileName });
@@ -316,16 +301,16 @@ export default function ClaimDetailPage() {
     },
   });
 
-  const _deleteFileMutation = useMutation({
+  const deleteFileMutation = useMutation({
     mutationFn: async (fileId: string) => {
-      await apiRequest("DELETE", `/api/evidence/files/${fileId}/permanent`);
+      await apiRequest("DELETE", `/api/evidence/files/${fileId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/evidence/files", claimId] });
-      toast({ title: "File deleted" });
+      toast({ title: "Document removed" });
     },
     onError: (err: Error) => {
-      toast({ title: "Failed to delete file", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to remove document", description: err.message, variant: "destructive" });
     },
   });
 
@@ -1182,7 +1167,7 @@ export default function ClaimDetailPage() {
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Paperclip className="w-4 h-4 text-primary" />
-            Documents & Evidence
+            Documents
             {evidenceFiles && evidenceFiles.length > 0 && (
               <Badge variant="secondary" className="text-[10px]">{evidenceFiles.length}</Badge>
             )}
@@ -1312,6 +1297,20 @@ export default function ClaimDetailPage() {
                             {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            if (window.confirm(`Remove "${file.fileName}" from this claim?`)) {
+                              deleteFileMutation.mutate(file.id);
+                            }
+                          }}
+                          disabled={deleteFileMutation.isPending}
+                          data-testid={`evidence-delete-${file.id}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </div>
                     {/* Document extraction panel */}
@@ -1327,19 +1326,6 @@ export default function ClaimDetailPage() {
                               </div>
                             );
                           })}
-                        </div>
-                        <div className="flex items-center gap-2 mt-3">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs"
-                            onClick={() => applyExtractionMutation.mutate(file.id)}
-                            disabled={applyExtractionMutation.isPending}
-                            data-testid={`evidence-apply-${file.id}`}
-                          >
-                            <Sparkles className="w-3 h-3 mr-1" />
-                            {applyExtractionMutation.isPending ? "Applying..." : "Apply to Claim"}
-                          </Button>
                         </div>
                       </div>
                     )}

@@ -20,7 +20,6 @@ import FounderLegalPage from "@/pages/founder-legal";
 import AdminPage from "@/pages/admin";
 import AdjustersPage from "@/pages/adjusters";
 import AdjusterReportPage from "@/pages/adjuster-report";
-import EvidencePage from "@/pages/evidence";
 import StormEventsPage from "@/pages/storm-events";
 import SignalEnginePage from "@/pages/signal-engine";
 import AudioPage from "@/pages/audio";
@@ -59,7 +58,6 @@ function AppRoutes() {
         {/* Core pages */}
         <Route path="/claims" component={ClaimsPage} />
         <Route path="/claims/:id" component={ClaimDetailPage} />
-        <Route path="/evidence" component={EvidencePage} />
         <Route path="/storm-events" component={StormEventsPage} />
         <Route path="/intelligence" component={IntelligencePage} />
         <Route path="/carrier-intelligence" component={CarrierIntelligencePage} />
