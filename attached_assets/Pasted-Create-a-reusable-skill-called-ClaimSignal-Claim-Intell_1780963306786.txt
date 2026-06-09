@@ -1,0 +1,100 @@
+Create a reusable skill called:
+
+ClaimSignal Claim Intelligence
+
+Purpose:
+Extract and organize insurance claim information from uploaded documents, emails, screenshots, estimates, denial letters, approval letters, supplements, photos, and notes.
+
+The skill must convert uploaded claim materials into structured claim intelligence.
+
+Rules:
+
+1. Extract claim identity:
+- Claim number
+- Property address
+- Insured/homeowner
+- Carrier
+- Date of loss
+- Loss type
+- Current status
+- Full status history
+
+2. Extract people and roles:
+- Homeowner
+- Adjusters
+- Field adjusters
+- Supervisors
+- Contractors
+- Vendors
+- Engineers
+- Ladder assist representatives
+
+Do not assume the first name found is the insured.
+
+3. Match documents to existing claims before creating new claims.
+
+Compare:
+- Claim number
+- Address
+- Carrier
+- Insured name
+- Adjuster names
+- Email subject
+- Email body
+- Attachments
+- Dates
+- Status language
+
+4. Resolve aliases and spelling variations.
+
+Example:
+Edwinah Bopape, Edwina Bopape, Edwina Opape, Edwina, and Eswinah Bopape are aliases of the same person only when supported by the same claim, carrier, address, document set, or timeline context.
+
+5. Build claim timelines:
+- Filed
+- Inspected
+- Denied
+- Reopened
+- Reinspected
+- Approved
+- Supplemented
+- Paid
+- Closed
+
+6. Preserve full outcome history.
+
+Never overwrite:
+Denied → Approved → Closed
+
+7. Identify outcome patterns:
+- Denial overturned to approval
+- Reinspection leading to approval
+- Multi-adjuster involvement before approval
+- Supplement approved
+- Partial approval converted to full approval
+
+8. Track sources for every extracted fact:
+- File name
+- Page number if available
+- Email subject
+- Screenshot name
+- Upload date
+- Confidence score
+
+9. If uncertain, mark:
+Needs Review
+
+10. Special rule:
+For CLM-721631 / 604 Milton Road, group all related uploaded materials under the same claim when evidence supports the connection.
+
+Known participants:
+- Cody Vines
+- Edwinah Bopape, including Edwina / Edwina Opape / Eswinah Bopape variations
+- Vernon Hood
+- Any other participant found in the documents
+
+Known lifecycle:
+Denied → Approved → Closed
+
+Primary objective:
+Do not just store files. Build relationships between claims, addresses, documents, emails, adjusters, carriers, timelines, and outcomes.
