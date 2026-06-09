@@ -153,7 +153,7 @@ export async function registerRoutes(
       }
 
       const passwordHash = await bcrypt.hash(data.password, 12);
-      const org = await storage.createOrganization({ name: data.orgName });
+      const org = await storage.createOrganization({ name: data.orgName, organizationType: data.organizationType });
 
       const user = await storage.createUser({
         email: data.email,

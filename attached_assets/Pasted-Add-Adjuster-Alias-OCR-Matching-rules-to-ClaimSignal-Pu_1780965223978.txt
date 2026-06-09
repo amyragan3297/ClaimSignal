@@ -1,0 +1,79 @@
+Add Adjuster Alias & OCR Matching rules to ClaimSignal.
+
+Purpose:
+ClaimSignal must understand that adjuster names may appear with spelling errors, OCR mistakes, partial names, initials, typos, email signature variations, or transcription errors. A misspelled name does not automatically mean it is a different person or does not belong to the claim.
+
+Core rule:
+Do not create a new adjuster record only because the spelling is different.
+
+Before creating a new adjuster, compare the name against existing claim participants and adjuster profiles.
+
+Check for:
+
+* Similar spelling
+* Partial name match
+* First name only
+* Last name only
+* Initials
+* OCR substitutions
+* Email address match
+* Email signature match
+* Same carrier
+* Same claim number
+* Same property address
+* Same email thread
+* Same document set
+* Same timeline window
+* Same role or similar role
+
+Examples of possible same-person matches:
+
+* Edwinah Bopape
+* Edwina Bopape
+* Edwina Opape
+* Eswinah Bopape
+* Edwina
+* E. Bopape
+
+These should be treated as possible aliases, not separate adjusters, when the claim context supports the match.
+
+Matching logic:
+
+1. If the same claim number and same carrier are present, increase match confidence.
+2. If the same property address and same carrier are present, increase match confidence.
+3. If the same email thread or email address is present, strongly increase match confidence.
+4. If the name appears in the same uploaded document set, increase match confidence.
+5. If the name appears near words such as adjuster, field adjuster, claim representative, examiner, desk adjuster, supervisor, team lead, or Allstate/State Farm/USAA/ALFA, increase match confidence.
+6. If spelling is similar but claim context is different, do not auto-merge.
+7. If confidence is high, attach the spelling variation as an alias to the existing adjuster profile.
+8. If confidence is medium, create a Possible Alias / Needs Review flag.
+9. If confidence is low, create a separate person record but preserve the source text.
+10. Never delete the original extracted name. Store it as extracted_text with source evidence.
+
+Required fields:
+
+* canonical_name
+* extracted_name
+* aliases
+* carrier
+* claim_id
+* role
+* source_document
+* source_location
+* confidence_score
+* needs_review
+* alias_reason
+
+Confidence rules:
+
+* 90% or higher: auto-link as alias if claim context also matches
+* 75% to 89%: flag as Possible Alias / Needs Review
+* Below 75%: keep separate unless later evidence connects the records
+
+Important:
+Name similarity alone is not enough to merge globally.
+
+The system must use claim context, carrier context, document context, and timeline context before merging.
+
+Goal:
+ClaimSignal should be smart enough to recognize misspelled or poorly extracted adjuster names without confusing unrelated adjusters across different claims.

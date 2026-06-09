@@ -34,7 +34,7 @@ export default function LoginPage() {
 
   const registerForm = useForm<z.infer<typeof signupSchema>>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "", fullName: "", orgName: "", planType: defaultPlan as "individual" | "team" | "founder" | "enterprise" },
+    defaultValues: { email: "", password: "", fullName: "", orgName: "", planType: defaultPlan as "individual" | "team" | "founder" | "enterprise", organizationType: "contractor" },
   });
 
   const [loginLoading, setLoginLoading] = useState(false);
