@@ -115,7 +115,46 @@ Compute aggregate metrics only when there are enough claims to be meaningful.
 - `avg_response_time_hours`
 - `avg_days_to_initial_determination`
 
-### 5. Identify Common Patterns
+### 5. Track Outcome Influence
+
+For every adjuster on every claim, record the claim status when the adjuster was first linked and the claim status when the adjuster was last linked. This reveals what events commonly precede or follow an adjuster's involvement without assigning blame or credit.
+
+**Capture at entry:**
+- Claim status when adjuster was first detected (filed, inspected, denied, reopened, etc.)
+- Source document that introduced the adjuster
+- Date of first detection
+
+**Capture at exit:**
+- Claim status when adjuster was last active (denied, approved, supplemented, closed, etc.)
+- Source document that shows the adjuster's last action
+- Date of last detection
+
+**Track outcome influence:**
+- **Involved before denial** — adjuster linked before the claim was denied
+- **Involved during denial** — adjuster linked while the claim was in denied status
+- **Involved during reinspection** — adjuster linked during reinspection phase
+- **Involved during approval** — adjuster linked when the claim was approved
+- **Involved during supplement approval** — adjuster linked when a supplement was approved
+
+**Why this matters:** If an adjuster is frequently present during the transition from "denied" to "approved," the pattern is "frequently present at overturn" — not "frequently causes overturn." The skill reports correlation, not causation.
+
+**Store in `claim_adjusters`:**
+- `first_seen_date`: when adjuster was first detected on this claim
+- `last_seen_date`: when adjuster was last active on this claim
+- `involvement_type`: the current status at the time of last update
+
+**Store in `intelligence_events`:**
+- Event type: "lifecycle" or "escalation"
+- Category: "adjuster_entry", "adjuster_exit", "adjuster_during_status_change"
+- Metadata: `{ priorStatus, newStatus, adjusterId, claimId }`
+
+**Example:**
+- Adjuster enters claim at status: "Denied"
+- Adjuster last active at status: "Approved"
+- Outcome influence: "Involved during denial → approval transition"
+- Pattern note: "Present in 3 of 5 denial-to-approval transitions. Not causal."
+
+### 6. Identify Common Patterns
 
 Label patterns only when the pattern appears across multiple claims.
 
@@ -127,7 +166,7 @@ Label patterns only when the pattern appears across multiple claims.
 
 **Pattern storage:** Use `intelligence_events` table with category "escalation" or "communication_signal" and source type "system." Link to the adjuster via `adjuster_id`.
 
-### 6. Never Use a Single Claim to Determine Performance
+### 7. Never Use a Single Claim to Determine Performance
 
 One claim is an incident, not a pattern.
 
@@ -138,7 +177,7 @@ One claim is an incident, not a pattern.
 
 **Why:** An adjuster who denied one claim might be following policy. An adjuster who denied 8 of 10 claims may have a pattern. Distinguish incident from behavior.
 
-### 7. Require Multiple Claims Before Generating Metrics
+### 8. Require Multiple Claims Before Generating Metrics
 
 **Minimums for metric display:**
 
@@ -154,7 +193,7 @@ One claim is an incident, not a pattern.
 
 **Below minimum:** Display "Insufficient data" or "N/A" with the current sample size.
 
-### 8. Preserve Source Evidence for All Metrics
+### 9. Preserve Source Evidence for All Metrics
 
 Every metric must be traceable to the claims that produced it.
 
@@ -166,7 +205,7 @@ Every metric must be traceable to the claims that produced it.
 
 **Storage:** Store source claim IDs in JSON metadata fields or `intelligence_events` table. Do not rely on memory or inference.
 
-### 9. Display Confidence Levels for All Adjuster Intelligence
+### 10. Display Confidence Levels for All Adjuster Intelligence
 
 Every piece of adjuster intelligence must show:
 
@@ -184,7 +223,7 @@ base = 0.3
 confidence = min(base, 1.0)
 ```
 
-### 10. Flag Insufficient Data When Sample Size Is Too Small
+### 11. Flag Insufficient Data When Sample Size Is Too Small
 
 When there are fewer than the minimum claims for a metric:
 
