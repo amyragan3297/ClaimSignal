@@ -105,13 +105,16 @@ export default function PlatformOverviewPage() {
       <section className="pt-36 pb-16 px-6 text-center">
         <div className="max-w-3xl mx-auto">
           <Badge variant="outline" className="mb-5 text-xs tracking-wide uppercase px-3 py-1">
-            Platform Overview
+            Property Claim Intelligence Platform
           </Badge>
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-5 leading-tight" data-testid="text-overview-title">
-            One Platform. Complete Claim Intelligence.
+            Property Claim Intelligence Powered by AI
           </h1>
-          <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed" data-testid="text-overview-sub">
-            ClaimSignal transforms claim documents into actionable intelligence. Every upload contributes to a living claim record, automated timeline, financial analysis, adjuster profile, carrier profile, and recommended next actions.
+          <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed mb-4" data-testid="text-overview-sub">
+            ClaimSignal transforms claim documents, estimates, photos, denial letters, emails, recordings, inspection reports, and carrier communications into actionable claim intelligence.
+          </p>
+          <p className="text-sm text-muted-foreground/80 max-w-2xl mx-auto leading-relaxed">
+            The platform automatically extracts claim data, organizes timelines, identifies risk factors, tracks adjuster and carrier patterns, detects supplement opportunities, and recommends next actions to help claim professionals make better decisions faster.
           </p>
         </div>
       </section>

@@ -152,13 +152,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {navItem("Dashboard", dashboardPath, LayoutDashboard)}
-                  {!isExecutive && navItem("Claims", "/claims", FileText)}
+                  {!isExecutive && !isInvestor && navItem("Claims", "/claims", FileText)}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
 
             {/* Intelligence */}
-            {!isExecutive && (
+            {!isExecutive && !isInvestor && (
               <SidebarGroup>
                 <SidebarGroupLabel>Intelligence</SidebarGroupLabel>
                 <SidebarGroupContent>
@@ -175,7 +175,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             )}
 
             {/* Workflow */}
-            {!isExecutive && (
+            {!isExecutive && !isInvestor && (
               <SidebarGroup>
                 <SidebarGroupLabel>Workflow</SidebarGroupLabel>
                 <SidebarGroupContent>

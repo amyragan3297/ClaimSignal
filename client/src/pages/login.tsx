@@ -53,7 +53,20 @@ export default function LoginPage() {
           <div className="flex items-center justify-center mb-2">
             <img src={logoImg} alt="ClaimSignal" className="h-24 w-auto object-contain" data-testid="img-login-logo" />
           </div>
-          <p className="text-sm text-muted-foreground">Operational Intelligence Platform</p>
+          <p className="text-sm text-muted-foreground mb-4">Operational Intelligence Platform</p>
+          <div className="flex items-center justify-center gap-3 text-xs flex-wrap">
+            <Link href="/founding-partner-apply" className="text-amber-500 hover:underline" data-testid="link-hero-founder">
+              Founder Access
+            </Link>
+            <span className="text-muted-foreground">|</span>
+            <Link href="/investor-access" className="text-emerald-500 hover:underline" data-testid="link-hero-investor">
+              Investor Access
+            </Link>
+            <span className="text-muted-foreground">|</span>
+            <Link href="/platform-overview" className="text-muted-foreground hover:text-foreground hover:underline transition-colors" data-testid="link-hero-platform">
+              View Platform
+            </Link>
+          </div>
         </div>
 
         <Card>

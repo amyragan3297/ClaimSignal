@@ -349,6 +349,15 @@ export async function registerRoutes(
     }
   });
 
+  // Investor role may not access claim-level or operational data
+  const blockInvestorRole = (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (req.auth?.role === 'investor') {
+      return res.status(403).json({ message: "Investor access does not include claim-level data." });
+    }
+    next();
+  };
+  app.use(['/api/claims', '/api/evidence', '/api/adjusters', '/api/supplements', '/api/audio', '/api/timeline'], requireAuth, blockInvestorRole);
+
   app.get("/api/claims", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;

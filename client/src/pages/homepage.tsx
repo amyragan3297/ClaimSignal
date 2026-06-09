@@ -39,13 +39,13 @@ export default function Homepage() {
             className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-tight"
             data-testid="text-hero-title"
           >
-            Property Claim Intelligence Powered by AI
+            Upload a Claim. Get Answers.
           </h1>
           <p
             className="text-base md:text-lg text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed"
             data-testid="text-hero-subtext"
           >
-            Upload claim documents, photos, estimates, denial letters, emails, recordings, and inspection reports. ClaimSignal automatically extracts claim data, identifies risks, tracks adjuster and carrier patterns, and recommends next actions.
+            ClaimSignal automatically extracts claim data, identifies risks, tracks adjuster and carrier patterns, analyzes claim activity, and recommends next actions from every document you upload.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <Link href="/founding-partner-apply">

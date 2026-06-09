@@ -886,6 +886,11 @@ export default function ClaimsPage() {
   const userRole = authData?.user?.role || 'individual';
   const isMaster = userRole === 'master_admin';
   const canArchive = !['executive_admin'].includes(userRole);
+
+  if (userRole === 'investor') {
+    setLocation('/investor');
+    return null;
+  }
   const [sharedSearch, setSharedSearch] = useState("");
   const [showDemoRecords, setShowDemoRecords] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
