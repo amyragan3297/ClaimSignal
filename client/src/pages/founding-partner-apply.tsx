@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Loader2, Check } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -20,6 +21,7 @@ const applySchema = z.object({
   phone: z.string().optional(),
   estimatedMonthlyClaimVolume: z.string().optional(),
   reasonForJoining: z.string().optional(),
+  agreeToTerms: z.boolean().refine((v) => v === true, "You must agree to the terms and conditions"),
 });
 
 export default function FoundingPartnerApplyPage() {
@@ -36,6 +38,7 @@ export default function FoundingPartnerApplyPage() {
       phone: "",
       estimatedMonthlyClaimVolume: "",
       reasonForJoining: "",
+      agreeToTerms: false,
     },
   });
 
@@ -132,6 +135,26 @@ export default function FoundingPartnerApplyPage() {
                 <Label htmlFor="reasonForJoining">Why are you interested? (optional)</Label>
                 <Textarea id="reasonForJoining" placeholder="Tell us about your claim workflow and what you hope to achieve..." {...form.register("reasonForJoining")} />
               </div>
+              <div className="flex items-start gap-2 pt-2">
+                <Checkbox
+                  id="apply-terms"
+                  data-testid="checkbox-apply-terms"
+                  checked={form.watch("agreeToTerms")}
+                  onCheckedChange={(checked) => form.setValue("agreeToTerms", checked === true, { shouldValidate: true })}
+                />
+                <label htmlFor="apply-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                  I agree to the{" "}
+                  <Link href="/terms" target="_blank" className="text-primary hover:underline">
+                    Terms of Service
+                  </Link>
+                  {" "}and the{" "}
+                  <Link href="/legal/founder" target="_blank" className="text-primary hover:underline">
+                    Founding Partner Agreement
+                  </Link>
+                  .
+                </label>
+              </div>
+              {form.formState.errors.agreeToTerms && <p className="text-xs text-destructive">{form.formState.errors.agreeToTerms.message}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Submit Application

@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, Check, Lock, Crown, Sparkles, Mail } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -19,6 +20,7 @@ const redeemSchema = z.object({
   companyName: z.string().min(2, "Organization name required"),
   inviteCode: z.string().min(6, "Invite code required"),
   password: z.string().min(8, "Password must be at least 8 characters"),
+  agreeToTerms: z.boolean().refine((v) => v === true, "You must agree to the terms and conditions"),
 });
 
 const loginSchema = z.object({
@@ -38,7 +40,7 @@ export default function FounderAccessPage() {
 
   const redeemForm = useForm<z.infer<typeof redeemSchema>>({
     resolver: zodResolver(redeemSchema),
-    defaultValues: { fullName: "", email: "", companyName: "", inviteCode: "", password: "" },
+    defaultValues: { fullName: "", email: "", companyName: "", inviteCode: "", password: "", agreeToTerms: false },
   });
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
@@ -230,6 +232,26 @@ export default function FounderAccessPage() {
                   <Input id="redeem-password" type="password" placeholder="Min 8 characters" data-testid="input-redeem-password" {...redeemForm.register("password")} />
                   {redeemForm.formState.errors.password && <p className="text-xs text-destructive">{redeemForm.formState.errors.password.message}</p>}
                 </div>
+                <div className="flex items-start gap-2 pt-2">
+                  <Checkbox
+                    id="redeem-terms"
+                    data-testid="checkbox-redeem-terms"
+                    checked={redeemForm.watch("agreeToTerms")}
+                    onCheckedChange={(checked) => redeemForm.setValue("agreeToTerms", checked === true, { shouldValidate: true })}
+                  />
+                  <label htmlFor="redeem-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                    I agree to the{" "}
+                    <Link href="/legal/founder" target="_blank" className="text-primary hover:underline">
+                      Founding Partner Agreement
+                    </Link>
+                    {" "}and the{" "}
+                    <Link href="/terms" target="_blank" className="text-primary hover:underline">
+                      Terms of Service
+                    </Link>
+                    .
+                  </label>
+                </div>
+                {redeemForm.formState.errors.agreeToTerms && <p className="text-xs text-destructive">{redeemForm.formState.errors.agreeToTerms.message}</p>}
                 <Button type="submit" className="w-full" disabled={redeeming} data-testid="button-redeem-submit">
                   {redeeming && <Loader2 className="w-4 h-4 animate-spin" />}
                   Create Account &amp; Continue
