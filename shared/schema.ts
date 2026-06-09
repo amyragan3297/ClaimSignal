@@ -7,6 +7,8 @@ export const userRoleEnum = pgEnum("user_role", ["super_admin", "admin", "team_o
 export const userStatusEnum = pgEnum("user_status", ["active", "archived", "test"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["pending_billing", "trialing", "active", "past_due", "canceled"]);
 export const planTypeEnum = pgEnum("plan_type", ["founder", "pro", "team", "enterprise", "individual"]);
+export const investorAccessStatusEnum = pgEnum("investor_access_status", ["pending", "approved", "rejected", "revoked"]);
+export const loginAttemptStatusEnum = pgEnum("login_attempt_status", ["success", "failed", "locked"]);
 export const organizationTypeEnum = pgEnum("organization_type", ["contractor", "roofing_firm", "enterprise_operator", "carrier", "tpa"]);
 export const eventSourceTypeEnum = pgEnum("event_source_type", ["document", "transcript", "email", "manual", "system"]);
 export const eventCategoryEnum = pgEnum("event_category", ["denial", "payment", "supplement", "irc_trigger", "communication_signal", "lifecycle", "escalation"]);
@@ -1011,3 +1013,37 @@ export type IdentityMatch = typeof identityMatches.$inferSelect;
 export type InsertIdentityMatch = z.infer<typeof insertIdentityMatchSchema>;
 export type IdentityReviewQueue = typeof identityReviewQueue.$inferSelect;
 export type InsertIdentityReviewQueue = z.infer<typeof insertIdentityReviewQueueSchema>;
+
+// ── Login Activity Tracking ──
+export const loginAttempts = pgTable("login_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
+  email: text("email"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  status: loginAttemptStatusEnum("status").notNull().default("failed"),
+  failureReason: text("failure_reason"),
+  deviceLabel: text("device_label"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertLoginAttemptSchema = createInsertSchema(loginAttempts).omit({ id: true, createdAt: true });
+export type LoginAttempt = typeof loginAttempts.$inferSelect;
+export type InsertLoginAttempt = z.infer<typeof insertLoginAttemptSchema>;
+
+// ── Investor Access Control ──
+export const investorAccess = pgTable("investor_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  organizationId: varchar("organization_id").notNull(),
+  status: investorAccessStatusEnum("status").notNull().default("pending"),
+  approvedBy: varchar("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertInvestorAccessSchema = createInsertSchema(investorAccess).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
+export type InvestorAccess = typeof investorAccess.$inferSelect;
+export type InsertInvestorAccess = z.infer<typeof insertInvestorAccessSchema>;

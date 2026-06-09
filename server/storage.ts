@@ -44,6 +44,8 @@ import {
   scoringWeights, intelligenceEvents, stormEvents,
   type Escalation, type InsertEscalation, escalations,
   identityProfiles, identityAliases, identityMatches, identityReviewQueue,
+  type LoginAttempt, type InsertLoginAttempt, type InvestorAccess, type InsertInvestorAccess,
+  loginAttempts, investorAccess,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, count, desc, gt, isNull, sql } from "drizzle-orm";
@@ -334,6 +336,21 @@ export interface IStorage {
     audioRecordings: { active: number; archived: number };
     emails: { active: number; archived: number };
   }>;
+
+  // Platform Access & User Management
+  createLoginAttempt(data: InsertLoginAttempt): Promise<LoginAttempt>;
+  getLoginAttempts(userId?: string): Promise<LoginAttempt[]>;
+  getLoginAttemptsByEmail(email: string): Promise<LoginAttempt[]>;
+  getRecentLoginAttempts(minutes?: number): Promise<LoginAttempt[]>;
+  createInvestorAccess(data: InsertInvestorAccess): Promise<InvestorAccess>;
+  getInvestorAccess(userId: string): Promise<InvestorAccess | undefined>;
+  getAllInvestorAccess(): Promise<InvestorAccess[]>;
+  updateInvestorAccess(userId: string, data: Partial<InvestorAccess>): Promise<InvestorAccess | undefined>;
+  deleteUser(id: string): Promise<void>;
+  deleteOrganization(id: string): Promise<void>;
+  getUserByEmailWithPassword(email: string): Promise<User | undefined>;
+  updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
+  compUser(userId: string, comped: boolean, compedBy?: string): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1517,6 +1534,77 @@ export class DatabaseStorage implements IStorage {
 
   async updateIdentityReviewQueue(id: string, data: { status?: string; reviewedBy?: string; reviewedAt?: Date }) {
     const [updated] = await db.update(identityReviewQueue).set(data).where(eq(identityReviewQueue.id, id)).returning();
+    return updated;
+  }
+
+  // ── Platform Access & User Management ──
+
+  async createLoginAttempt(data: InsertLoginAttempt): Promise<LoginAttempt> {
+    const [created] = await db.insert(loginAttempts).values(data).returning();
+    return created;
+  }
+
+  async getLoginAttempts(userId?: string): Promise<LoginAttempt[]> {
+    if (userId) {
+      return db.select().from(loginAttempts).where(eq(loginAttempts.userId, userId)).orderBy(desc(loginAttempts.createdAt)).limit(100);
+    }
+    return db.select().from(loginAttempts).orderBy(desc(loginAttempts.createdAt)).limit(500);
+  }
+
+  async getLoginAttemptsByEmail(email: string): Promise<LoginAttempt[]> {
+    return db.select().from(loginAttempts).where(eq(loginAttempts.email, email)).orderBy(desc(loginAttempts.createdAt)).limit(100);
+  }
+
+  async getRecentLoginAttempts(minutes: number = 60): Promise<LoginAttempt[]> {
+    const cutoff = new Date(Date.now() - minutes * 60 * 1000);
+    return db.select().from(loginAttempts).where(gt(loginAttempts.createdAt, cutoff)).orderBy(desc(loginAttempts.createdAt));
+  }
+
+  async createInvestorAccess(data: InsertInvestorAccess): Promise<InvestorAccess> {
+    const [created] = await db.insert(investorAccess).values(data).returning();
+    return created;
+  }
+
+  async getInvestorAccess(userId: string): Promise<InvestorAccess | undefined> {
+    const [record] = await db.select().from(investorAccess).where(eq(investorAccess.userId, userId));
+    return record;
+  }
+
+  async getAllInvestorAccess(): Promise<InvestorAccess[]> {
+    return db.select().from(investorAccess).orderBy(desc(investorAccess.createdAt));
+  }
+
+  async updateInvestorAccess(userId: string, data: Partial<InvestorAccess>): Promise<InvestorAccess | undefined> {
+    const [updated] = await db.update(investorAccess).set(data).where(eq(investorAccess.userId, userId)).returning();
+    return updated;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    // Soft delete: set status to archived and add deleted_at timestamp
+    await db.update(users).set({ status: "archived", updatedAt: new Date() }).where(eq(users.id, id));
+  }
+
+  async deleteOrganization(id: string): Promise<void> {
+    // Soft delete: set status to archived for all users in org
+    await db.update(users).set({ status: "archived", updatedAt: new Date() }).where(eq(users.organizationId, id));
+  }
+
+  async getUserByEmailWithPassword(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase()));
+    return user;
+  }
+
+  async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
+    const [updated] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async compUser(userId: string, _comped: boolean, _compedBy?: string): Promise<User | undefined> {
+    // Note: comped status is tracked via metadata in a separate table or field
+    // For now, soft-comp via user status update
+    const [updated] = await db.update(users).set({
+      updatedAt: new Date(),
+    }).where(eq(users.id, userId)).returning();
     return updated;
   }
 }

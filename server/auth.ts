@@ -200,6 +200,58 @@ export function blockDuringImpersonation(req: AuthRequest, res: Response, next: 
   next();
 }
 
+export function requireMasterDelete(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.auth) return res.status(401).json({ message: "Not authenticated" });
+  if (!req.auth.isPlatformOwner) {
+    return res.status(403).json({ message: "Master Admin deletion authority required" });
+  }
+  next();
+}
+
+export function requireRole(allowedRoles: string[]) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.auth) return res.status(401).json({ message: "Not authenticated" });
+    if (req.auth.isPlatformOwner) return next();
+    if (!allowedRoles.includes(req.auth.role)) {
+      return res.status(403).json({ message: "Role not authorized for this resource" });
+    }
+    next();
+  };
+}
+
+export async function requireInvestorApproved(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.auth) return res.status(401).json({ message: "Not authenticated" });
+  if (req.auth.isPlatformOwner) return next();
+  if (req.auth.role !== "investor") return next();
+  const investor = await storage.getInvestorAccess(req.auth.userId);
+  if (!investor || investor.status !== "approved") {
+    return res.status(403).json({ message: "Investor approval pending", code: "INVESTOR_PENDING" });
+  }
+  next();
+}
+
+export async function trackLoginActivity(opts: {
+  userId?: string;
+  email: string;
+  ipAddress?: string;
+  userAgent?: string;
+  success: boolean;
+  failureReason?: string;
+}) {
+  try {
+    await storage.createLoginAttempt({
+      userId: opts.userId,
+      email: opts.email,
+      ipAddress: opts.ipAddress,
+      userAgent: opts.userAgent,
+      status: opts.success ? "success" : "failed",
+      failureReason: opts.failureReason || null,
+    });
+  } catch (err) {
+    console.warn("[login-activity] Failed to log login attempt:", (err as Error).message);
+  }
+}
+
 export function getClientIp(req: Request): string {
   return (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
 }
