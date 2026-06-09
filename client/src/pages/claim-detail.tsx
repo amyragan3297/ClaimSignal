@@ -67,6 +67,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { computeDefensibility, type AiAnalysis } from "@/lib/claim-intelligence";
 import { ClaimAdjustersCard } from "@/components/claim-adjusters-card";
+import { claimAnalysisStatus, hasAiAnalysis } from "@/lib/data-source";
 
 const LIFECYCLE_PHASES = [
   { key: "pre_claim", label: "Pre-Claim" },
