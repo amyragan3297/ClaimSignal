@@ -188,16 +188,11 @@ export default function Homepage() {
           <p className="text-muted-foreground leading-relaxed text-sm max-w-2xl mx-auto">
             ClaimSignal is live with full platform access: authentication, role-based access, tenant isolation, server-enforced PII masking, audit logging, Stripe billing, claim and evidence management, AI-powered claim extraction and analysis, audio transcription, and behavioral scoring. Every metric is evidence-backed — empty data shows as "Not enough data" rather than a false zero.
           </p>
-          <div className="mt-8 flex items-center justify-center gap-4 flex-wrap">
+          <div className="mt-8 flex items-center justify-center">
             <Link href="/login?tab=register">
-              <Button size="lg" data-testid="button-stage-cta">
-                Start Your Free Trial
+              <Button size="lg" className="px-8" data-testid="button-stage-cta">
+                Request Access
                 <ArrowRight className="w-4 h-4 ml-1" />
-              </Button>
-            </Link>
-            <Link href="/pricing">
-              <Button variant="outline" size="lg">
-                View Pricing
               </Button>
             </Link>
           </div>

@@ -2050,7 +2050,19 @@ export async function registerRoutes(
         fileUrl: req.body.fileUrl || null,
         durationSeconds: req.body.durationSeconds ? Number(req.body.durationSeconds) : null,
         transcriptText: req.body.transcriptText || null,
+        transcriptStatus: req.body.transcriptText ? "completed" : "pending",
       });
+      // Update claim audio flags when a recording is linked
+      if (req.body.claimId) {
+        try {
+          await storage.updateClaim(req.body.claimId, req.auth!.organizationId, {
+            audioUploaded: true,
+            transcriptStatus: req.body.transcriptText ? "completed" : "pending",
+          });
+        } catch (claimErr) {
+          console.error("[audio/log] claim audio flag update non-fatal:", (claimErr as Error)?.message);
+        }
+      }
       res.json(recording);
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
@@ -2061,6 +2073,16 @@ export async function registerRoutes(
     try {
       const updated = await storage.updateAudioRecording(req.params.id as string, req.auth!.organizationId, req.body);
       if (!updated) return res.status(404).json({ message: "Recording not found" });
+      // When transcript is updated on a linked recording, update the claim's transcript status
+      if (updated.claimId && req.body.transcriptText !== undefined) {
+        try {
+          await storage.updateClaim(updated.claimId, req.auth!.organizationId, {
+            transcriptStatus: req.body.transcriptText ? "completed" : "pending",
+          });
+        } catch (claimErr) {
+          console.error("[audio/patch] claim flag update non-fatal:", (claimErr as Error)?.message);
+        }
+      }
       res.json(updated);
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
@@ -2079,13 +2101,21 @@ export async function registerRoutes(
         if (!isOpenAIConfigured()) {
           return res.status(503).json({ message: "Transcription is not configured." });
         }
-        const { audioBase64, fileName, claimId, durationSeconds } = req.body || {};
+        const { audioBase64, fileName, claimId, durationSeconds, notes } = req.body || {};
         if (!audioBase64 || typeof audioBase64 !== "string") {
           return res.status(400).json({ message: "audioBase64 is required" });
         }
         const base64 = audioBase64.includes(",") ? audioBase64.split(",")[1] : audioBase64;
         const buffer = Buffer.from(base64, "base64");
         if (buffer.length === 0) return res.status(400).json({ message: "Empty audio payload" });
+
+        // OpenAI Whisper API has a 20MB file size limit
+        const MAX_WHISPER_SIZE = 20 * 1024 * 1024;
+        if (buffer.length > MAX_WHISPER_SIZE) {
+          return res.status(413).json({
+            message: `Audio file too large. Size: ${(buffer.length / (1024 * 1024)).toFixed(1)}MB. Maximum: 20MB. Please compress or split the audio file.`,
+          });
+        }
 
         const sha256Hash = createHash("sha256").update(buffer).digest("hex");
         const transcriptText = await transcribeAudio(buffer);
@@ -2102,6 +2132,11 @@ export async function registerRoutes(
           }
         }
 
+        // Combine AI transcript with user notes (if provided)
+        const combinedTranscript = notes
+          ? `${transcriptText}\n\n--- User Notes ---\n${notes}`
+          : transcriptText;
+
         const recording = await storage.createAudioRecording({
           organizationId: req.auth!.organizationId,
           uploadedByUserId: req.auth!.userId,
@@ -2109,7 +2144,9 @@ export async function registerRoutes(
           fileUrl: fileName ? `#upload/${fileName}` : null,
           durationSeconds: durationSeconds ? Number(durationSeconds) : null,
           sha256Hash,
-          transcriptText,
+          transcriptText: combinedTranscript,
+          transcriptStatus: transcriptText ? "completed" : "failed",
+          processedAt: new Date(),
         });
 
         await storage.createAuditLog({
@@ -2123,6 +2160,18 @@ export async function registerRoutes(
           entityId: recording.id,
           ipAddress: getClientIp(req),
         });
+
+        // Update claim audio flags when linked to a claim
+        if (claimId) {
+          try {
+            await storage.updateClaim(claimId, req.auth!.organizationId, {
+              audioUploaded: true,
+              transcriptStatus: transcriptText ? "completed" : "failed",
+            });
+          } catch (claimErr) {
+            console.error("[audio/transcribe] claim audio flag update non-fatal:", (claimErr as Error)?.message);
+          }
+        }
 
         // Connect audio to claim intelligence: when the recording is linked to a
         // claim, run MVP timeline/date extraction over the transcript so spoken
@@ -4430,6 +4479,7 @@ export async function registerRoutes(
 
   seedPlatformOwner().catch(console.error);
   seedDefaultWeights().catch(console.error);
+  seedIrcCodes().catch(console.error);
   if (isDemoSeedingAllowed()) {
     seedDemoData().catch(console.error);
     seedDemoUsers().catch(console.error);
@@ -4497,6 +4547,97 @@ async function ensureMasterUser(email: string, password: string, fullName: strin
     subscriptionStatus: "active",
     planType: "founder",
   });
+}
+
+async function seedIrcCodes() {
+  const existing = await storage.getIrcCodes();
+  if (existing.length > 0) return;
+  const codes = [
+    {
+      codeReference: "IRC R905.2",
+      title: "Asphalt Shingles — Installation Requirements",
+      description: "Asphalt shingles shall be fastened to solid sheathing. Minimum 4 nails per shingle required in high-wind zones. Improper fastening voids manufacturer warranty and may trigger supplement for re-nailing.",
+      supplementTriggerKeywords: ["wind", "hail", "shingle", "roof", "asphalt"],
+      roofingTypeApplicable: "asphalt_shingle",
+      severityWeight: 8.5,
+    },
+    {
+      codeReference: "IRC R905.2.8.1",
+      title: "High-Wind Fastening — Asphalt Shingles",
+      description: "In areas with basic wind speeds of 110 mph or greater, shingles must be installed using 6 nails per strip shingle. Carrier estimates using 4-nail schedules in high-wind counties are subject to supplement.",
+      supplementTriggerKeywords: ["wind", "hurricane", "storm", "shingle"],
+      roofingTypeApplicable: "asphalt_shingle",
+      severityWeight: 9.0,
+    },
+    {
+      codeReference: "IRC R907.3",
+      title: "Recover vs. Replacement — Roof Covering",
+      description: "Existing roof coverings may not be covered more than once. When a second layer is present, full tear-off is required under code. Carriers must account for tear-off labor and disposal when a re-cover is not code-compliant.",
+      supplementTriggerKeywords: ["roof", "tear-off", "replacement", "recover", "layers"],
+      roofingTypeApplicable: "all",
+      severityWeight: 9.5,
+    },
+    {
+      codeReference: "IRC R806.2",
+      title: "Attic Ventilation — Minimum Requirements",
+      description: "Net free ventilation area shall not be less than 1/150 of attic floor area. When roof replacement triggers ventilation upgrades, the supplement must include ridge vent or soffit vent installation as required by code.",
+      supplementTriggerKeywords: ["ventilation", "attic", "vent", "ridge vent", "roof"],
+      roofingTypeApplicable: "all",
+      severityWeight: 7.0,
+    },
+    {
+      codeReference: "IRC R903.2",
+      title: "Flashing Requirements — Roof-Wall Intersections",
+      description: "Flashing shall be installed at wall and roof intersections, at gutters, and at all locations where the roof surface changes direction. Full replacement of step and counter flashing is required when new shingles are installed.",
+      supplementTriggerKeywords: ["flashing", "leak", "water intrusion", "roof", "wall"],
+      roofingTypeApplicable: "all",
+      severityWeight: 8.0,
+    },
+    {
+      codeReference: "IRC R908.1",
+      title: "Roof Repairs — Code Compliance Trigger",
+      description: "Repairs to existing roofs shall comply with the requirements of the applicable section. Any repair exceeding 25% of the total roof area in a 12-month period constitutes a replacement and requires full code compliance.",
+      supplementTriggerKeywords: ["repair", "partial", "supplement", "roof"],
+      roofingTypeApplicable: "all",
+      severityWeight: 7.5,
+    },
+    {
+      codeReference: "IRC R905.3",
+      title: "Clay and Concrete Tile — Installation",
+      description: "Tile roof installations require minimum 2.5:12 pitch. Double underlayment required below 4:12 pitch. Broken tile from hail or impact events must include substrate inspection and may require full underlayment replacement.",
+      supplementTriggerKeywords: ["tile", "clay", "concrete tile", "hail", "impact"],
+      roofingTypeApplicable: "tile",
+      severityWeight: 8.0,
+    },
+    {
+      codeReference: "IRC R905.10",
+      title: "Metal Roof Panels — Fastening and Sealing",
+      description: "Exposed fastener metal roofs require neoprene-washered screws replaced at 10-year intervals. Wind-driven rain intrusion at panel laps triggers supplement for re-fastening or panel replacement.",
+      supplementTriggerKeywords: ["metal", "panel", "fastener", "wind", "seam"],
+      roofingTypeApplicable: "metal",
+      severityWeight: 7.5,
+    },
+    {
+      codeReference: "IBC 1504.3",
+      title: "Wind Uplift Resistance — Mechanically Fastened Systems",
+      description: "Roof assemblies in areas subject to special wind regions must meet FM or UL uplift ratings. Insurer denial of wind-related roof claims must consider local uplift classification. Supplement warranted when installed system does not meet required rating.",
+      supplementTriggerKeywords: ["wind uplift", "commercial", "FM", "UL", "membrane"],
+      roofingTypeApplicable: "commercial",
+      severityWeight: 9.0,
+    },
+    {
+      codeReference: "IRC R905.1.1",
+      title: "Ice Barrier — Required Zones",
+      description: "In areas where the average daily temperature in January is 25°F or less, an ice barrier is required at the eaves. Ice barrier must be installed when performing full roof replacement; carriers cannot exclude this line item in qualifying climates.",
+      supplementTriggerKeywords: ["ice dam", "ice barrier", "freeze", "winter", "roof"],
+      roofingTypeApplicable: "asphalt_shingle",
+      severityWeight: 7.0,
+    },
+  ];
+  for (const code of codes) {
+    await storage.createIrcCode(code);
+  }
+  console.log(`[seedIrcCodes] seeded ${codes.length} IRC building codes`);
 }
 
 async function seedPlatformOwner() {

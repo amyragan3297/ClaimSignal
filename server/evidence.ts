@@ -713,6 +713,18 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         console.error("[audio-upload] non-fatal creating audioRecordings:", (audioRecErr as Error)?.message);
       }
 
+      // Update claim audio flags when an audio recording is linked
+      if (claimId && audioRecId) {
+        try {
+          await storage.updateClaim(claimId, matchedClaim?.organizationId || organizationId, {
+            audioUploaded: true,
+            transcriptStatus: textContent && textContent.trim().length > 0 ? "completed" : (isOpenAIConfigured() ? "failed" : "pending"),
+          });
+        } catch (flagErr) {
+          console.error("[audio-upload] claim audio flag update non-fatal:", (flagErr as Error)?.message);
+        }
+      }
+
       // Auto-link adjusters found in the transcript to the associated claim.
       if (claimId && audioRecId && textContent && textContent.trim()) {
         const transcriptCarrier = matchedClaim?.carrier || undefined;

@@ -114,7 +114,7 @@ export default function AudioPage() {
   });
 
   const transcribeMutation = useMutation({
-    mutationFn: async (data: { audioBase64: string; fileName: string; claimId?: string; durationSeconds?: number }) => {
+    mutationFn: async (data: { audioBase64: string; fileName: string; claimId?: string; durationSeconds?: number; notes?: string }) => {
       const res = await apiRequest("POST", "/api/audio/transcribe", data);
       return res.json();
     },
@@ -171,6 +171,7 @@ export default function AudioPage() {
           fileName: audioFile.name,
           claimId,
           durationSeconds: duration ? parseInt(duration) * 60 : undefined,
+          notes: notes || undefined,
         });
       } catch {
         toast({ title: "Could not read audio file", variant: "destructive" });

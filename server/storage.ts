@@ -925,13 +925,22 @@ export class DatabaseStorage implements IStorage {
 
   async getAudioRecordings(claimId: string, orgId: string): Promise<AudioRecording[]> {
     return db.select().from(audioRecordings).where(
-      and(eq(audioRecordings.claimId, claimId), eq(audioRecordings.organizationId, orgId))
-    );
+      and(
+        eq(audioRecordings.claimId, claimId),
+        eq(audioRecordings.organizationId, orgId),
+        sql`${audioRecordings.archivedAt} IS NULL`,
+        sql`${audioRecordings.deletedAt} IS NULL`
+      )
+    ).orderBy(desc(audioRecordings.createdAt));
   }
 
   async getAudioRecordingsByOrg(orgId: string): Promise<AudioRecording[]> {
     return db.select().from(audioRecordings).where(
-      eq(audioRecordings.organizationId, orgId)
+      and(
+        eq(audioRecordings.organizationId, orgId),
+        sql`${audioRecordings.archivedAt} IS NULL`,
+        sql`${audioRecordings.deletedAt} IS NULL`
+      )
     ).orderBy(desc(audioRecordings.createdAt));
   }
 
