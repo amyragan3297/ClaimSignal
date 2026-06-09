@@ -1,4 +1,5 @@
 import { useAuth } from "@/lib/auth";
+import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,13 @@ interface InvestorMetrics {
 
 export default function InvestorDashboardPage() {
   const { data: auth } = useAuth();
+  const [, setLocation] = useLocation();
+  const userRole = auth?.user?.role;
+
+  if (userRole && userRole !== "investor" && userRole !== "master_admin") {
+    setLocation("/dashboard");
+    return null;
+  }
 
   const { data: metrics, isLoading } = useQuery<InvestorMetrics>({
     queryKey: ["/api/executive/investor-safe"],

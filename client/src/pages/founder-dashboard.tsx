@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   FileText,
   Users,
@@ -20,6 +20,13 @@ import {
 
 export default function FounderDashboardPage() {
   const { data: auth } = useAuth();
+  const [, setLocation] = useLocation();
+  const userRole = auth?.user?.role;
+
+  if (userRole && userRole !== "founder" && userRole !== "master_admin") {
+    setLocation("/dashboard");
+    return null;
+  }
   const billing = auth?.billing;
   const hasSignedAgreement = !!auth?.founderAgreement;
   const daysLeft = billing?.trialEndDate

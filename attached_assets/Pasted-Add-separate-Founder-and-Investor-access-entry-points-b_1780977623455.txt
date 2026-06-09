@@ -1,0 +1,143 @@
+Add separate Founder and Investor access entry points, but do not place them on the public hero page.
+
+Current issue:
+The app has role-based dashboards after login, but there is not a clear separate access flow for Founder users or Investor users.
+
+Important UI rule:
+Do not add Founder Access or Investor Access buttons to the hero section.
+
+The hero page should remain focused on the main ClaimSignal product message and standard user conversion.
+
+Allowed placement:
+
+* Footer links
+* Login page links
+* Register page secondary links
+* Admin-created invitation links
+* Direct routes only
+
+Required routes:
+
+1. Founder Access Page
+    Route:
+    /founder-access
+
+Purpose:
+Founder invitation-only login and signup flow.
+
+Page must include:
+
+* Founder program description
+* $79/month locked Founder pricing
+* Invitation-only language
+* Founder login button
+* Founder invite code or approval flow
+* Request Founder Access button if no invite code
+
+Founder rules:
+
+* Founder access is not open public registration.
+* Founder accounts require invitation code or Master Admin approval.
+* Only Master Admin can approve Founder users.
+* Master Admin: claimsignal1@gmail.com
+* Approved founder users redirect to /founder after login.
+* Non-founder users cannot access /founder.
+
+Display:
+Founding Partner — $79/month
+Invitation Only
+Locked Founder Pricing
+
+2. Investor Access Page
+    Route:
+    /investor-access
+
+Purpose:
+Investor-only login and access request flow.
+
+Page must include:
+
+* Investor portal description
+* Read-only investor access explanation
+* Investor login button
+* Request Investor Access button
+* Investor access pending approval message
+
+Investor rules:
+
+* Investor access is not open public registration.
+* Investor accounts require Master Admin approval.
+* Only Master Admin can approve investor users.
+* Investor role redirects to /investor after login.
+* Non-investor users cannot access /investor.
+* Investor dashboard must remain read-only and aggregate-only.
+* Investor dashboard must show no homeowner PII, no addresses, no policy numbers, no claim documents, and no private notes.
+
+3. Main Login Page
+
+Keep the regular /login route for:
+
+* Individual users
+* Team users
+* Team admins
+* Executive admins
+* Master Admin
+
+Add subtle secondary links:
+
+* Founder Access
+* Investor Access
+
+These links may appear below the login/register form, not in the hero section.
+
+4. Registration Behavior
+
+Founder registration:
+
+* Requires invite code or creates pending founder request.
+* Does not activate account until Master Admin approves.
+
+Investor registration:
+
+* Creates pending investor access request.
+* Does not activate investor dashboard until Master Admin approves.
+
+5. Master Admin Controls
+
+Add Master Admin controls for:
+
+* Approve founder request
+* Reject founder request
+* Approve investor request
+* Reject investor request
+* View pending access requests
+* View approved founder users
+* View approved investor users
+
+6. Security
+
+Server-side route guards required:
+
+* /founder requires role founder
+* /investor requires role investor
+* /founder-access may be public
+* /investor-access may be public
+* Master Admin approval endpoints require master_admin
+
+Do not rely on frontend hiding only.
+
+7. Audit Logging
+
+Audit log:
+
+* Founder request submitted
+* Founder approved
+* Founder rejected
+* Investor request submitted
+* Investor approved
+* Investor rejected
+* Founder login
+* Investor login
+
+Primary objective:
+Create clear separate access flows for Founder and Investor users while keeping the hero page clean, product-focused, and not cluttered with investor or founder entry points.

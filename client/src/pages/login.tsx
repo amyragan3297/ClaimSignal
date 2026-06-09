@@ -233,6 +233,21 @@ export default function LoginPage() {
                 </form>
               </TabsContent>
             </Tabs>
+
+            <div className="mt-6 pt-4 border-t border-border">
+              <p className="text-xs text-center text-muted-foreground mb-3">
+                Special access programs
+              </p>
+              <div className="flex items-center justify-center gap-4 text-xs">
+                <Link href="/founder-access" className="text-amber-500 hover:underline" data-testid="link-founder-access">
+                  Founder Access
+                </Link>
+                <span className="text-muted-foreground">|</span>
+                <Link href="/investor-access" className="text-emerald-500 hover:underline" data-testid="link-investor-access">
+                  Investor Access
+                </Link>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

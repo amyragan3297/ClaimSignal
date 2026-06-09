@@ -33,6 +33,8 @@ import BrandAssetsPage from "@/pages/brand-assets";
 import PricingPage from "@/pages/pricing";
 import FoundingPartnerApplyPage from "@/pages/founding-partner-apply";
 import EnterpriseContactPage from "@/pages/enterprise-contact";
+import FounderAccessPage from "@/pages/founder-access";
+import InvestorAccessPage from "@/pages/investor-access";
 import IdentityResolutionPage from "@/pages/identity-resolution";
 import RevenueIntelligencePage from "@/pages/revenue-intelligence";
 import AppLayout from "@/components/app-layout";
@@ -84,6 +86,8 @@ function Router() {
       <Route path="/pricing" component={PricingPage} />
       <Route path="/founding-partner-apply" component={FoundingPartnerApplyPage} />
       <Route path="/enterprise-contact" component={EnterpriseContactPage} />
+      <Route path="/founder-access" component={FounderAccessPage} />
+      <Route path="/investor-access" component={InvestorAccessPage} />
       <Route path="/login" component={LoginPage} />
       <Route>
         <AppRoutes />

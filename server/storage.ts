@@ -1485,13 +1485,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   // —— Pricing & Registration ——
-  async createFoundingPartnerRequest(data: { fullName: string; email: string; companyName: string; phone?: string; estimatedMonthlyClaimVolume?: string; reasonForJoining?: string }) {
+  async createFoundingPartnerRequest(data: { fullName: string; email: string; companyName: string; phone?: string; estimatedMonthlyClaimVolume?: string; reasonForJoining?: string; inviteCode?: string }) {
     const [created] = await db.insert(foundingPartnerRequests).values(data).returning();
     return created;
   }
 
   async getFoundingPartnerRequests() {
     return db.select().from(foundingPartnerRequests).orderBy(desc(foundingPartnerRequests.createdAt));
+  }
+
+  async getFoundingPartnerRequestById(id: string) {
+    const [record] = await db.select().from(foundingPartnerRequests).where(eq(foundingPartnerRequests.id, id));
+    return record;
+  }
+
+  async updateFoundingPartnerRequest(id: string, data: Partial<typeof foundingPartnerRequests.$inferSelect>) {
+    const [updated] = await db.update(foundingPartnerRequests).set(data).where(eq(foundingPartnerRequests.id, id)).returning();
+    return updated;
   }
 
   async createEnterpriseContactLead(data: { fullName: string; companyName: string; email: string; phone?: string; organizationType?: string; estimatedUsers?: number; estimatedMonthlyClaimVolume?: string; integrationNeeds?: string; message?: string }) {

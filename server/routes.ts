@@ -3,7 +3,7 @@ import { type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
-import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema, type TimelineEvent, type InsertClaim, foundingPartnerRequestSchema, enterpriseContactSchema, insertRevenueOpportunitySchema } from "@shared/schema";
+import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema, type TimelineEvent, type InsertClaim, foundingPartnerRequestSchema, founderAccessRequestSchema, investorAccessRequestSchema, enterpriseContactSchema, insertRevenueOpportunitySchema } from "@shared/schema";
 import { applyPiiMasking, canViewUnmasked, sanitizeSharedClaimList, sanitizePlaybookList, sanitizePlaybookRecord, toPlaybookAggregate, isMaster } from "./masking";
 import { computeCarrierIntelligence } from "./carrier-intelligence";
 import { computeAdjusterScorecard } from "./adjuster-scorecard";
@@ -2581,6 +2581,132 @@ export async function registerRoutes(
     }
   });
 
+  // —— Founder Access Request (public) ——
+  app.post("/api/founder-access/request", async (req, res) => {
+    try {
+      const data = founderAccessRequestSchema.parse(req.body);
+      const request = await storage.createFoundingPartnerRequest(data);
+      await sendAdminNotificationEmail({
+        subject: "New Founder Access Request",
+        body: `Founder Access Request Received\n\nName: ${data.fullName}\nEmail: ${data.email}\nCompany: ${data.companyName}\nPhone: ${data.phone || "N/A"}\nEstimated Monthly Claims: ${data.estimatedMonthlyClaimVolume || "N/A"}\nReason: ${data.reasonForJoining || "N/A"}\nInvite Code: ${data.inviteCode || "None"}`,
+      });
+      await storage.createAuditLog({
+        organizationId: "",
+        actorUserId: "",
+        actorRole: "system",
+        actionType: "FOUNDER_REQUEST_SUBMITTED",
+        entityType: "founder_access_request",
+        entityId: (request as Record<string, unknown>).id as string,
+        afterJson: { email: data.email, inviteCode: data.inviteCode || null },
+        ipAddress: getClientIp(req),
+      });
+      res.json({ success: true, id: (request as Record<string, unknown>).id });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
+    }
+  });
+
+  app.get("/api/admin/founder-access/requests", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
+    try {
+      const requests = await storage.getFoundingPartnerRequests();
+      res.json(requests);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/admin/founder-access/:id/approve", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const id = String(req.params.id);
+      const request = await storage.getFoundingPartnerRequestById(id);
+      if (!request) return res.status(404).json({ message: "Request not found" });
+      if (request.status !== "pending") return res.status(400).json({ message: "Request already processed" });
+
+      const approved = await storage.updateFoundingPartnerRequest(id, {
+        status: "approved",
+        approvedBy: req.auth!.userId,
+        approvedAt: new Date(),
+      });
+
+      await storage.createAuditLog({
+        organizationId: "",
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "FOUNDER_REQUEST_APPROVED",
+        entityType: "founder_access_request",
+        entityId: id,
+        afterJson: { email: request.email, approvedBy: req.auth!.userId },
+        ipAddress: getClientIp(req),
+      });
+
+      res.json({ success: true, request: approved });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/admin/founder-access/:id/reject", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const id = String(req.params.id);
+      const request = await storage.getFoundingPartnerRequestById(id);
+      if (!request) return res.status(404).json({ message: "Request not found" });
+      if (request.status !== "pending") return res.status(400).json({ message: "Request already processed" });
+
+      const rejected = await storage.updateFoundingPartnerRequest(id, {
+        status: "rejected",
+        approvedBy: req.auth!.userId,
+        approvedAt: new Date(),
+        notes: req.body.notes || "Rejected by Master Admin",
+      });
+
+      await storage.createAuditLog({
+        organizationId: "",
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "FOUNDER_REQUEST_REJECTED",
+        entityType: "founder_access_request",
+        entityId: id,
+        afterJson: { email: request.email, rejectedBy: req.auth!.userId, notes: req.body.notes || null },
+        ipAddress: getClientIp(req),
+      });
+
+      res.json({ success: true, request: rejected });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // —— Investor Access Request (public) ——
+  app.post("/api/investor-access/request", async (req, res) => {
+    try {
+      const data = investorAccessRequestSchema.parse(req.body);
+      // Create a placeholder user record for tracking (or store in investor_access table)
+      const investor = await storage.createInvestorAccess({
+        userId: "pending", // placeholder, will be updated on actual user creation
+        organizationId: "pending",
+        status: "pending",
+        notes: `Name: ${data.fullName}, Company: ${data.companyName}, Email: ${data.email}, Interest: ${data.investmentInterest || "N/A"}, Reason: ${data.reasonForAccess || "N/A"}`,
+      });
+      await sendAdminNotificationEmail({
+        subject: "New Investor Access Request",
+        body: `Investor Access Request Received\n\nName: ${data.fullName}\nEmail: ${data.email}\nCompany: ${data.companyName}\nPhone: ${data.phone || "N/A"}\nInvestment Interest: ${data.investmentInterest || "N/A"}\nReason: ${data.reasonForAccess || "N/A"}`,
+      });
+      await storage.createAuditLog({
+        organizationId: "",
+        actorUserId: "",
+        actorRole: "system",
+        actionType: "INVESTOR_REQUEST_SUBMITTED",
+        entityType: "investor_access_request",
+        entityId: (investor as Record<string, unknown>).id as string,
+        afterJson: { email: data.email },
+        ipAddress: getClientIp(req),
+      });
+      res.json({ success: true, id: (investor as Record<string, unknown>).id });
+    } catch (err) {
+      res.status(400).json({ message: (err as Error).message });
+    }
+  });
+
   // —— Enterprise Contact Lead (public) ——
   app.post("/api/enterprise/contact-sales", async (req, res) => {
     try {
@@ -3831,7 +3957,7 @@ export async function registerRoutes(
   app.get("/api/executive/investor-safe", requireAuth, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      if (!['master_admin', 'executive_admin', 'founder'].includes(role)) return res.status(403).json({ message: "Access denied" });
+      if (!['master_admin', 'executive_admin', 'founder', 'investor'].includes(role)) return res.status(403).json({ message: "Access denied" });
       const isGlobal = isMaster(role);
       const allUsers = await storage.getAllUsers();
       const users = isGlobal ? allUsers : allUsers.filter((u) => u.organizationId === orgId);

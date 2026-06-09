@@ -610,6 +610,10 @@ export const foundingPartnerRequests = pgTable("founding_partner_requests", {
   estimatedMonthlyClaimVolume: text("estimated_monthly_claim_volume"),
   reasonForJoining: text("reason_for_joining"),
   status: text("status").notNull().default("pending"),
+  inviteCode: text("invite_code"),
+  approvedBy: varchar("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -901,6 +905,26 @@ export const foundingPartnerRequestSchema = z.object({
   phone: z.string().optional(),
   estimatedMonthlyClaimVolume: z.string().optional(),
   reasonForJoining: z.string().optional(),
+  inviteCode: z.string().optional(),
+});
+
+export const founderAccessRequestSchema = z.object({
+  fullName: z.string().min(2, "Full name required"),
+  email: z.string().email("Valid email required"),
+  companyName: z.string().min(2, "Company name required"),
+  phone: z.string().optional(),
+  estimatedMonthlyClaimVolume: z.string().optional(),
+  reasonForJoining: z.string().optional(),
+  inviteCode: z.string().optional(),
+});
+
+export const investorAccessRequestSchema = z.object({
+  fullName: z.string().min(2, "Full name required"),
+  email: z.string().email("Valid email required"),
+  companyName: z.string().min(2, "Company name required"),
+  phone: z.string().optional(),
+  investmentInterest: z.string().optional(),
+  reasonForAccess: z.string().optional(),
 });
 
 export const enterpriseContactSchema = z.object({
