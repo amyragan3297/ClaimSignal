@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Check, Lock, Crown, Sparkles, Mail } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Lock, Crown, Sparkles } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { useToast } from "@/hooks/use-toast";
@@ -18,7 +18,6 @@ const redeemSchema = z.object({
   fullName: z.string().min(2, "Full name required"),
   email: z.string().email("Valid email required"),
   companyName: z.string().min(2, "Organization name required"),
-  inviteCode: z.string().min(6, "Invite code required"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   agreeToTerms: z.boolean().refine((v) => v === true, "You must agree to the terms and conditions"),
 });
@@ -34,13 +33,14 @@ export default function FounderAccessPage() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
   const [redeemed, setRedeemed] = useState(false);
-  const [, setVerified] = useState(false);
-  const [, setVerifiedData] = useState<{ fullName: string; email: string; companyName: string } | null>(null);
-  const [mode, setMode] = useState<"info" | "login" | "redeem">("info");
+  const [mode, setMode] = useState<"info" | "login" | "setup">("info");
+  const [setupToken, setSetupToken] = useState<string | null>(null);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   const redeemForm = useForm<z.infer<typeof redeemSchema>>({
     resolver: zodResolver(redeemSchema),
-    defaultValues: { fullName: "", email: "", companyName: "", inviteCode: "", password: "", agreeToTerms: false },
+    defaultValues: { fullName: "", email: "", companyName: "", password: "", agreeToTerms: false },
   });
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
@@ -48,42 +48,60 @@ export default function FounderAccessPage() {
     defaultValues: { email: "", password: "" },
   });
 
-  async function onVerifyAndRedeem(data: z.infer<typeof redeemSchema>) {
+  // Check for setup token in URL on mount
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get("token");
+    if (token) {
+      setSetupToken(token);
+      setSetupLoading(true);
+      fetch(`/api/founder-access/setup?token=${encodeURIComponent(token)}`)
+        .then(async (res) => {
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.message || "Invalid setup link");
+          }
+          return res.json();
+        })
+        .then((json) => {
+          const inv = json.invitation;
+          redeemForm.reset({
+            fullName: inv.fullName || "",
+            email: inv.email || "",
+            companyName: inv.companyName || "",
+            password: "",
+            agreeToTerms: false,
+          });
+          setMode("setup");
+        })
+        .catch((err) => {
+          setSetupError(err instanceof Error ? err.message : "Invalid setup link");
+        })
+        .finally(() => setSetupLoading(false));
+    }
+  }, []);
+
+  async function onRedeem(data: z.infer<typeof redeemSchema>) {
     try {
       setRedeeming(true);
-
-      // Step 1: Verify invitation
-      const verifyRes = await apiRequest("POST", "/api/founder-access/verify", {
-        inviteCode: data.inviteCode,
-        email: data.email,
-      });
-      if (!verifyRes.ok) {
-        const err = await verifyRes.json();
-        throw new Error(err.message || "Invalid invitation code");
-      }
-      const verifyJson = await verifyRes.json();
-      setVerified(true);
-      setVerifiedData(verifyJson.invitation);
-
-      // Step 2: Redeem invitation
-      const redeemRes = await apiRequest("POST", "/api/founder-access/redeem", {
-        inviteCode: data.inviteCode,
+      const res = await apiRequest("POST", "/api/founder-access/redeem", {
+        token: setupToken,
         email: data.email,
         password: data.password,
         fullName: data.fullName,
         companyName: data.companyName,
       });
-      if (!redeemRes.ok) {
-        const err = await redeemRes.json();
-        throw new Error(err.message || "Redemption failed");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Account creation failed");
       }
-      const redeemJson = await redeemRes.json();
+      const json = await res.json();
       setRedeemed(true);
       toast({ title: "Welcome, Founder", description: "Your account is ready. Redirecting to dashboard..." });
-      window.location.href = redeemJson.redirect || "/founder";
+      window.location.href = json.redirect || "/founder";
     } catch (err) {
       toast({
-        title: "Redemption failed",
+        title: "Setup failed",
         description: err instanceof Error ? err.message : "An error occurred",
         variant: "destructive",
       });
@@ -106,6 +124,37 @@ export default function FounderAccessPage() {
     } finally {
       setLoginLoading(false);
     }
+  }
+
+  // If a token is in the URL but loading or errored
+  if (setupToken && setupLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Verifying your setup link...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (setupToken && setupError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+              <Lock className="w-8 h-8 text-destructive" />
+            </div>
+            <h2 className="text-xl font-bold">Link Invalid</h2>
+            <p className="text-muted-foreground">{setupError}</p>
+            <Button variant="outline" onClick={() => { setSetupError(null); setMode("info"); }}>
+              Back to Founder Access
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -159,10 +208,6 @@ export default function FounderAccessPage() {
                 </ul>
               </div>
               <div className="space-y-3">
-                <Button className="w-full" onClick={() => setMode("redeem")} data-testid="button-founder-redeem">
-                  <Mail className="w-4 h-4 mr-2" />
-                  Redeem Invitation
-                </Button>
                 <Button variant="outline" className="w-full" onClick={() => setMode("login")} data-testid="button-founder-login">
                   Founder Login
                 </Button>
@@ -199,36 +244,34 @@ export default function FounderAccessPage() {
           </Card>
         )}
 
-        {mode === "redeem" && !redeemed && (
+        {mode === "setup" && !redeemed && (
           <Card>
             <CardContent className="p-6 space-y-4">
-              <h2 className="text-lg font-semibold">Redeem Founder Invitation</h2>
+              <div className="flex items-center gap-2 text-amber-500">
+                <Sparkles className="w-4 h-4" />
+                <h2 className="text-lg font-semibold">Set Up Your Founder Account</h2>
+              </div>
               <p className="text-sm text-muted-foreground">
-                Enter your invitation details to create your Founder account.
+                Your Founding Partner application has been approved. Review your details below and create a password to activate your account.
               </p>
-              <form onSubmit={redeemForm.handleSubmit(onVerifyAndRedeem)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="redeem-code">Invitation Code</Label>
-                  <Input id="redeem-code" placeholder="CSF-XXXXXXXX" data-testid="input-redeem-code" {...redeemForm.register("inviteCode")} />
-                  {redeemForm.formState.errors.inviteCode && <p className="text-xs text-destructive">{redeemForm.formState.errors.inviteCode.message}</p>}
-                </div>
+              <form onSubmit={redeemForm.handleSubmit(onRedeem)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="redeem-name">Full Name</Label>
-                  <Input id="redeem-name" placeholder="John Smith" data-testid="input-redeem-name" {...redeemForm.register("fullName")} />
+                  <Input id="redeem-name" data-testid="input-redeem-name" {...redeemForm.register("fullName")} />
                   {redeemForm.formState.errors.fullName && <p className="text-xs text-destructive">{redeemForm.formState.errors.fullName.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="redeem-email">Email</Label>
-                  <Input id="redeem-email" type="email" placeholder="you@company.com" data-testid="input-redeem-email" {...redeemForm.register("email")} />
+                  <Input id="redeem-email" type="email" data-testid="input-redeem-email" {...redeemForm.register("email")} />
                   {redeemForm.formState.errors.email && <p className="text-xs text-destructive">{redeemForm.formState.errors.email.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="redeem-company">Organization Name</Label>
-                  <Input id="redeem-company" placeholder="Acme Restoration" data-testid="input-redeem-company" {...redeemForm.register("companyName")} />
+                  <Input id="redeem-company" data-testid="input-redeem-company" {...redeemForm.register("companyName")} />
                   {redeemForm.formState.errors.companyName && <p className="text-xs text-destructive">{redeemForm.formState.errors.companyName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="redeem-password">Password</Label>
+                  <Label htmlFor="redeem-password">Create Password</Label>
                   <Input id="redeem-password" type="password" placeholder="Min 8 characters" data-testid="input-redeem-password" {...redeemForm.register("password")} />
                   {redeemForm.formState.errors.password && <p className="text-xs text-destructive">{redeemForm.formState.errors.password.message}</p>}
                 </div>
@@ -254,17 +297,14 @@ export default function FounderAccessPage() {
                 {redeemForm.formState.errors.agreeToTerms && <p className="text-xs text-destructive">{redeemForm.formState.errors.agreeToTerms.message}</p>}
                 <Button type="submit" className="w-full" disabled={redeeming} data-testid="button-redeem-submit">
                   {redeeming && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Create Account &amp; Continue
+                  Activate Account
                 </Button>
               </form>
-              <Button variant="ghost" className="w-full text-sm" onClick={() => setMode("info")}>
-                Back to Founder Access
-              </Button>
             </CardContent>
           </Card>
         )}
 
-        {mode === "redeem" && redeemed && (
+        {mode === "setup" && redeemed && (
           <Card>
             <CardContent className="p-6 text-center space-y-6">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">

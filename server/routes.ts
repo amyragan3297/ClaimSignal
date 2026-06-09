@@ -2618,16 +2618,6 @@ export async function registerRoutes(
         ipAddress: getClientIp(req),
       });
 
-      await sendFounderInvitationEmail({
-        to: email,
-        fullName,
-        inviteCode,
-        companyName,
-        expiresAt,
-      }).catch((err) => {
-        console.warn("[email] Failed to send founder invitation email:", (err as Error).message);
-      });
-
       res.json({ success: true, invitation });
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
@@ -2654,10 +2644,14 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invitation already processed" });
       }
 
+      const setupToken = randomBytes(32).toString("hex");
+      const setupTokenExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
       const approved = await storage.updateFoundingPartnerRequest(id, {
         status: "approved",
         approvedBy: req.auth!.userId,
         approvedAt: new Date(),
+        setupToken,
+        setupTokenExpiresAt,
       });
 
       await storage.createAuditLog({
@@ -2669,6 +2663,16 @@ export async function registerRoutes(
         entityId: id,
         afterJson: { email: request.email, approvedBy: req.auth!.userId },
         ipAddress: getClientIp(req),
+      });
+
+      await sendFounderInvitationEmail({
+        to: request.email,
+        fullName: request.fullName,
+        companyName: request.companyName,
+        setupToken,
+        expiresAt: setupTokenExpiresAt,
+      }).catch((err) => {
+        console.warn("[email] Failed to send founder approval email:", (err as Error).message);
       });
 
       res.json({ success: true, request: approved });
@@ -2706,23 +2710,18 @@ export async function registerRoutes(
     }
   });
 
-  // 5. Public: verify invitation code
-  app.post("/api/founder-access/verify", async (req, res) => {
+  // 5. Public: verify setup token (returns pre-filled data for the signup form)
+  app.get("/api/founder-access/setup", async (req, res) => {
     try {
-      const { inviteCode, email } = req.body;
-      if (!inviteCode || !email) {
-        return res.status(400).json({ message: "Invite code and email are required" });
+      const token = req.query.token as string;
+      if (!token) {
+        return res.status(400).json({ message: "Setup token is required" });
       }
-      const invitation = await storage.getFoundingPartnerRequestByInviteCode(inviteCode);
-      if (!invitation) return res.status(404).json({ message: "Invalid invitation code" });
-      if (invitation.status === "expired") return res.status(400).json({ message: "Invitation has expired" });
-      if (invitation.status === "redeemed") return res.status(400).json({ message: "Invitation already redeemed" });
-      if (invitation.status === "rejected") return res.status(400).json({ message: "Invitation was rejected" });
-      if (invitation.email.toLowerCase() !== email.toLowerCase()) {
-        return res.status(400).json({ message: "Email does not match invitation" });
-      }
-      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
-        return res.status(400).json({ message: "Invitation has expired" });
+      const invitation = await storage.getFoundingPartnerRequestBySetupToken(token);
+      if (!invitation) return res.status(404).json({ message: "Invalid or expired setup link" });
+      if (invitation.status !== "approved") return res.status(400).json({ message: "Setup link already used or not yet approved" });
+      if (invitation.setupTokenExpiresAt && new Date(invitation.setupTokenExpiresAt) < new Date()) {
+        return res.status(400).json({ message: "Setup link has expired" });
       }
       res.json({
         valid: true,
@@ -2730,6 +2729,7 @@ export async function registerRoutes(
           fullName: invitation.fullName,
           email: invitation.email,
           companyName: invitation.companyName,
+          token,
         },
       });
     } catch (err) {
@@ -2740,19 +2740,18 @@ export async function registerRoutes(
   // 6. Public: redeem invitation (create account + org + billing)
   app.post("/api/founder-access/redeem", async (req, res) => {
     try {
-      const { inviteCode, email, password, fullName, companyName } = req.body;
-      if (!inviteCode || !email || !password || !fullName || !companyName) {
+      const { token, email, password, fullName, companyName } = req.body;
+      if (!token || !email || !password || !fullName || !companyName) {
         return res.status(400).json({ message: "All fields are required" });
       }
-      const invitation = await storage.getFoundingPartnerRequestByInviteCode(inviteCode);
-      if (!invitation) return res.status(404).json({ message: "Invalid invitation code" });
-      if (invitation.status === "expired") return res.status(400).json({ message: "Invitation has expired" });
-      if (invitation.status === "redeemed") return res.status(400).json({ message: "Invitation already redeemed" });
+      const invitation = await storage.getFoundingPartnerRequestBySetupToken(token);
+      if (!invitation) return res.status(404).json({ message: "Invalid setup link" });
+      if (invitation.status !== "approved") return res.status(400).json({ message: "Setup link not valid or already used" });
       if (invitation.email.toLowerCase() !== email.toLowerCase()) {
         return res.status(400).json({ message: "Email does not match invitation" });
       }
-      if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
-        return res.status(400).json({ message: "Invitation has expired" });
+      if (invitation.setupTokenExpiresAt && new Date(invitation.setupTokenExpiresAt) < new Date()) {
+        return res.status(400).json({ message: "Setup link has expired" });
       }
 
       const founderCount = await storage.getFounderSubscriptionCount();

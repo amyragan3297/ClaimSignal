@@ -327,6 +327,7 @@ export interface IStorage {
   getFoundingPartnerRequestById(id: string): Promise<unknown | undefined>;
   getFoundingPartnerRequestByInviteCode(inviteCode: string): Promise<unknown | undefined>;
   getFoundingPartnerRequestByEmail(email: string): Promise<unknown | undefined>;
+  getFoundingPartnerRequestBySetupToken(token: string): Promise<unknown | undefined>;
   updateFoundingPartnerRequest(id: string, data: Partial<typeof foundingPartnerRequests.$inferSelect>): Promise<unknown>;
   createEnterpriseContactLead(data: { fullName: string; companyName: string; email: string; phone?: string; organizationType?: string; estimatedUsers?: number; estimatedMonthlyClaimVolume?: string; integrationNeeds?: string; message?: string }): Promise<unknown>;
   getEnterpriseContactLeads(): Promise<unknown[]>;
@@ -1510,6 +1511,11 @@ export class DatabaseStorage implements IStorage {
 
   async getFoundingPartnerRequestByEmail(email: string) {
     const [record] = await db.select().from(foundingPartnerRequests).where(eq(foundingPartnerRequests.email, email));
+    return record;
+  }
+
+  async getFoundingPartnerRequestBySetupToken(token: string) {
+    const [record] = await db.select().from(foundingPartnerRequests).where(eq(foundingPartnerRequests.setupToken, token));
     return record;
   }
 

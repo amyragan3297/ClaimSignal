@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Users, Building2, CreditCard, FileText, Shield, Loader2, Eye,
   Archive, Trash2, RotateCcw, BarChart3, AlertCircle, GitMerge,
-  Crown, Copy, CheckCircle, Plus,
+  Crown, Plus,
 } from "lucide-react";
 import { Redirect } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -294,7 +294,6 @@ interface FounderInvitation {
   email: string;
   companyName: string;
   status: string;
-  inviteCode: string | null;
   createdAt: string | null;
   expiresAt: string | null;
   redeemedAt: string | null;
@@ -305,7 +304,6 @@ interface FounderInvitation {
 function FounderInvitationsTab() {
   const { toast } = useToast();
   const [showCreate, setShowCreate] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const { data: invitations, isLoading } = useQuery<FounderInvitation[]>({
     queryKey: ["/api/admin/founder-invitations"],
@@ -318,7 +316,7 @@ function FounderInvitationsTab() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Invitation created", description: "The founder invitation has been sent." });
+      toast({ title: "Invitation created", description: "Application received. Click Approve to send the setup email." });
       setShowCreate(false);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/founder-invitations"] });
     },
@@ -356,13 +354,6 @@ function FounderInvitationsTab() {
       toast({ title: "Failed to revoke", description: err.message, variant: "destructive" });
     },
   });
-
-  function copyCode(code: string, id: string) {
-    navigator.clipboard.writeText(code);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-    toast({ title: "Copied invitation code" });
-  }
 
   function getStatusBadge(status: string) {
     const map: Record<string, string> = {
@@ -452,14 +443,13 @@ function FounderInvitationsTab() {
                   <TableHead>Email</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Invite Code</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(invitations || []).length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       No founder invitations yet.
                     </TableCell>
                   </TableRow>
@@ -473,27 +463,6 @@ function FounderInvitationsTab() {
                       <Badge variant="outline" className={getStatusBadge(inv.status)}>
                         {inv.status}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {inv.inviteCode ? (
-                        <div className="flex items-center gap-2">
-                          <code className="text-xs bg-muted px-2 py-1 rounded">{inv.inviteCode}</code>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="w-6 h-6"
-                            onClick={() => copyCode(inv.inviteCode!, inv.id)}
-                          >
-                            {copiedId === inv.id ? (
-                              <CheckCircle className="w-3 h-3 text-emerald-500" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">-</span>
-                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">

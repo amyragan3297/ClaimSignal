@@ -618,6 +618,8 @@ export const foundingPartnerRequests = pgTable("founding_partner_requests", {
   expiresAt: timestamp("expires_at"),
   redeemedAt: timestamp("redeemed_at"),
   redeemedBy: varchar("redeemed_by"),
+  setupToken: text("setup_token"),
+  setupTokenExpiresAt: timestamp("setup_token_expires_at"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   notes: text("notes"),
