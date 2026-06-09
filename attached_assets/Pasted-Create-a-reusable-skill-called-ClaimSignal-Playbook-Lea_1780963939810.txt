@@ -1,0 +1,97 @@
+Create a reusable skill called:
+
+ClaimSignal Playbook Learning
+
+Purpose:
+Identify what worked in successful insurance claim outcomes and convert those patterns into reusable claim strategy intelligence.
+
+Responsibilities:
+
+1. Detect successful claim outcomes:
+- Denial overturned to approval
+- Partial approval converted to full approval
+- Reinspection leading to approval
+- Supplement submitted and approved
+- Code documentation accepted
+- Missing scope added
+- Payment increased
+- Claim reopened after denial
+
+2. Identify the actions that happened before the successful outcome:
+- Reinspection requested
+- Photos submitted
+- Estimate revised
+- Supplement submitted
+- Code citation provided
+- Manufacturer documentation provided
+- Carrier contacted
+- Supervisor involved
+- Engineer report challenged
+- Ladder assist findings disputed
+- DOI complaint prepared or submitted
+
+3. Track supporting evidence:
+- Source document
+- Email
+- Screenshot
+- Estimate
+- Photo set
+- Denial letter
+- Approval letter
+- Supplement
+- Payment document
+
+4. Create reusable playbook patterns.
+
+Example:
+Pattern name:
+Denial overturned after reinspection
+
+Required evidence:
+- Initial denial
+- Reinspection request
+- Reinspection documentation
+- Later approval
+
+5. Do not claim that one action caused the outcome unless the documents clearly state it.
+
+Use language such as:
+- Associated with approval
+- Present before approval
+- Preceded approval
+- Commonly appears in successful claims
+
+Avoid unsupported language such as:
+- Caused approval
+- Guaranteed approval
+- Proves approval
+
+6. Require multiple similar claims before labeling a repeatable strategy.
+
+If only one claim supports the pattern, label it:
+Single Claim Example
+
+If three or more claims support the pattern, label it:
+Emerging Pattern
+
+If five or more claims support the pattern, label it:
+Validated Pattern
+
+7. Preserve source references for every playbook pattern.
+
+8. Include confidence scores and sample size.
+
+9. Connect playbook patterns to:
+- Carrier
+- Adjuster
+- Claim type
+- Damage type
+- Denial reason
+- Reinspection status
+- Supplement status
+- Final outcome
+
+10. Never use homeowner personal information in generalized playbook intelligence.
+
+Primary objective:
+Turn claim history into reusable strategy intelligence while preserving evidence, confidence, and legal defensibility.
