@@ -366,7 +366,7 @@ export default function AdminPage() {
     },
   });
 
-  if (!auth?.isPlatformOwner && auth?.user?.role !== "super_admin") {
+  if (!auth?.isPlatformOwner && auth?.user?.role !== 'master_admin') {
     return <Redirect to="/dashboard" />;
   }
 

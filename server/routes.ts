@@ -3,7 +3,7 @@ import { type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import cookieParser from "cookie-parser";
-import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema, type TimelineEvent, type InsertClaim, foundingPartnerRequestSchema, enterpriseContactSchema } from "@shared/schema";
+import { signupSchema, loginSchema, insertClientSchema, insertSupplementSchema, insertAdjusterSchema, insertStormEventSchema, insertTimelineEventSchema, type TimelineEvent, type InsertClaim, foundingPartnerRequestSchema, enterpriseContactSchema, insertRevenueOpportunitySchema } from "@shared/schema";
 import { applyPiiMasking, canViewUnmasked, sanitizeSharedClaimList, sanitizePlaybookList, sanitizePlaybookRecord, toPlaybookAggregate, isMaster } from "./masking";
 import { computeCarrierIntelligence } from "./carrier-intelligence";
 import { computeAdjusterScorecard } from "./adjuster-scorecard";
@@ -166,7 +166,7 @@ export async function registerRoutes(
         passwordHash,
         fullName: data.fullName,
         organizationId: org.id,
-        role: planType === "founder" ? "founder" : "standard",
+        role: planType === "founder" ? "founder" : 'individual',
         founderFlag: planType === "founder",
       });
 
@@ -190,7 +190,7 @@ export async function registerRoutes(
       await storage.createAuditLog({
         organizationId: org.id,
         actorUserId: user.id,
-        actorRole: planType === "founder" ? "founder" : "standard",
+        actorRole: planType === "founder" ? "founder" : 'individual',
         actionType: "USER_REGISTERED",
         entityType: "user",
         entityId: user.id,
@@ -316,12 +316,12 @@ export async function registerRoutes(
       const founderAgreement = await storage.getFounderAgreement(org.id);
 
       const roleRedirects: Record<string, string> = {
-        super_admin: "/master",
-        admin: "/admin",
-        carrier_analyst: "/executive",
+        master_admin: "/master",
+        executive_admin: "/admin",
         founder: "/founder",
-        team_owner: "/team-admin",
-        standard: "/dashboard",
+        team_admin: "/team-admin",
+        team_member: "/dashboard",
+        individual: "/dashboard",
         investor: "/investor",
       };
 
@@ -330,7 +330,7 @@ export async function registerRoutes(
         org,
         billing: billing || null,
         founderAgreement: founderAgreement || null,
-        isPlatformOwner: !!user.isPlatformOwner || user.role === "super_admin",
+        isPlatformOwner: !!user.isPlatformOwner || user.role === "master_admin",
         isImpersonation: req.auth!.isImpersonation,
         redirectTo: roleRedirects[user.role] || "/dashboard",
       });
@@ -374,11 +374,11 @@ export async function registerRoutes(
 
       // Master sees all claims across all tenants, always unmasked
       // Non-Master sees only their own org's claims, always unmasked (own data)
-      const claimsData = role === "super_admin"
+      const claimsData = role === "master_admin"
         ? await storage.getAllClaimsAcrossTenants()
         : await storage.getClaims(orgId);
 
-      if (role === "super_admin") {
+      if (role === "master_admin") {
         await storage.createAuditLog({
           organizationId: orgId,
           actorUserId: req.auth!.userId,
@@ -400,7 +400,7 @@ export async function registerRoutes(
     try {
       const role = req.auth!.role;
       const orgId = req.auth!.organizationId;
-      const includeDemoRecords = req.query.includeDemoRecords === "true" && role === "super_admin";
+      const includeDemoRecords = req.query.includeDemoRecords === "true" && role === "master_admin";
 
       let allClaims = await storage.getAllClaimsAcrossTenants();
 
@@ -432,7 +432,7 @@ export async function registerRoutes(
       });
 
       // Master always unmasked; everyone else receives sanitized/masked records
-      if (role === "super_admin") {
+      if (role === "master_admin") {
         return res.json(allClaims);
       }
 
@@ -448,7 +448,7 @@ export async function registerRoutes(
       const role = req.auth!.role;
       const orgId = req.auth!.organizationId;
 
-      const claims = role === "super_admin"
+      const claims = role === "master_admin"
         ? await storage.getAllClaimsAcrossTenants()
         : await storage.getClaims(orgId);
 
@@ -492,7 +492,7 @@ export async function registerRoutes(
               lifecyclePhase: c.currentPhase ?? null,
               dateOfLoss: lossDateRaw ? new Date(lossDateRaw).toISOString().slice(0, 10) : null,
               claimIdentifier: c.claimNumber
-                ? (role === "super_admin" ? c.claimNumber : "CLM-" + c.id.slice(0, 6).toUpperCase())
+                ? (role === "master_admin" ? c.claimNumber : "CLM-" + c.id.slice(0, 6).toUpperCase())
                 : "CLM-" + c.id.slice(0, 6).toUpperCase(),
             };
           })
@@ -516,7 +516,7 @@ export async function registerRoutes(
       // Try own org first; Master uses direct cross-tenant lookup as fallback
       let claim = await storage.getClaim(req.params.id as string, orgId);
 
-      if (!claim && role === "super_admin") {
+      if (!claim && role === "master_admin") {
         claim = await storage.getClaimAnyTenant(req.params.id as string);
       }
 
@@ -524,7 +524,7 @@ export async function registerRoutes(
 
       // Master: always unmasked, always audited
       // Non-Master: own-org claim returned unmasked (they own this data)
-      if (role === "super_admin") {
+      if (role === "master_admin") {
         await storage.createAuditLog({
           organizationId: claim.organizationId,
           actorUserId: req.auth!.userId,
@@ -746,7 +746,7 @@ export async function registerRoutes(
     const role = req.auth!.role;
     const orgId = req.auth!.organizationId;
     let claim = await storage.getClaim(req.params.id as string, orgId);
-    if (!claim && role === "super_admin") {
+    if (!claim && role === "master_admin") {
       const all = await storage.getAllClaimsAcrossTenants();
       claim = all.find((c) => c.id === req.params.id) || undefined;
     }
@@ -762,7 +762,7 @@ export async function registerRoutes(
 
       const scopeOrg = claim.organizationId;
       const links = await storage.getClaimAdjusters(claim.id, scopeOrg);
-      const orgAdjusters = role === "super_admin"
+      const orgAdjusters = role === "master_admin"
         ? await storage.getAllAdjustersAcrossTenants()
         : await storage.getAdjusters(scopeOrg);
       const adjusterMap = new Map(orgAdjusters.map((a) => [a.id, a]));
@@ -787,7 +787,7 @@ export async function registerRoutes(
   app.post("/api/claims/:id/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
-      if (role === "carrier_analyst") {
+      if (role === "executive_admin") {
         await storage.createAuditLog({
           organizationId: req.auth!.organizationId,
           actorUserId: req.auth!.userId,
@@ -849,7 +849,7 @@ export async function registerRoutes(
   app.patch("/api/claims/:id/adjusters/:linkId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
-      if (role === "carrier_analyst") return res.status(403).json({ message: "Not permitted for this role" });
+      if (role === "executive_admin") return res.status(403).json({ message: "Not permitted for this role" });
 
       const claim = await resolveClaimForCaller(req);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
@@ -890,7 +890,7 @@ export async function registerRoutes(
   app.delete("/api/claims/:id/adjusters/:linkId", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
-      if (role === "carrier_analyst") return res.status(403).json({ message: "Not permitted for this role" });
+      if (role === "executive_admin") return res.status(403).json({ message: "Not permitted for this role" });
 
       const claim = await resolveClaimForCaller(req);
       if (!claim) return res.status(404).json({ message: "Claim not found" });
@@ -928,11 +928,11 @@ export async function registerRoutes(
       const orgId = req.auth!.organizationId;
       const adjusterId = req.params.id as string;
 
-      const links = role === "super_admin"
+      const links = role === "master_admin"
         ? await storage.getAdjusterClaims(adjusterId)
         : await storage.getAdjusterClaims(adjusterId, orgId);
 
-      const allClaims = role === "super_admin"
+      const allClaims = role === "master_admin"
         ? await storage.getAllClaimsAcrossTenants()
         : await storage.getClaims(orgId);
       const claimMap = new Map(allClaims.map((c) => [c.id, c]));
@@ -1080,7 +1080,7 @@ export async function registerRoutes(
   app.get("/api/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
-      const adjustersList = role === "super_admin"
+      const adjustersList = role === "master_admin"
         ? await storage.getAllAdjustersAcrossTenants()
         : await storage.getAdjusters(req.auth!.organizationId);
       res.json(adjustersList);
@@ -1234,7 +1234,7 @@ export async function registerRoutes(
         ipAddress: getClientIp(req),
       });
       // Executive: aggregate metrics only. Master: full. Others: sanitized.
-      if (role === "carrier_analyst") return res.json(entries.map(toPlaybookAggregate));
+      if (role === "executive_admin") return res.json(entries.map(toPlaybookAggregate));
       return res.json(sanitizePlaybookList(entries, role));
     } catch (err) {
       res.status(400).json({ message: (err as Error).message });
@@ -1244,7 +1244,7 @@ export async function registerRoutes(
   app.get("/api/playbooks/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
-      if (role === "carrier_analyst") {
+      if (role === "executive_admin") {
         return res.status(403).json({ message: "Executive role has aggregate-only playbook access" });
       }
       const entry = await storage.getPlaybookEntry(req.params.id as string);
@@ -1578,7 +1578,7 @@ export async function registerRoutes(
       });
 
       // Executive role: aggregate intelligence only — no individual claim cards.
-      if (role === "carrier_analyst") {
+      if (role === "executive_admin") {
         if (filtered.length === 0) {
           return res.json({ executiveAggregateOnly: true, totalResults: 0, message: "No matching playbook history found yet." });
         }
@@ -1646,7 +1646,7 @@ export async function registerRoutes(
       const orgId = req.auth!.organizationId;
       const role = req.auth!.role;
       let claim = await storage.getClaim(req.params.id as string, orgId);
-      if (!claim && role === "super_admin") {
+      if (!claim && role === "master_admin") {
         const all = await storage.getAllClaimsAcrossTenants();
         claim = all.find((c) => c.id === req.params.id) || undefined;
       }
@@ -1688,7 +1688,7 @@ export async function registerRoutes(
       const orgId = req.auth!.organizationId;
       const role = req.auth!.role;
       let target = await storage.getClaim(req.params.id as string, orgId);
-      if (!target && role === "super_admin") {
+      if (!target && role === "master_admin") {
         const all = await storage.getAllClaimsAcrossTenants();
         target = all.find((c) => c.id === req.params.id) || undefined;
       }
@@ -1790,7 +1790,7 @@ export async function registerRoutes(
       const orgId = req.auth!.organizationId;
       const role = req.auth!.role;
       let claim = await storage.getClaim(req.params.id as string, orgId);
-      if (!claim && role === "super_admin") {
+      if (!claim && role === "master_admin") {
         const all = await storage.getAllClaimsAcrossTenants();
         claim = all.find((c) => c.id === req.params.id) || undefined;
       }
@@ -1802,7 +1802,7 @@ export async function registerRoutes(
       }
       const { weather } = weatherResult;
 
-      // Audit cross-tenant access (super_admin viewing another org's claim).
+      // Audit cross-tenant access (master_admin viewing another org's claim).
       if (claim.organizationId !== orgId) {
         await storage.createAuditLog({
           organizationId: claim.organizationId,
@@ -1967,7 +1967,7 @@ export async function registerRoutes(
       const orgId = req.auth!.organizationId;
       const role = req.auth!.role;
       let claim = await storage.getClaim(req.params.id as string, orgId);
-      if (!claim && role === "super_admin") {
+      if (!claim && role === "master_admin") {
         const all = await storage.getAllClaimsAcrossTenants();
         claim = all.find((c) => c.id === req.params.id) || undefined;
       }
@@ -2294,6 +2294,122 @@ export async function registerRoutes(
     }
   });
 
+  // ── Revenue Intelligence ──────────────────────────────────────────────
+  app.get("/api/revenue/opportunities", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
+    try {
+      const { organizationId: orgId, role } = req.auth!;
+      const isGlobal = isMaster(role);
+      const orgScoped = orgId;
+      const opps = isGlobal
+        ? await storage.getAllRevenueOpportunitiesAcrossTenants()
+        : await storage.getRevenueOpportunities(orgScoped);
+      res.json(opps);
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
+  });
+
+  app.post("/api/revenue/opportunities", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
+    try {
+      const { organizationId: orgId } = req.auth!;
+      const parsed = insertRevenueOpportunitySchema.parse({ ...req.body, organizationId: orgId });
+      const opp = await storage.createRevenueOpportunity(parsed);
+      res.status(201).json(opp);
+    } catch (err) { res.status(400).json({ message: (err as Error).message }); }
+  });
+
+  app.put("/api/revenue/opportunities/:id", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
+    try {
+      const { organizationId: orgId } = req.auth!;
+      const updated = await storage.updateRevenueOpportunity(req.params.id as string, orgId, req.body);
+      if (!updated) return res.status(404).json({ message: "Opportunity not found" });
+      res.json(updated);
+    } catch (err) { res.status(400).json({ message: (err as Error).message }); }
+  });
+
+  app.get("/api/revenue/alerts", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
+    try {
+      const { organizationId: orgId, role } = req.auth!;
+      const isGlobal = isMaster(role);
+      const claims = isGlobal ? await storage.getAllClaimsAcrossTenants() : await storage.getClaims(orgId);
+      const alerts: Array<{
+        alertType: string;
+        claimId: string;
+        claimNumber?: string;
+        estimatedImpact: number;
+        confidence: number;
+        recommendedAction: string;
+        urgency: "low" | "medium" | "high";
+      }> = [];
+      for (const c of claims) {
+        const rcv = c.rcvAmount ?? 0;
+        const paid = c.finalPaidAmount ?? 0;
+        const deductible = c.deductible ?? 0;
+        const supplement = c.supplementAmountTotal ?? 0;
+        const recoverableDep = c.recoverableDepreciation ?? 0;
+        const outstanding = Math.max(0, rcv - paid - deductible);
+        if (outstanding > 1000 && c.status !== "closed") {
+          alerts.push({
+            alertType: "underpayment",
+            claimId: c.id,
+            claimNumber: c.claimNumber || undefined,
+            estimatedImpact: outstanding,
+            confidence: 0.75,
+            recommendedAction: "Review claim for underpayment — difference between RCV and paid amount exceeds $1,000",
+            urgency: outstanding > 5000 ? "high" : "medium",
+          });
+        }
+        if (recoverableDep > 0 && c.status !== "closed") {
+          alerts.push({
+            alertType: "recoverable_depreciation",
+            claimId: c.id,
+            claimNumber: c.claimNumber || undefined,
+            estimatedImpact: recoverableDep,
+            confidence: 0.82,
+            recommendedAction: "Recoverable depreciation available — submit depreciation release request",
+            urgency: "medium",
+          });
+        }
+        if (supplement > 0 && c.status !== "closed" && c.supplementOutcome !== "approved") {
+          alerts.push({
+            alertType: "supplement_pending",
+            claimId: c.id,
+            claimNumber: c.claimNumber || undefined,
+            estimatedImpact: supplement,
+            confidence: 0.68,
+            recommendedAction: "Supplement submitted but not yet approved — follow up with carrier",
+            urgency: "medium",
+          });
+        }
+      }
+      res.json({ alerts: alerts.sort((a, b) => b.estimatedImpact - a.estimatedImpact) });
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
+  });
+
+  app.get("/api/revenue/summary", requireAuth, requireActiveSubscription, async (req: AuthRequest, res: Response) => {
+    try {
+      const { organizationId: orgId, role } = req.auth!;
+      const isGlobal = isMaster(role);
+      const claims = isGlobal ? await storage.getAllClaimsAcrossTenants() : await storage.getClaims(orgId);
+      let totalPotential = 0;
+      let totalConfirmed = 0;
+      let underpaidCount = 0;
+      let depCount = 0;
+      let supplementCount = 0;
+      for (const c of claims) {
+        const rcv = c.rcvAmount ?? 0;
+        const paid = c.finalPaidAmount ?? 0;
+        const deductible = c.deductible ?? 0;
+        const supplement = c.supplementAmountTotal ?? 0;
+        const recoverableDep = c.recoverableDepreciation ?? 0;
+        const outstanding = Math.max(0, rcv - paid - deductible);
+        if (outstanding > 1000) { totalPotential += outstanding; underpaidCount++; }
+        if (recoverableDep > 0) { totalPotential += recoverableDep; depCount++; }
+        if (supplement > 0 && c.supplementOutcome === "approved") { totalConfirmed += supplement; }
+        if (supplement > 0 && c.supplementOutcome !== "approved") { totalPotential += supplement; supplementCount++; }
+      }
+      res.json({ totalPotential, totalConfirmed, underpaidCount, depCount, supplementCount, claimCount: claims.length });
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
+  });
+
   app.post("/api/billing/checkout", requireAuth, blockDuringImpersonation, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;
@@ -2604,7 +2720,7 @@ export async function registerRoutes(
       await storage.createAuditLog({
         organizationId: targetUser.organizationId,
         actorUserId: req.auth!.userId,
-        actorRole: "super_admin",
+        actorRole: "master_admin",
         isImpersonation: true,
         impersonatorUserId: req.auth!.userId,
         targetUserId: targetUser.id,
@@ -2637,7 +2753,7 @@ export async function registerRoutes(
       await storage.createAuditLog({
         organizationId: req.auth!.organizationId,
         actorUserId: req.auth!.impersonatorUserId,
-        actorRole: "super_admin",
+        actorRole: "master_admin",
         isImpersonation: true,
         impersonatorUserId: req.auth!.impersonatorUserId,
         targetUserId: req.auth!.userId,
@@ -2738,7 +2854,7 @@ export async function registerRoutes(
 
   function requireCanArchive(req: AuthRequest, res: Response, next: NextFunction) {
     if (!req.auth) return res.status(401).json({ message: "Not authenticated" });
-    const noDestructive = ["carrier_analyst"];
+    const noDestructive = ['executive_admin'];
     if (noDestructive.includes(req.auth.role)) {
       return res.status(403).json({ message: "Your role cannot perform destructive actions" });
     }
@@ -2791,11 +2907,26 @@ export async function registerRoutes(
   // Merges duplicate adjuster profiles within each org using normalized name
   // matching. Idempotent — safe to run multiple times. Returns a structured
   // result with counts and a full operation log.
-  app.post("/api/admin/dedupe-adjusters", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
+  app.post("/api/admin/dedupe-adjusters", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
     try {
       const { runAdjusterDedup } = await import("./dedupe-adjusters-util");
-      const result = await runAdjusterDedup();
+      const orgId = req.query.orgId as string | undefined;
+      const result = await runAdjusterDedup(orgId);
       res.json(result);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  // ── Adjuster Deduplication Status ─────────────────────────────────────────
+  // Returns counts needed for a "Duplicate Review" panel. Read-only, so it is
+  // available to any authenticated user for their own org.
+  app.get("/api/admin/dedupe-adjusters/status", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { getDedupStatus } = await import("./dedupe-adjusters-util");
+      const orgId = req.auth?.organizationId ?? "";
+      const status = await getDedupStatus(orgId);
+      res.json(status);
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
     }
@@ -2901,7 +3032,7 @@ export async function registerRoutes(
   // Claims governance
   app.patch("/api/claims/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const scopedOrgId = isSuperAdmin ? undefined : orgId;
       const ok = await storage.archiveClaim(req.params.id as string, scopedOrgId);
@@ -2917,7 +3048,7 @@ export async function registerRoutes(
 
   app.patch("/api/claims/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const scopedOrgId = isSuperAdmin ? undefined : orgId;
       const ok = await storage.restoreClaim(req.params.id as string, scopedOrgId);
@@ -2945,7 +3076,7 @@ export async function registerRoutes(
   // Adjusters governance
   app.patch("/api/adjusters/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const scopedOrgId = isSuperAdmin ? undefined : orgId;
       const ok = await storage.archiveAdjuster(req.params.id as string, scopedOrgId);
@@ -2961,7 +3092,7 @@ export async function registerRoutes(
 
   app.patch("/api/adjusters/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const scopedOrgId = isSuperAdmin ? undefined : orgId;
       const ok = await storage.restoreAdjuster(req.params.id as string, scopedOrgId);
@@ -2989,7 +3120,7 @@ export async function registerRoutes(
   // Clients governance
   app.patch("/api/clients/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const scopedOrgId = isSuperAdmin ? undefined : orgId;
       const ok = await storage.archiveClient(req.params.id as string, scopedOrgId);
@@ -3005,7 +3136,7 @@ export async function registerRoutes(
 
   app.patch("/api/clients/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const scopedOrgId = isSuperAdmin ? undefined : orgId;
       const ok = await storage.restoreClient(req.params.id as string, scopedOrgId);
@@ -3033,7 +3164,7 @@ export async function registerRoutes(
   // Evidence governance
   app.patch("/api/evidence/files/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const ok = await storage.archiveEvidenceFile(req.params.id as string, isSuperAdmin ? undefined : orgId);
       if (!ok) return res.status(404).json({ message: "File not found or already archived" });
@@ -3047,7 +3178,7 @@ export async function registerRoutes(
 
   app.patch("/api/evidence/files/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const ok = await storage.restoreEvidenceFile(req.params.id as string, isSuperAdmin ? undefined : orgId);
       if (!ok) return res.status(404).json({ message: "File not found" });
@@ -3074,7 +3205,7 @@ export async function registerRoutes(
   // Audio governance
   app.patch("/api/audio/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const ok = await storage.archiveAudioRecording(req.params.id as string, isSuperAdmin ? undefined : orgId);
       if (!ok) return res.status(404).json({ message: "Recording not found or already archived" });
@@ -3088,7 +3219,7 @@ export async function registerRoutes(
 
   app.patch("/api/audio/:id/restore", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const ok = await storage.restoreAudioRecording(req.params.id as string, isSuperAdmin ? undefined : orgId);
       if (!ok) return res.status(404).json({ message: "Recording not found" });
@@ -3115,7 +3246,7 @@ export async function registerRoutes(
   // Communications governance
   app.patch("/api/communications/:id/archive", requireAuth, requireActiveSubscription, requireCanArchive, async (req: AuthRequest, res) => {
     try {
-      const isSuperAdmin = req.auth!.role === "super_admin";
+      const isSuperAdmin = req.auth!.role === "master_admin";
       const orgId = req.auth!.organizationId;
       const ok = await storage.archiveEmail(req.params.id as string, isSuperAdmin ? undefined : orgId);
       if (!ok) return res.status(404).json({ message: "Communication not found or already archived" });
@@ -3487,7 +3618,7 @@ export async function registerRoutes(
   // ─── Section 24: Executive / Investor Reporting ───────────────────────────
   const requireExecAccess = (req: AuthRequest, res: Response, next: NextFunction) => {
     const r = req.auth?.role;
-    if (!r || !["super_admin", "carrier_analyst", "admin", "founder"].includes(r)) return res.status(403).json({ message: "Executive reporting access required" });
+    if (!r || !['master_admin', 'executive_admin', 'founder'].includes(r)) return res.status(403).json({ message: "Executive reporting access required" });
     next();
   };
 
@@ -3583,7 +3714,7 @@ export async function registerRoutes(
   app.get("/api/executive/investor-safe", requireAuth, async (req: AuthRequest, res: Response) => {
     try {
       const { organizationId: orgId, userId, role } = req.auth!;
-      if (!["super_admin", "carrier_analyst", "founder", "admin"].includes(role)) return res.status(403).json({ message: "Access denied" });
+      if (!['master_admin', 'executive_admin', 'founder'].includes(role)) return res.status(403).json({ message: "Access denied" });
       const isGlobal = isMaster(role);
       const allUsers = await storage.getAllUsers();
       const users = isGlobal ? allUsers : allUsers.filter((u) => u.organizationId === orgId);
@@ -3598,6 +3729,188 @@ export async function registerRoutes(
         platformAdoptionTrend: countLastNDays(users, "createdAt", 30) >= 1 ? "growing" : "stable",
         newUsersLast30Days: countLastNDays(users, "createdAt", 30),
         newClaimsLast30Days: countLastNDays(claims, "createdAt", 30),
+      });
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
+  });
+
+  // ─── Section 24b: Executive Intelligence Aggregation ──────────────────────
+  app.get("/api/executive/intelligence", requireAuth, requireActiveSubscription, requireExecAccess, async (req: AuthRequest, res: Response) => {
+    try {
+      const { organizationId: orgId, userId, role } = req.auth!;
+      const isGlobal = isMaster(role);
+      const [claims, allTimeline, allEvidence, allPlaybooks, allAdjusters] = await Promise.all([
+        isGlobal ? storage.getAllClaimsAcrossTenants() : storage.getClaims(orgId),
+        isGlobal ? storage.getAllTimelineEvents() : storage.getTimelineEventsByOrgId(orgId),
+        isGlobal ? storage.getAllEvidenceFilesAcrossTenants() : storage.getEvidenceFiles(orgId),
+        storage.getPlaybookEntries(),
+        isGlobal ? storage.getAllAdjustersAcrossTenants() : storage.getAdjusters(orgId),
+      ]);
+
+      // Financial aggregates
+      const totalRCV = claims.reduce((sum: number, c: typeof claims[0]) => sum + (c.rcvAmount ?? c.rcvTotal ?? 0), 0);
+      const totalACV = claims.reduce((sum: number, c: typeof claims[0]) => sum + (c.acvAmount ?? c.acvTotal ?? 0), 0);
+      const _totalDeductible = claims.reduce((sum: number, c: typeof claims[0]) => sum + (c.deductible ?? 0), 0);
+      const _totalDepreciation = claims.reduce((sum: number, c: typeof claims[0]) => sum + (c.recoverableDepreciation ?? 0) + (c.nonRecoverableDepreciation ?? 0), 0);
+      const totalPayments = claims.reduce((sum: number, c: typeof claims[0]) => sum + (c.finalPaidAmount ?? 0) + (c.priorPayments ?? 0), 0);
+      const totalSupplementRequested = claims.reduce((sum: number, c: typeof claims[0]) => sum + (c.supplementRequested ?? 0), 0);
+      const totalSupplementApproved = claims.reduce((sum: number, c: typeof claims[0]) => sum + (c.supplementApproved ?? 0), 0);
+      const totalRecovered = totalPayments + totalSupplementApproved - totalACV;
+      const revenueOpportunity = claims.reduce((sum: number, c: typeof claims[0]) => sum + (c.outstandingAmount ?? 0), 0);
+
+      // Status breakdown
+      const openClaims = claims.filter((c: typeof claims[0]) => !["closed", "resolved", "denied"].includes(c.status));
+      const deniedClaims = claims.filter((c: typeof claims[0]) => c.status === "denied" || c.finalOutcome === "denied");
+      const approvedClaims = claims.filter((c: typeof claims[0]) => c.status === "resolved" || c.finalOutcome === "approved");
+      const overturned = claims.filter((c: typeof claims[0]) => c.denialOverturned === true);
+      const supplementApprovedClaims = claims.filter((c: typeof claims[0]) => c.supplementOutcome === "approved");
+
+      // Aging claims (open > 30 days without status change)
+      const now = new Date();
+      const aging30 = openClaims.filter(c => {
+        const claimEvents = allTimeline.filter(t => t.claimId === c.id).sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        });
+        const lastEvent = claimEvents[0];
+        const daysSince = lastEvent?.createdAt ? (now.getTime() - new Date(lastEvent.createdAt).getTime()) / 86400000 : 999;
+        return daysSince > 30;
+      });
+      const aging60 = aging30.filter(c => {
+        const claimEvents = allTimeline.filter(t => t.claimId === c.id).sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        });
+        const lastEvent = claimEvents[0];
+        const daysSince = lastEvent?.createdAt ? (now.getTime() - new Date(lastEvent.createdAt).getTime()) / 86400000 : 999;
+        return daysSince > 60;
+      });
+      const aging90 = aging60.filter(c => {
+        const claimEvents = allTimeline.filter(t => t.claimId === c.id).sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        });
+        const lastEvent = claimEvents[0];
+        const daysSince = lastEvent?.createdAt ? (now.getTime() - new Date(lastEvent.createdAt).getTime()) / 86400000 : 999;
+        return daysSince > 90;
+      });
+
+      // Missing documents per claim
+      const claimDocs = new Map<string, string[]>();
+      for (const e of allEvidence) {
+        if (!e.claimId) continue;
+        if (!claimDocs.has(e.claimId)) claimDocs.set(e.claimId, []);
+        claimDocs.get(e.claimId)!.push(e.docCategory || "unknown");
+      }
+      const missingDenialLetters = claims.filter(c => (c.status === "denied" || c.finalOutcome === "denied") && !(claimDocs.get(c.id)?.includes("denial_letter")));
+      const missingEstimates = claims.filter(c => (c.status === "resolved" || c.finalOutcome === "approved") && !(claimDocs.get(c.id)?.includes("estimate")));
+      const missingSupplements = claims.filter(c => (c.supplementRequested ?? 0) > 0 && !(claimDocs.get(c.id)?.includes("supplement")));
+
+      // Carrier performance
+      const carrierGroups = new Map<string, typeof claims>();
+      for (const c of claims) {
+        if (!c.carrier) continue;
+        if (!carrierGroups.has(c.carrier)) carrierGroups.set(c.carrier, []);
+        carrierGroups.get(c.carrier)!.push(c);
+      }
+      const carrierPerformance = Array.from(carrierGroups.entries()).map(([carrier, carrierClaims]) => {
+        const cDenied = carrierClaims.filter(c => c.status === "denied" || c.finalOutcome === "denied").length;
+        const cApproved = carrierClaims.filter(c => c.status === "resolved" || c.finalOutcome === "approved").length;
+        return {
+          carrier,
+          claims: carrierClaims.length,
+          denialRate: carrierClaims.length > 0 ? Number((cDenied / carrierClaims.length).toFixed(2)) : 0,
+          approvalRate: carrierClaims.length > 0 ? Number((cApproved / carrierClaims.length).toFixed(2)) : 0,
+          confidence: carrierClaims.length >= 3 ? Math.min(0.5 + carrierClaims.length * 0.02, 0.95) : 0.3,
+        };
+      }).sort((a, b) => b.claims - a.claims).slice(0, 10);
+
+      // Adjuster performance (linked via claims)
+      const adjusterClaims = new Map<string, typeof claims>();
+      for (const c of claims) {
+        if (!c.adjusterId) continue;
+        if (!adjusterClaims.has(c.adjusterId)) adjusterClaims.set(c.adjusterId, []);
+        adjusterClaims.get(c.adjusterId)!.push(c);
+      }
+      const adjusterPerformance = Array.from(adjusterClaims.entries()).map(([adjId, adjClaims]) => {
+        const adj = allAdjusters.find(a => a.id === adjId);
+        const cDenied = adjClaims.filter(c => c.status === "denied" || c.finalOutcome === "denied").length;
+        const cApproved = adjClaims.filter(c => c.status === "resolved" || c.finalOutcome === "approved").length;
+        return {
+          adjusterId: adjId,
+          adjusterName: adj?.adjusterName || "Unknown",
+          claims: adjClaims.length,
+          denialRate: adjClaims.length > 0 ? Number((cDenied / adjClaims.length).toFixed(2)) : 0,
+          approvalRate: adjClaims.length > 0 ? Number((cApproved / adjClaims.length).toFixed(2)) : 0,
+          confidence: adjClaims.length >= 3 ? Math.min(0.5 + adjClaims.length * 0.02, 0.95) : 0.3,
+        };
+      }).sort((a, b) => b.claims - a.claims).slice(0, 10);
+
+      // Top risks
+      const topRisks = [
+        { label: "Denied claims with no overturn attempt", count: deniedClaims.filter(c => !c.denialOverturned && !c.reinspectionRequested).length, recommendedAction: "Review denial letters and consider supplement or reinspection submission" },
+        { label: "Aging claims with no recent activity", count: aging30.length, recommendedAction: "Follow up on open claims with no status change in 30+ days" },
+        { label: "Claims missing critical documents", count: missingDenialLetters.length + missingEstimates.length + missingSupplements.length, recommendedAction: "Upload missing denial letters, estimates, or supplement documents" },
+      ];
+
+      // Top opportunities
+      const topOpportunities = [
+        { label: "Claims with recoverable depreciation", count: claims.filter(c => (c.recoverableDepreciation ?? 0) > 0).length, recommendedAction: "Pursue release of recoverable depreciation" },
+        { label: "Claims with outstanding amounts", count: claims.filter(c => (c.outstandingAmount ?? 0) > 0).length, recommendedAction: "Submit supplements for outstanding scope" },
+        { label: "Underpaid claims (paid < ACV)", count: claims.filter(c => (c.finalPaidAmount ?? 0) > 0 && (c.finalPaidAmount ?? 0) < (c.acvAmount ?? c.acvTotal ?? 0)).length, recommendedAction: "Review underpaid claims for supplement opportunities" },
+      ];
+
+      // Recommended actions
+      const recommendedActions: string[] = [];
+      const noOverturn = deniedClaims.filter(c => !c.denialOverturned && !c.reinspectionRequested);
+      if (noOverturn.length > 0) recommendedActions.push(`Review ${noOverturn.length} denied claims with no overturn attempt`);
+      const outstandingHigh = claims.filter(c => (c.outstandingAmount ?? 0) > 10000);
+      if (outstandingHigh.length > 0) recommendedActions.push(`Submit supplements for ${outstandingHigh.length} claims with outstanding amounts > $10,000`);
+      if (aging90.length > 0) recommendedActions.push(`Follow up on ${aging90.length} claims open for 90+ days`);
+      if (missingDenialLetters.length > 0) recommendedActions.push(`Upload missing denial letters for ${missingDenialLetters.length} claims`);
+
+      await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "EXECUTIVE_INTELLIGENCE_VIEWED", entityType: "platform", entityId: "intelligence", ipAddress: getClientIp(req) });
+      res.json({
+        executiveSummary: {
+          period: `${new Date(now.getTime() - 90 * 86400000).toISOString().split("T")[0]} to ${now.toISOString().split("T")[0]}`,
+          totalClaims: claims.length,
+          openClaims: openClaims.length,
+          closedClaims: claims.length - openClaims.length,
+          deniedClaims: deniedClaims.length,
+          approvedClaims: approvedClaims.length,
+          overturnedDenials: overturned.length,
+          supplementApprovals: supplementApprovedClaims.length,
+          totalRCV,
+          totalACV,
+          totalPayments,
+          totalSupplementRequested,
+          totalSupplementApproved,
+          totalRecovered,
+          revenueOpportunity,
+        },
+        topRisks,
+        topOpportunities,
+        carrierPerformance,
+        adjusterPerformance,
+        agingClaims: [
+          { age: "30-60 days", count: aging30.length - aging60.length },
+          { age: "60-90 days", count: aging60.length - aging90.length },
+          { age: "90+ days", count: aging90.length },
+        ],
+        missingDocuments: [
+          { document: "Denial letter", count: missingDenialLetters.length },
+          { document: "Estimate", count: missingEstimates.length },
+          { document: "Supplement", count: missingSupplements.length },
+        ],
+        recommendedActions,
+        playbookPerformance: allPlaybooks.slice(0, 5).map(p => ({
+          pattern: p.title || "Unnamed pattern",
+          label: (p.sourceClaimCount ?? 0) >= 3 ? "Validated Pattern" : "Example",
+          confidence: p.confidenceScore ?? 0,
+          sourceClaimCount: p.sourceClaimCount ?? 0,
+        })),
       });
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
@@ -3667,15 +3980,15 @@ function sanitizeUser(user: import("@shared/schema").User) {
   return safe;
 }
 
-// Create or promote a Master (super_admin) platform-owner user. Idempotent.
+// Create or promote a Master (master_admin) platform-owner user. Idempotent.
 // Also syncs the password hash whenever ADMIN_PASSWORD secret changes.
 async function ensureMasterUser(email: string, password: string, fullName: string) {
   const existing = await storage.getUserByEmail(email);
   if (existing) {
     const updates: Record<string, unknown> = {};
-    if (!existing.isPlatformOwner || existing.role !== "super_admin") {
+    if (!existing.isPlatformOwner || existing.role !== 'master_admin') {
       updates.isPlatformOwner = true;
-      updates.role = "super_admin";
+      updates.role = 'master_admin';
     }
     // Sync display name: strip any stale "(DEMO)" suffix or other drift.
     if (existing.fullName !== fullName) {
@@ -3704,7 +4017,7 @@ async function ensureMasterUser(email: string, password: string, fullName: strin
     passwordHash,
     fullName,
     organizationId: org.id,
-    role: "super_admin",
+    role: 'master_admin',
     isPlatformOwner: true,
     founderFlag: false,
   });
@@ -3751,7 +4064,7 @@ async function seedPlatformOwner() {
       passwordHash: testPasswordHash,
       fullName: "Test User (DEMO)",
       organizationId: testOrg.id,
-      role: "super_admin",
+      role: 'master_admin',
       isPlatformOwner: true,
       founderFlag: false,
     });
@@ -3992,7 +4305,7 @@ async function seedDemoUsers() {
     fullName: string;
     orgName?: string;          // omit to join an existing org by ID
     orgId?: string;            // provide to join existing org
-    role: "carrier_analyst" | "team_owner" | "founder" | "standard" | "admin";
+    role: 'executive_admin' | 'team_admin' | 'team_member' | "founder" | 'individual' | 'master_admin';
     founderFlag?: boolean;
     planType?: string;
     subscriptionStatus?: "active" | "trialing";
@@ -4029,12 +4342,12 @@ async function seedDemoUsers() {
     return { userId: user.id, orgId };
   }
 
-  // ── Executive (carrier_analyst) ──────────────────────────────────────────
+  // ── Executive (executive_admin) ──────────────────────────────────────────
   await ensureUser({
     email: "exec@claimsignal.test",
     fullName: "Executive Demo",
     orgName: "Demo Carrier Analytics",
-    role: "carrier_analyst",
+    role: 'executive_admin',
     planType: "pro",
     subscriptionStatus: "active",
   });
@@ -4056,7 +4369,7 @@ async function seedDemoUsers() {
     email: "individual@claimsignal.test",
     fullName: "Individual Demo",
     orgName: "Demo Individual Org",
-    role: "standard",
+    role: 'individual',
     planType: "pro",
     subscriptionStatus: "active",
   });
@@ -4066,7 +4379,7 @@ async function seedDemoUsers() {
     email: "teamadmin@claimsignal.test",
     fullName: "Team Admin Demo",
     orgName: "Demo Team Organization",
-    role: "team_owner",
+    role: 'team_admin',
     planType: "team",
     subscriptionStatus: "active",
   });
@@ -4075,7 +4388,7 @@ async function seedDemoUsers() {
     email: "member@claimsignal.test",
     fullName: "Team Member Demo",
     orgId: teamOrgId,          // same org as Team Admin — billing already created
-    role: "standard",
+    role: 'individual',
     // no planType — billing already exists at org level
   });
 

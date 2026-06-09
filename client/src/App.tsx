@@ -8,6 +8,11 @@ import NotFound from "@/pages/not-found";
 import Homepage from "@/pages/homepage";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
+import FounderDashboardPage from "@/pages/founder-dashboard";
+import ExecutiveDashboardPage from "@/pages/executive-dashboard";
+import TeamDashboardPage from "@/pages/team-dashboard";
+import IndividualDashboardPage from "@/pages/individual-dashboard";
+import InvestorDashboardPage from "@/pages/investor-dashboard";
 import ClaimsPage from "@/pages/claims";
 import ClaimDetailPage from "@/pages/claim-detail";
 import BillingPage from "@/pages/billing";
@@ -29,7 +34,7 @@ import PricingPage from "@/pages/pricing";
 import FoundingPartnerApplyPage from "@/pages/founding-partner-apply";
 import EnterpriseContactPage from "@/pages/enterprise-contact";
 import IdentityResolutionPage from "@/pages/identity-resolution";
-import InvestorPage from "@/pages/investor";
+import RevenueIntelligencePage from "@/pages/revenue-intelligence";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -37,7 +42,17 @@ function AppRoutes() {
   return (
     <AppLayout>
       <Switch>
+        {/* Role-specific dashboards */}
         <Route path="/dashboard" component={DashboardPage} />
+        <Route path="/founder" component={FounderDashboardPage} />
+        <Route path="/executive" component={ExecutiveDashboardPage} />
+        <Route path="/team-admin" component={TeamDashboardPage} />
+        <Route path="/individual" component={IndividualDashboardPage} />
+        <Route path="/investor" component={InvestorDashboardPage} />
+        {/* Master & Admin routes */}
+        <Route path="/admin" component={AdminPage} />
+        <Route path="/master" component={AdminPage} />
+        {/* Core pages */}
         <Route path="/claims" component={ClaimsPage} />
         <Route path="/claims/:id" component={ClaimDetailPage} />
         <Route path="/evidence" component={EvidencePage} />
@@ -54,13 +69,8 @@ function AppRoutes() {
         <Route path="/billing" component={BillingPage} />
         <Route path="/brand-assets" component={BrandAssetsPage} />
         <Route path="/identity-resolution" component={IdentityResolutionPage} />
+        <Route path="/revenue" component={RevenueIntelligencePage} />
         <Route path="/legal/founder" component={FounderLegalPage} />
-        <Route path="/admin" component={AdminPage} />
-        <Route path="/master" component={AdminPage} />
-        <Route path="/executive" component={AdminPage} />
-        <Route path="/founder" component={DashboardPage} />
-        <Route path="/team-admin" component={DashboardPage} />
-        <Route path="/investor" component={InvestorPage} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

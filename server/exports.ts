@@ -88,7 +88,7 @@ router.get("/exports/claims/:claimId", requireAuth, requireActiveSubscription, a
     const effectiveExportType: "intelligence_summary" | "claim_packet_masked" | "claim_packet_unmasked" =
       unmaskedRequested && privileged ? "claim_packet_unmasked" : exportType === "intelligence_summary" ? "intelligence_summary" : "claim_packet_masked";
 
-    let claim = role === "super_admin"
+    let claim = role === "master_admin"
       ? await storage.getClaim(claimId, orgId) || (await storage.getAllClaimsAcrossTenants()).find(c => c.id === claimId)
       : await storage.getClaim(claimId, orgId);
 

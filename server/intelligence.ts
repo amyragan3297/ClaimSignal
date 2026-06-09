@@ -17,7 +17,7 @@ import { z } from "zod";
 const router = Router();
 
 function blockCarrierFromLayer1(req: AuthRequest, res: Response, next: NextFunction) {
-  if (req.auth!.role === "carrier_analyst") {
+  if (req.auth!.role === "executive_admin") {
     return res.status(403).json({ message: "Carrier analysts can only access aggregated intelligence data" });
   }
   next();
@@ -181,7 +181,7 @@ router.get("/weights", async (req: AuthRequest, res: Response) => {
 
 router.post("/weights", async (req: AuthRequest, res: Response) => {
   try {
-    if (req.auth!.role !== "super_admin") {
+    if (req.auth!.role !== "master_admin") {
       return res.status(403).json({ message: "Only platform owner can modify scoring weights" });
     }
     const created = await storage.upsertScoringWeight(req.body);
@@ -322,7 +322,7 @@ router.get("/aggregated/adjuster", async (req: AuthRequest, res: Response) => {
 
 router.post("/aggregated/compute", async (req: AuthRequest, res: Response) => {
   try {
-    if (req.auth!.role !== "super_admin") {
+    if (req.auth!.role !== "master_admin") {
       return res.status(403).json({ message: "Only platform owner can trigger aggregation" });
     }
     const timePeriod = req.body.timePeriod || new Date().toISOString().slice(0, 7);

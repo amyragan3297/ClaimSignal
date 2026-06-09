@@ -41,16 +41,18 @@ import {
   BookOpen,
   MapPin,
   Image,
+  DollarSign,
 } from "lucide-react";
 import { getPlanLabel } from "@/lib/pricing";
 
 const ROLE_LABEL: Record<string, string> = {
-  super_admin: "Master Admin",
-  admin: "Admin",
-  team_owner: "Team Admin",
+  master_admin: "Master Admin",
+  executive_admin: "Executive Admin",
+  team_admin: "Team Admin",
+  team_member: "Team Member",
   founder: "Founder",
-  standard: "Individual",
-  carrier_analyst: "Executive",
+  individual: "Individual",
+  investor: "Investor",
 };
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -78,12 +80,30 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return <Redirect to="/billing" />;
   }
 
-  const role = data.user?.role ?? "standard";
-  const isMaster = role === "super_admin" || data.isPlatformOwner;
-  const isExecutive = role === "carrier_analyst";
+  const role = data.user?.role ?? 'individual';
+  const isMaster = role === "master_admin" || data.isPlatformOwner;
+  const isExecutive = role === "executive_admin";
+  const isFounder = role === "founder";
+  const isTeam = role === "team_admin" || role === "team_member";
+  const isIndividual = role === "individual";
+  const isInvestor = role === "investor";
   const roleLabel = ROLE_LABEL[role] ?? role;
 
   const planLabel = getPlanLabel(billing?.planType);
+
+  const dashboardPath = isMaster
+    ? "/master"
+    : isExecutive
+    ? "/executive"
+    : isFounder
+    ? "/founder"
+    : isTeam
+    ? "/team-admin"
+    : isIndividual
+    ? "/individual"
+    : isInvestor
+    ? "/investor"
+    : "/dashboard";
 
   const style = {
     "--sidebar-width": "16rem",
@@ -132,7 +152,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <SidebarGroupLabel>Core</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {navItem("Dashboard", "/dashboard", LayoutDashboard)}
+                  {navItem("Dashboard", dashboardPath, LayoutDashboard)}
                   {!isExecutive && navItem("Claims", "/claims", FileText)}
                   {!isExecutive && navItem("Evidence", "/evidence", FileSearch)}
                 </SidebarMenu>
@@ -177,6 +197,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <SidebarMenu>
                   {navItem("Billing", "/billing", CreditCard)}
                   {navItem("Brand Assets", "/brand-assets", Image, "nav-brand-assets")}
+                  {(isMaster || isExecutive) && navItem("Revenue Intelligence", "/revenue", DollarSign, "nav-revenue-intelligence")}
                   {(isMaster || isExecutive) && navItem("Executive Metrics", "/admin", BarChart2, "nav-executive-metrics")}
                   {isMaster && navItem("Admin", "/admin", Lock, "nav-admin")}
                   {billing?.planType === "founder" && navItem("Founder Agreement", "/legal/founder", Shield)}

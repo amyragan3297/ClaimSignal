@@ -38,16 +38,22 @@ interface OrphanedMetricKey {
  *  - Duplicates soft-deleted (deleted_at = NOW())
  *  - Orphaned aggregated_metrics rows cleaned up
  *  - Current-period metrics recomputed for merged canonicals
+ *
+ * @param orgId — optional organization filter; if provided, only dedupes within that org
  */
-export async function runAdjusterDedup(): Promise<DedupeResult> {
+export async function runAdjusterDedup(orgId?: string): Promise<DedupeResult> {
   const log: string[] = [];
+
+  const whereClause = orgId
+    ? and(sql`${adjusters.deletedAt} IS NULL`, eq(adjusters.organizationId, orgId))
+    : sql`${adjusters.deletedAt} IS NULL`;
 
   const all = await db
     .select()
     .from(adjusters)
-    .where(sql`deleted_at IS NULL`);
+    .where(whereClause);
 
-  log.push(`Loaded ${all.length} active adjuster record(s).`);
+  log.push(`Loaded ${all.length} active adjuster record(s).${orgId ? ` (orgId: ${orgId})` : ""}`);
 
   const groups = new Map<string, Adjuster[]>();
   for (const adj of all) {
@@ -190,5 +196,48 @@ export async function runAdjusterDedup(): Promise<DedupeResult> {
     orphanedMetricsDeleted,
     metricsRecomputed,
     log,
+  };
+}
+
+export interface DedupStatus {
+  totalActive: number;
+  duplicateGroups: number;
+  duplicatesInGroups: number;
+  lastRun: string | null;
+}
+
+/**
+ * Returns a lightweight read-only status for the duplicate-review panel.
+ * Does not perform any merges or recompute metrics.
+ */
+export async function getDedupStatus(orgId: string): Promise<DedupStatus> {
+  const all = await db
+    .select()
+    .from(adjusters)
+    .where(and(sql`${adjusters.deletedAt} IS NULL`, eq(adjusters.organizationId, orgId)));
+
+  const groups = new Map<string, Adjuster[]>();
+  for (const adj of all) {
+    const key = nameKey(adj.adjusterName);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(adj);
+  }
+
+  const dupGroups = Array.from(groups.values()).filter((g) => g.length > 1);
+  const duplicatesInGroups = dupGroups.reduce((sum, g) => sum + g.length - 1, 0);
+
+  // Last time any adjuster was soft-deleted in this org (approximate "last run")
+  const lastDeleted = await db
+    .select({ deletedAt: adjusters.deletedAt })
+    .from(adjusters)
+    .where(and(eq(adjusters.organizationId, orgId), sql`${adjusters.deletedAt} IS NOT NULL`))
+    .orderBy(sql`${adjusters.deletedAt} DESC`)
+    .limit(1);
+
+  return {
+    totalActive: all.length,
+    duplicateGroups: dupGroups.length,
+    duplicatesInGroups,
+    lastRun: lastDeleted[0]?.deletedAt ? new Date(lastDeleted[0].deletedAt).toISOString() : null,
   };
 }

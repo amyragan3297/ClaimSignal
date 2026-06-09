@@ -3,7 +3,7 @@ import { pgTable, text, varchar, integer, timestamp, boolean, pgEnum, json, real
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const userRoleEnum = pgEnum("user_role", ["super_admin", "admin", "team_owner", "founder", "standard", "carrier_analyst", "investor"]);
+export const userRoleEnum = pgEnum("user_role", ["master_admin", "executive_admin", "team_admin", "team_member", "founder", "individual", "investor"]);
 export const userStatusEnum = pgEnum("user_status", ["active", "archived", "test"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["pending_billing", "trialing", "active", "past_due", "canceled"]);
 export const planTypeEnum = pgEnum("plan_type", ["founder", "pro", "team", "enterprise", "individual"]);
@@ -763,6 +763,40 @@ export const insertCommunicationSignalSchema = createInsertSchema(communicationS
 export const insertPlaybookInsightSchema = createInsertSchema(playbookInsights).omit({ id: true, createdAt: true });
 export const insertScoringWeightSchema = createInsertSchema(scoringWeights).omit({ id: true, createdAt: true });
 export const insertIntelligenceEventSchema = createInsertSchema(intelligenceEvents).omit({ id: true, createdAt: true });
+export const revenueOpportunityStatusEnum = pgEnum("revenue_opportunity_status", ["identified", "needs_review", "in_progress", "resolved", "expired"]);
+export const revenueOpportunityTypeEnum = pgEnum("revenue_opportunity_type", [
+  "missing_scope",
+  "omitted_code_item",
+  "underpaid_line_item",
+  "recoverable_depreciation",
+  "supplement_pending",
+  "payment_delay",
+  "reinspection_opportunity",
+  "matching_issue",
+  "opportunity",
+]);
+export const revenueAlertUrgencyEnum = pgEnum("revenue_alert_urgency", ["low", "medium", "high"]);
+
+export const revenueOpportunities = pgTable("revenue_opportunities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  claimId: varchar("claim_id").notNull(),
+  organizationId: varchar("organization_id").notNull(),
+  opportunityType: revenueOpportunityTypeEnum("opportunity_type").notNull(),
+  status: revenueOpportunityStatusEnum("status").default("identified"),
+  estimatedImpact: real("estimated_impact"),
+  confirmedRecovery: real("confirmed_recovery"),
+  confidenceScore: real("confidence_score"),
+  evidenceFiles: json("evidence_files").$type<string[]>(),
+  recommendedAction: text("recommended_action"),
+  urgency: revenueAlertUrgencyEnum("urgency").default("medium"),
+  sourceDocumentIds: json("source_document_ids").$type<string[]>(),
+  needsReview: boolean("needs_review").default(false),
+  notes: text("notes"),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertRevenueOpportunitySchema = createInsertSchema(revenueOpportunities).omit({ id: true, createdAt: true, resolvedAt: true });
 
 // Storm Event Lookup — roadmap MVP module (manual entry, no external API)
 export const stormEventTypeEnum = pgEnum("storm_event_type", ["hail", "wind", "hail_and_wind", "other"]);
@@ -946,6 +980,8 @@ export type ScoringWeight = typeof scoringWeights.$inferSelect;
 export type InsertScoringWeight = z.infer<typeof insertScoringWeightSchema>;
 export type IntelligenceEvent = typeof intelligenceEvents.$inferSelect;
 export type InsertIntelligenceEvent = z.infer<typeof insertIntelligenceEventSchema>;
+export type RevenueOpportunity = typeof revenueOpportunities.$inferSelect;
+export type InsertRevenueOpportunity = z.infer<typeof insertRevenueOpportunitySchema>;
 
 // Identity Resolution tables
 export const identityProfiles = pgTable("identity_profiles", {

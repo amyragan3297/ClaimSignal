@@ -3,7 +3,7 @@
  * Run with:  npx tsx server/masking.test.ts
  *
  * Proves:
- *   1. Master (super_admin) receives fully unmasked data.
+ *   1. Master (master_admin) receives fully unmasked data.
  *   2. Non-Master users receive masked shared claim data (homeowner PII).
  *   3. Contractor identity is stripped in shared views.
  *   4. Adjuster intelligence is preserved in shared views.
@@ -67,15 +67,15 @@ const sampleClaim = {
   rcvAmount: 42000,
 };
 
-console.log("\n=== 0. Role mapping (Master === super_admin) ===");
-check("MASTER_ROLE is 'super_admin'", MASTER_ROLE === "super_admin");
-check("isMaster('super_admin') is true", isMaster("super_admin") === true);
+console.log("\n=== 0. Role mapping (Master === master_admin) ===");
+check("MASTER_ROLE is 'master_admin'", MASTER_ROLE === "master_admin");
+check("isMaster('master_admin') is true", isMaster("master_admin") === true);
 check("isMaster('founder') is false", isMaster("founder") === false);
-check("canViewUnmasked('super_admin') is true", canViewUnmasked("super_admin") === true);
-check("canViewUnmasked('standard') is false", canViewUnmasked("standard") === false);
+check("canViewUnmasked('master_admin') is true", canViewUnmasked("master_admin") === true);
+check("canViewUnmasked('individual') is false", canViewUnmasked("individual") === false);
 
 console.log("\n=== 1. Master receives UNMASKED data ===");
-const masterRow = sanitizeSharedClaimRecord(sampleClaim, "super_admin");
+const masterRow = sanitizeSharedClaimRecord(sampleClaim, "master_admin");
 check("homeownerName intact", masterRow.homeownerName === "John Smith");
 check("claimNumber intact", masterRow.claimNumber === "800816754");
 check("propertyAddress intact", masterRow.propertyAddress === "604 Milton Road, Athens, AL");
@@ -86,7 +86,7 @@ check("notes intact", typeof masterRow.notes === "string" && masterRow.notes.inc
 check("returns identical object reference (no copy)", masterRow === sampleClaim);
 
 console.log("\n=== 2. Non-Master receives MASKED shared homeowner PII ===");
-for (const role of ["founder", "standard", "team_owner", "admin", "carrier_analyst"]) {
+for (const role of ["founder", "individual", "team_admin", "executive_admin"]) {
   const r = sanitizeSharedClaimRecord(sampleClaim, role);
   check(`[${role}] homeownerName masked to initials`, r.homeownerName === "J. S.");
   check(`[${role}] insuredName masked to initials`, r.insuredName === "J. S.");
@@ -131,7 +131,7 @@ check("approvalProbability preserved", contractorView.approvalProbability === 0.
 check("supplementProbabilityScore preserved", contractorView.supplementProbabilityScore === 0.7);
 
 console.log("\n=== 5. List sanitizer applies per-record ===");
-const list = sanitizeSharedClaimList([sampleClaim, sampleClaim], "standard");
+const list = sanitizeSharedClaimList([sampleClaim, sampleClaim], "individual");
 check("list length preserved", list.length === 2);
 check("every record masked", list.every((r) => r.homeownerName === "J. S."));
 check("every record strips contractor identity", list.every((r) => r.notes === null && r.organizationId === undefined));
@@ -179,7 +179,7 @@ check("Master keeps narrative actionTaken", masterPb.actionTaken === "Submitted 
 check("Master keeps narrative recommendedNextStep", masterPb.recommendedNextStep === "Escalate to desk supervisor with IRC citation");
 
 console.log("\n=== 7. Playbook masking — non-Master strips source linkage + identity ===");
-const sharedPb = sanitizePlaybookRecord(samplePlaybook, "standard");
+const sharedPb = sanitizePlaybookRecord(samplePlaybook, "individual");
 check("organizationId stripped", sharedPb.organizationId === undefined);
 check("sourceClaimId stripped", sharedPb.sourceClaimId === undefined);
 check("createdBy stripped", sharedPb.createdBy === undefined);
@@ -206,7 +206,7 @@ check("outcome preserved", sharedPb.outcome === "supplement_approved");
 check("supplementDelta preserved", sharedPb.supplementDelta === 4200);
 
 console.log("\n=== 9. Playbook list sanitizer applies per-record ===");
-const pbList = sanitizePlaybookList([samplePlaybook, samplePlaybook], "standard");
+const pbList = sanitizePlaybookList([samplePlaybook, samplePlaybook], "individual");
 check("playbook list length preserved", pbList.length === 2);
 check("every playbook strips source linkage", pbList.every((r) => r.organizationId === undefined && r.sourceClaimId === undefined));
 check("every playbook preserves carrier intel", pbList.every((r) => r.carrier === "Farmers"));

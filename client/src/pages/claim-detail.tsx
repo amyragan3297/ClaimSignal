@@ -126,8 +126,8 @@ export default function ClaimDetailPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { data: authData } = useAuth();
-  const userRole = authData?.user?.role || "standard";
-  const isMaster = userRole === "super_admin";
+  const userRole = authData?.user?.role || 'individual';
+  const isMaster = userRole === 'master_admin';
 
   const claimId = params?.id;
 
@@ -1107,7 +1107,7 @@ export default function ClaimDetailPage() {
         </Card>
       </div>
 
-      <ClaimAdjustersCard claimId={claim.id} canEdit={userRole !== "carrier_analyst"} />
+      <ClaimAdjustersCard claimId={claim.id} canEdit={userRole !== 'executive_admin'} />
 
       {/* ── Documentation Checklist (IICRC S500) ── */}
       {(() => {

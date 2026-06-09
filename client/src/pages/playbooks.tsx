@@ -76,8 +76,8 @@ const CONFIDENCE_COLOR: Record<string, string> = {
 
 export default function PlaybooksPage() {
   const { data: auth } = useAuth();
-  const isMaster = auth?.user.role === "super_admin" || !!auth?.isPlatformOwner;
-  const isExecutive = auth?.user.role === "carrier_analyst";
+  const isMaster = auth?.user.role === "master_admin" || !!auth?.isPlatformOwner;
+  const isExecutive = auth?.user.role === "executive_admin";
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<PlaybookEntry | null>(null);

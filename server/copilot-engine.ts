@@ -96,7 +96,7 @@ export function assembleCopilotContext(
 // ── System prompt ──────────────────────────────────────────────────────────
 function buildSystemPrompt(role: string): string {
   const roleInstructions =
-    role === "carrier_analyst"
+    role === "executive_admin"
       ? "You are in Executive mode. Provide only AGGREGATE intelligence — no individual homeowner details, no specific claim identifiers, no individual adjuster names. Focus on patterns, rates, and trends."
       : "You are operating in standard intelligence mode. Follow all masking rules — never output homeowner names, addresses, phone numbers, email addresses, claim numbers, or policy numbers.";
 

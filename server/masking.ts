@@ -5,17 +5,17 @@ type Role = string;
  * ------------------------
  * The platform-owner role is presented to users as "Master".
  * Internally (DB enum `user_role`, JWT `role` claim, all backend checks) the
- * Master permission level is represented by the string "super_admin".
+ * Master permission level is represented by the string "master_admin".
  *
- *     Master  ===  super_admin   (internal permission level)
+ *     Master  ===  master_admin   (internal permission level)
  *
  * The user-facing label "Master" is applied in the frontend via ROLE_LABEL in
  * client/src/components/app-layout.tsx. There is exactly one platform-owner
  * permission level; do not introduce a separate "master" enum value.
  */
-export const MASTER_ROLE = "super_admin" as const;
+export const MASTER_ROLE = "master_admin" as const;
 
-// Only the Master (super_admin) permission level may view unmasked PII.
+// Only the Master (master_admin) permission level may view unmasked PII.
 const PII_UNMASK_ROLES: string[] = [MASTER_ROLE];
 
 export function isMaster(role: string): boolean {

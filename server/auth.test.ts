@@ -153,7 +153,7 @@ async function run() {
   {
     const { mod, restore } = await loadConfig({ NODE_ENV: "test" });
     const loginResponse = {
-      user: { id: "u1", email: "a@b.com", role: "super_admin", passwordHash: "HASH" },
+      user: { id: "u1", email: "a@b.com", role: "master_admin", passwordHash: "HASH" },
       accessToken: "eyJ-secret-jwt-token",
       refreshToken: "raw-refresh-token",
       nested: { token: "deep-token", keep: "visible" },

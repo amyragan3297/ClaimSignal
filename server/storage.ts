@@ -32,6 +32,7 @@ import {
   type PlaybookInsight, type InsertPlaybookInsight,
   type ScoringWeight, type InsertScoringWeight,
   type IntelligenceEvent, type InsertIntelligenceEvent,
+  type RevenueOpportunity, type InsertRevenueOpportunity,
   organizations, users, userSessions, billingAccounts,
   claims, claimVersions, adjusters, claimAdjusters,
   foundingPartnerRequests, enterpriseContactLeads,
@@ -42,6 +43,7 @@ import {
   adjusterAggregatedMetrics,
   supplementIntelligence, adjusterIrcBehavior, communicationSignals, playbookInsights,
   scoringWeights, intelligenceEvents, stormEvents,
+  revenueOpportunities,
   type Escalation, type InsertEscalation, escalations,
   identityProfiles, identityAliases, identityMatches, identityReviewQueue,
   type LoginAttempt, type InsertLoginAttempt, type InvestorAccess, type InsertInvestorAccess,
@@ -254,6 +256,13 @@ export interface IStorage {
   getIntelligenceEventsByAdjuster(adjusterId: string, orgId: string): Promise<IntelligenceEvent[]>;
   getIntelligenceEventsByAdjusterAllOrgs(adjusterId: string): Promise<IntelligenceEvent[]>;
   getIntelligenceEventsByCategory(claimId: string, orgId: string, category: string): Promise<IntelligenceEvent[]>;
+
+  // Revenue Intelligence
+  createRevenueOpportunity(data: InsertRevenueOpportunity): Promise<RevenueOpportunity>;
+  getRevenueOpportunities(orgId: string, claimId?: string): Promise<RevenueOpportunity[]>;
+  getRevenueOpportunity(id: string, orgId: string): Promise<RevenueOpportunity | undefined>;
+  updateRevenueOpportunity(id: string, orgId: string, data: Partial<RevenueOpportunity>): Promise<RevenueOpportunity | undefined>;
+  getAllRevenueOpportunitiesAcrossTenants(): Promise<RevenueOpportunity[]>;
 
   // Storm Events
   createStormEvent(event: InsertStormEvent): Promise<StormEvent>;
@@ -1601,6 +1610,39 @@ export class DatabaseStorage implements IStorage {
       updatedAt: new Date(),
     }).where(eq(users.id, userId)).returning();
     return updated;
+  }
+
+  // Revenue Intelligence
+  async createRevenueOpportunity(data: InsertRevenueOpportunity): Promise<RevenueOpportunity> {
+    const [created] = await db.insert(revenueOpportunities).values(data).returning();
+    return created;
+  }
+
+  async getRevenueOpportunities(orgId: string, claimId?: string): Promise<RevenueOpportunity[]> {
+    if (claimId) {
+      return db.select().from(revenueOpportunities).where(
+        and(eq(revenueOpportunities.organizationId, orgId), eq(revenueOpportunities.claimId, claimId))
+      ).orderBy(desc(revenueOpportunities.createdAt));
+    }
+    return db.select().from(revenueOpportunities).where(eq(revenueOpportunities.organizationId, orgId)).orderBy(desc(revenueOpportunities.createdAt));
+  }
+
+  async getRevenueOpportunity(id: string, orgId: string): Promise<RevenueOpportunity | undefined> {
+    const [opp] = await db.select().from(revenueOpportunities).where(
+      and(eq(revenueOpportunities.id, id), eq(revenueOpportunities.organizationId, orgId))
+    );
+    return opp;
+  }
+
+  async updateRevenueOpportunity(id: string, orgId: string, data: Partial<RevenueOpportunity>): Promise<RevenueOpportunity | undefined> {
+    const [updated] = await db.update(revenueOpportunities).set(data).where(
+      and(eq(revenueOpportunities.id, id), eq(revenueOpportunities.organizationId, orgId))
+    ).returning();
+    return updated;
+  }
+
+  async getAllRevenueOpportunitiesAcrossTenants(): Promise<RevenueOpportunity[]> {
+    return db.select().from(revenueOpportunities).orderBy(desc(revenueOpportunities.createdAt));
   }
 }
 

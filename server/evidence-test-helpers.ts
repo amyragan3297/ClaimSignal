@@ -198,7 +198,7 @@ export function mountEvidenceApp(): Promise<MountedApp> {
     (req as unknown as Record<string, unknown>).auth = {
       userId: "user-1",
       organizationId: "org-1",
-      role: "standard",
+      role: "individual",
       email: "t@t.com",
     };
     next();

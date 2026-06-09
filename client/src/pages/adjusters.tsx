@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import type { Adjuster } from "@shared/schema";
-import { Plus, Users, Loader2, Search, X, ChevronLeft, Activity, BarChart3, Target, MoreHorizontal, Archive, Trash2, Download, MessageSquare, Zap } from "lucide-react";
+import { Plus, Users, Loader2, Search, X, ChevronLeft, Activity, BarChart3, Target, MoreHorizontal, Archive, Trash2, Download, MessageSquare, Zap, Merge } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Link } from "wouter";
 
@@ -553,9 +553,9 @@ export default function AdjustersPage() {
   const [selectedAdjuster, setSelectedAdjuster] = useState<Adjuster | null>(null);
   const { toast } = useToast();
   const { data: authData } = useAuth();
-  const userRole = authData?.user?.role || "standard";
-  const isMaster = userRole === "super_admin";
-  const canArchive = !["carrier_analyst"].includes(userRole);
+  const userRole = authData?.user?.role || 'individual';
+  const isMaster = userRole === 'master_admin';
+  const canArchive = !['executive_admin'].includes(userRole);
   const [confirmDialog, setConfirmDialog] = useState<{ type: "archive" | "delete"; adjuster: Adjuster } | null>(null);
 
   const { data: adjustersList, isLoading } = useQuery<Adjuster[]>({
@@ -596,6 +596,25 @@ export default function AdjustersPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Failed to add adjuster", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const dedupStatusQuery = useQuery<{ totalActive: number; duplicateGroups: number; duplicatesInGroups: number; lastRun: string | null }>({
+    queryKey: ["/api/admin/dedupe-adjusters/status"],
+  });
+
+  const runDedupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/dedupe-adjusters");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/adjusters"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/dedupe-adjusters/status"] });
+      toast({ title: `Merged ${data.mergedCount} duplicate(s)`, description: `${data.duplicateGroups} group(s) processed.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Deduplication failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -743,6 +762,38 @@ export default function AdjustersPage() {
           )}
         </div>
       </div>
+
+      {dedupStatusQuery.data && dedupStatusQuery.data.duplicateGroups > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5" data-testid="card-duplicate-review">
+          <CardContent className="flex items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-3">
+              <Merge className="w-5 h-5 text-amber-500" />
+              <div>
+                <p className="text-sm font-medium text-amber-500">
+                  {dedupStatusQuery.data.duplicatesInGroups} possible duplicate adjuster{dedupStatusQuery.data.duplicatesInGroups === 1 ? "" : "s"} detected
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {dedupStatusQuery.data.duplicateGroups} name group{dedupStatusQuery.data.duplicateGroups === 1 ? "" : "s"} matched.
+                  {dedupStatusQuery.data.lastRun ? ` Last merged ${new Date(dedupStatusQuery.data.lastRun).toLocaleDateString()}.` : " Never run."}
+                </p>
+              </div>
+            </div>
+            {isMaster && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                disabled={runDedupMutation.isPending}
+                onClick={() => runDedupMutation.mutate()}
+                data-testid="button-run-dedup"
+              >
+                {runDedupMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                Merge Duplicates
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-0">

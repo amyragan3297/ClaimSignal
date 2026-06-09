@@ -34,9 +34,9 @@ export default function ClientsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
   const { data: authData } = useAuth();
-  const userRole = authData?.user?.role || "standard";
-  const isMaster = userRole === "super_admin";
-  const canArchive = !["carrier_analyst"].includes(userRole);
+  const userRole = authData?.user?.role || 'individual';
+  const isMaster = userRole === 'master_admin';
+  const canArchive = !['executive_admin'].includes(userRole);
   const [confirmDialog, setConfirmDialog] = useState<{ type: "archive" | "delete"; client: Client } | null>(null);
 
   const { data: clientsList, isLoading } = useQuery<Client[]>({

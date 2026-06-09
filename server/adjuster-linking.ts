@@ -226,5 +226,15 @@ export async function extractAndLinkAdjustersForClaim(
     }
   }
 
+  // Auto-dedup after linking to catch newly-created duplicates
+  if (linked.length > 0) {
+    try {
+      const { runAdjusterDedup } = await import("./dedupe-adjusters-util");
+      await runAdjusterDedup(orgId);
+    } catch (dedupErr: unknown) {
+      console.error("[adjuster-linking] auto-dedup non-fatal:", (dedupErr as Error)?.message);
+    }
+  }
+
   return linked;
 }

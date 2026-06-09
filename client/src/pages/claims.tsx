@@ -883,9 +883,9 @@ export default function ClaimsPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { data: authData } = useAuth();
-  const userRole = authData?.user?.role || "standard";
-  const isMaster = userRole === "super_admin";
-  const canArchive = !["carrier_analyst"].includes(userRole);
+  const userRole = authData?.user?.role || 'individual';
+  const isMaster = userRole === 'master_admin';
+  const canArchive = !['executive_admin'].includes(userRole);
   const [sharedSearch, setSharedSearch] = useState("");
   const [showDemoRecords, setShowDemoRecords] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{

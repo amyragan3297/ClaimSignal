@@ -78,7 +78,7 @@ export async function createAuthSession(
     email: user.email,
     organizationId,
     role: user.role,
-    isPlatformOwner: !!user.isPlatformOwner || user.role === "super_admin",
+    isPlatformOwner: !!user.isPlatformOwner || user.role === "master_admin",
     isImpersonation: opts?.isImpersonation ?? false,
     impersonatorUserId: opts?.impersonatorUserId,
     sessionId: session.id,
@@ -120,7 +120,7 @@ export async function refreshAuthSession(
     email: user.email,
     organizationId: session.organizationId,
     role: user.role,
-    isPlatformOwner: !!user.isPlatformOwner || user.role === "super_admin",
+    isPlatformOwner: !!user.isPlatformOwner || user.role === "master_admin",
     isImpersonation: session.isImpersonation ?? false,
     impersonatorUserId: session.impersonatorUserId ?? undefined,
     sessionId: newSession.id,
@@ -190,7 +190,7 @@ export function requirePlatformOwner(req: AuthRequest, res: Response, next: Next
 
 export function requireSuperAdmin(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.auth) return res.status(401).json({ message: "Not authenticated" });
-  if (req.auth.role !== "super_admin") {
+  if (req.auth.role !== "master_admin") {
     return res.status(403).json({ message: "Forbidden" });
   }
   next();

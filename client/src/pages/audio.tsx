@@ -75,9 +75,9 @@ function TranscriptToggle({ text }: { text: string }) {
 export default function AudioPage() {
   const { toast } = useToast();
   const { data: authData } = useAuth();
-  const userRole = authData?.user?.role || "standard";
-  const isMaster = userRole === "super_admin";
-  const canArchive = !["carrier_analyst"].includes(userRole);
+  const userRole = authData?.user?.role || 'individual';
+  const isMaster = userRole === 'master_admin';
+  const canArchive = !['executive_admin'].includes(userRole);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedClaimId, setSelectedClaimId] = useState("none");
   const [fileName, setFileName] = useState("");
