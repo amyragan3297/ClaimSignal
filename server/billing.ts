@@ -25,8 +25,8 @@ export async function createCheckoutSession(
 ): Promise<{ url: string } | { error: string }> {
   if (planType === "founder") {
     const founderCount = await getFounderCount();
-    if (founderCount >= 3) {
-      return { error: "Founder tier unavailable - all 3 spots are taken" };
+    if (founderCount >= 100) {
+      return { error: "Founder tier unavailable - all spots are taken" };
     }
   }
 

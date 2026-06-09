@@ -48,7 +48,7 @@ ClaimSignal is a full-stack monorepo with a React frontend (`client/`), an Expre
 - **Master (`super_admin`)** has full platform access, impersonation, cross-tenant data visibility, and is the only role that receives unmasked PII (enforced server-side via `MASTER_ROLE` in `server/masking.ts`).
 
 ### Billing Model
-- **Tiers:** Founding Partner ($79/mo), Individual ($99/mo), Team ($299/mo, includes 5 users, +$25/user/month for additional seats), Enterprise (contact sales).
+- **Tiers:** Founding Partner ($79/mo), Individual ($149/mo), Team ($299/mo, includes 5 users, +$25/user/month for additional seats), Enterprise (contact sales).
 - **Founding Partner:** 14-day trial (card required), $79/mo locked for life while subscription remains active; rate forfeited permanently upon cancellation. Limited availability, requires legal agreement for unmasked data.
 - **Individual:** Renamed from "Pro". No trial, immediate active status.
 - **Team:** $299/mo, includes 5 users, +$25/user/month for additional seats. No trial, immediate active status.
