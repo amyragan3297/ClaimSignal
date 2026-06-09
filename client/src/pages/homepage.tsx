@@ -19,14 +19,14 @@ import {
 } from "lucide-react";
 
 const solutionCards = [
-  { icon: ClipboardList, title: "Claim Intake", description: "Structured intake for loss type, carrier, policy, lifecycle phase, and key dates." },
-  { icon: Brain, title: "Document Intelligence", description: "Structured extraction of financials, scope fields, code items, denial signals, and risk indicators from uploaded claim documents." },
-  { icon: Zap, title: "Action Engine", description: "Generates prioritized recommended actions from extracted document intelligence and scoring signals." },
-  { icon: BookOpen, title: "Playbook Engine", description: "Builds adjuster-specific behavioral playbooks from historical claim pattern data." },
-  { icon: BarChart2, title: "Carrier Intelligence", description: "Aggregated adjuster and carrier behavioral data for pattern analysis without homeowner PII." },
-  { icon: Users, title: "Adjuster Intelligence", description: "Friction scoring, supplement resistance, IRC behavior, and response velocity by adjuster." },
-  { icon: CloudLightning, title: "Storm Date Intelligence", description: "Storm event lookup module for correlating claim dates with verifiable weather events." },
-  { icon: FileText, title: "Audit Logs", description: "Immutable event stream capturing all platform actions for compliance and review purposes." },
+  { icon: ClipboardList, title: "Claim Intelligence", description: "Automatically organizes claim information including homeowner data, carrier details, claim numbers, dates of loss, financials, communications, and claim status." },
+  { icon: Brain, title: "AI Extraction", description: "Extracts financial data, scope items, code requirements, denial indicators, adjuster information, carrier information, and claim activity directly from uploaded documents." },
+  { icon: Zap, title: "Action Engine", description: "Identifies missing scope, supplement opportunities, documentation gaps, escalation triggers, and recommended next steps." },
+  { icon: Users, title: "Adjuster Intelligence", description: "Tracks adjuster response times, supplement behavior, reinspection trends, approval patterns, friction indicators, and claim outcomes." },
+  { icon: BarChart2, title: "Carrier Intelligence", description: "Analyzes carrier approval trends, supplement success rates, response performance, payment behavior, and recurring claim patterns." },
+  { icon: BookOpen, title: "Claim Playbooks", description: "Builds intelligence from historical claim outcomes to identify what documentation, strategies, and actions produce successful results." },
+  { icon: CloudLightning, title: "Storm Intelligence", description: "Correlates claims with verified weather events, storm dates, hail activity, wind events, and geographic loss data." },
+  { icon: FileText, title: "Audit & Compliance", description: "Maintains complete audit history, document tracking, role-based permissions, and compliance records across all claim activity." },
 ];
 
 
@@ -45,9 +45,9 @@ export default function Homepage() {
             <Link href="/login">
               <Button variant="ghost" size="sm" data-testid="link-login">Log In</Button>
             </Link>
-            <Link href="/login?tab=register">
+            <Link href="/founding-partner-apply">
               <Button size="sm" data-testid="button-nav-request-access">
-                Request Access
+                Request Founder Access
                 <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </Link>
@@ -66,26 +66,30 @@ export default function Homepage() {
             className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-tight"
             data-testid="text-hero-title"
           >
-            Claim intelligence built from real claim evidence.
+            Property Claim Intelligence Powered by AI
           </h1>
           <p
             className="text-base md:text-lg text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed"
             data-testid="text-hero-subtext"
           >
-            ClaimSignal™ organizes estimates, photos, denial letters, audio, inspection notes, storm data, and carrier communications into structured claim intelligence for contractors, claim professionals, and restoration teams.
+            Upload claim documents, photos, estimates, denial letters, emails, recordings, and inspection reports. ClaimSignal automatically extracts claim data, identifies risk factors, tracks adjuster and carrier patterns, and recommends next actions.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
-            <Link href="/login?tab=register">
+            <Link href="/founding-partner-apply">
               <Button size="lg" className="px-8" data-testid="button-hero-cta">
-                Request Access
+                Request Founder Access
                 <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </Link>
-            <Link href="/login">
-              <Button variant="outline" size="lg" className="px-8" data-testid="button-hero-secondary">
-                View Platform
-              </Button>
-            </Link>
+            <Button
+              variant="outline"
+              size="lg"
+              className="px-8"
+              data-testid="button-hero-secondary"
+              onClick={() => document.getElementById("platform")?.scrollIntoView({ behavior: "smooth" })}
+            >
+              View Platform
+            </Button>
           </div>
         </div>
       </section>
@@ -97,15 +101,18 @@ export default function Homepage() {
             The Problem
           </Badge>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
-            Property claim work is fragmented, manual, and difficult to defend.
+            Critical Claim Information Is Scattered Everywhere.
           </h2>
           <p className="text-muted-foreground leading-relaxed text-base">
-            Claim files often live across estimates, photos, emails, voicemails, inspection notes, and carrier correspondence. ClaimSignal™ is designed to convert that scattered evidence into structured operational intelligence.
+            Property claim files are spread across estimates, photos, emails, denial letters, inspection reports, recordings, invoices, and carrier communications. Important information is often missed, timelines become difficult to track, and opportunities for recovery are lost.
+          </p>
+          <p className="text-muted-foreground/80 leading-relaxed text-sm mt-4">
+            ClaimSignal centralizes claim intelligence, automatically extracts key information, and helps claim professionals make faster, more informed decisions.
           </p>
         </div>
       </section>
 
-      {/* Solution */}
+      {/* Platform */}
       <section className="py-24 px-6" id="platform">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
@@ -113,10 +120,10 @@ export default function Homepage() {
               Platform
             </Badge>
             <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
-              A structured intelligence layer for property claims.
+              One Platform. Complete Claim Intelligence.
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm leading-relaxed">
-              Eight interconnected modules that convert scattered claim evidence into defensible, actionable intelligence.
+              ClaimSignal transforms claim documents into actionable intelligence. Every upload contributes to a living claim record, automated timeline, financial analysis, adjuster profile, carrier profile, and recommended next actions.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -176,22 +183,22 @@ export default function Homepage() {
         </div>
       </section>
 
-      {/* Get Started */}
+      {/* Final CTA */}
       <section className="py-20 px-6">
         <div className="max-w-3xl mx-auto text-center">
           <Badge variant="outline" className="mb-5 text-xs tracking-wide uppercase px-3 py-1">
             Get Started
           </Badge>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
-            Claim intelligence that works for you.
+            Upload a Claim. Get Answers.
           </h2>
           <p className="text-muted-foreground leading-relaxed text-sm max-w-2xl mx-auto">
-            ClaimSignal is live with full platform access: authentication, role-based access, tenant isolation, server-enforced PII masking, audit logging, Stripe billing, claim and evidence management, AI-powered claim extraction and analysis, audio transcription, and behavioral scoring. Every metric is evidence-backed — empty data shows as "Not enough data" rather than a false zero.
+            ClaimSignal automatically extracts claim data, analyzes claim activity, identifies opportunities, tracks adjuster and carrier patterns, and delivers actionable intelligence from every document you upload.
           </p>
           <div className="mt-8 flex items-center justify-center">
-            <Link href="/login?tab=register">
+            <Link href="/founding-partner-apply">
               <Button size="lg" className="px-8" data-testid="button-stage-cta">
-                Request Access
+                Request Founder Access
                 <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </Link>
@@ -219,8 +226,8 @@ export default function Homepage() {
               </div>
               <div className="flex flex-col gap-2">
                 <span className="font-semibold text-foreground uppercase tracking-wider text-[10px]">Platform</span>
-                <a href="#platform" className="hover:text-foreground transition-colors">Overview</a>
-                <a href="#security" className="hover:text-foreground transition-colors">Security</a>
+                <button onClick={() => document.getElementById("platform")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-foreground transition-colors text-left">Overview</button>
+                <button onClick={() => document.getElementById("security")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-foreground transition-colors text-left">Security</button>
                 <Link href="/login" className="hover:text-foreground transition-colors">Log In</Link>
               </div>
               <div className="flex flex-col gap-2">

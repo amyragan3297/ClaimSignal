@@ -35,8 +35,8 @@ export default function PricingPage() {
             <Link href="/login">
               <Button variant="ghost" size="sm">Log In</Button>
             </Link>
-            <Link href="/login?tab=register">
-              <Button size="sm">Request Access</Button>
+            <Link href="/founding-partner-apply">
+              <Button size="sm">Request Founder Access</Button>
             </Link>
           </div>
         </div>
