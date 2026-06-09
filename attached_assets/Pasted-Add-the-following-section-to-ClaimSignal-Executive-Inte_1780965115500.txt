@@ -1,0 +1,168 @@
+Add the following section to ClaimSignal Executive Intelligence:
+
+AI Executive Decision Engine
+
+ClaimSignal AI must not only report metrics.
+
+ClaimSignal AI must continuously analyze platform-wide data and generate executive-level recommendations.
+
+AI responsibilities:
+
+1. Risk Detection
+
+AI identifies:
+
+- Claims likely to stall
+- Claims likely to be denied
+- Claims missing critical documentation
+- Claims approaching deadlines
+- Claims with payment delays
+- Claims with unresolved supplements
+- Claims requiring escalation
+
+Each risk includes:
+
+- Risk score
+- Confidence score
+- Supporting evidence
+- Recommended action
+
+2. Revenue Opportunity Detection
+
+AI identifies:
+
+- Missing scope opportunities
+- Recoverable depreciation opportunities
+- Supplement opportunities
+- Code compliance opportunities
+- Reinspection opportunities
+- Matching opportunities
+- Underpaid claims
+
+Each opportunity includes:
+
+- Estimated revenue impact
+- Confidence score
+- Supporting evidence
+- Recommended action
+
+3. Carrier Intelligence Monitoring
+
+AI continuously evaluates:
+
+- Carrier approval trends
+- Carrier denial trends
+- Carrier response times
+- Carrier payment delays
+- Carrier supplement behavior
+- Carrier documentation requests
+
+AI flags significant trend changes automatically.
+
+4. Adjuster Intelligence Monitoring
+
+AI continuously evaluates:
+
+- Adjuster approval patterns
+- Adjuster denial patterns
+- Reinspection involvement
+- Documentation request frequency
+- Communication response times
+- Outcome transition participation
+
+AI identifies emerging patterns only when minimum sample thresholds are met.
+
+5. Executive Recommendations
+
+AI generates recommendations such as:
+
+- Request reinspection
+- Submit additional documentation
+- Escalate to supervisor
+- Submit code support
+- Request engineering review
+- Challenge engineering findings
+- Pursue supplement
+- Release depreciation
+- Close claim
+- Continue monitoring
+
+Recommendations must include:
+
+- Reasoning
+- Evidence
+- Confidence score
+
+6. Confidence Requirements
+
+AI must never present speculation as fact.
+
+Every recommendation must include:
+
+- Confidence score
+- Sample size
+- Supporting evidence
+- Source records
+
+7. Continuous Learning
+
+AI continuously learns from:
+
+- Closed claims
+- Approved claims
+- Denied claims
+- Reopened claims
+- Supplement outcomes
+- Reinspection outcomes
+- Playbook outcomes
+
+AI updates intelligence as new evidence enters the system.
+
+8. Auditability
+
+Every AI recommendation must store:
+
+- Recommendation date
+- AI confidence score
+- Evidence used
+- Claims referenced
+- User actions taken
+- Final outcome
+
+This allows ClaimSignal to measure whether AI recommendations actually improved outcomes.
+
+9. Master Admin Visibility
+
+Master Admin can view:
+
+- All AI recommendations
+- AI accuracy metrics
+- Recommendation acceptance rates
+- Recommendation success rates
+- AI confidence performance
+- Learning history
+
+Master Admin:
+claimsignal1@gmail.com
+
+10. AI Rule
+
+ClaimSignal is an AI-powered claim intelligence platform.
+
+AI is responsible for:
+
+- Extraction
+- Classification
+- Matching
+- Timeline creation
+- Pattern detection
+- Adjuster intelligence
+- Carrier intelligence
+- Playbook learning
+- Executive intelligence
+- Recommendation generation
+
+Users review and act on recommendations.
+
+AI provides intelligence.
+Humans make final decisions.

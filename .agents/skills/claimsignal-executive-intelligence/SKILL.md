@@ -328,6 +328,218 @@ When presenting executive intelligence, use this structure:
 }
 ```
 
+## AI Executive Decision Engine
+
+ClaimSignal AI must not only report metrics. It must continuously analyze platform-wide data and generate executive-level recommendations.
+
+### 1. Risk Detection
+
+AI identifies risks across all claims:
+
+- **Claims likely to stall** — open claims with no status change in 21+ days
+- **Claims likely to be denied** — claims with high friction scores or missing documentation
+- **Claims missing critical documentation** — no denial letter, no estimate, no supplement
+- **Claims approaching deadlines** — claims approaching statute of limitations or carrier deadlines
+- **Claims with payment delays** — approved but not paid within 14 days
+- **Claims with unresolved supplements** — supplement submitted but no response in 21 days
+- **Claims requiring escalation** — denied claims with no overturn attempt
+
+Each risk includes:
+- **Risk score** — 0.0 to 1.0 based on claim status, timeline, and documentation gaps
+- **Confidence score** — 0.0 to 1.0 based on evidence quality
+- **Supporting evidence** — claim IDs, timeline events, missing documents
+- **Recommended action** — specific next step to mitigate the risk
+
+**Risk score formula:**
+```
+base = 0.0
++ (days_since_last_activity / 30) * 0.3  // up to 0.3 for 30+ days
++ (missing_critical_docs ? 0.3 : 0)
++ (high_friction_score ? 0.2 : 0)
++ (approaching_deadline ? 0.2 : 0)
+risk_score = min(base, 1.0)
+```
+
+### 2. Revenue Opportunity Detection
+
+AI identifies revenue opportunities across all claims:
+
+- **Missing scope opportunities** — claims with known scope gaps
+- **Recoverable depreciation opportunities** — claims with `recoverableDepreciation` > 0
+- **Supplement opportunities** — claims with outstanding supplement potential
+- **Code compliance opportunities** — claims where code items were omitted
+- **Reinspection opportunities** — denied claims eligible for reinspection
+- **Matching opportunities** — claims with matching disputes
+- **Underpaid claims** — claims where `finalPaidAmount` < `acvAmount`
+
+Each opportunity includes:
+- **Estimated revenue impact** — dollar amount calculated from scope gaps and depreciation
+- **Confidence score** — 0.0 to 1.0 based on evidence quality
+- **Supporting evidence** — claim IDs, estimate documents, scope analysis
+- **Recommended action** — specific action to capture the opportunity
+
+### 3. Carrier Intelligence Monitoring
+
+AI continuously evaluates carrier behavior:
+
+- **Carrier approval trends** — approval rate over time, increasing or decreasing
+- **Carrier denial trends** — denial rate over time, increasing or decreasing
+- **Carrier response times** — average days to respond, trend over time
+- **Carrier payment delays** — average days to pay after approval, trend over time
+- **Carrier supplement behavior** — supplement approval rate, trend over time
+- **Carrier documentation requests** — frequency of documentation requests, trend over time
+
+**AI flags significant trend changes automatically:**
+- Denial rate increases by > 10 percentage points
+- Response time increases by > 5 days
+- Payment delay increases by > 3 days
+- Supplement approval rate decreases by > 10 percentage points
+
+**Trend flag format:**
+```json
+{
+  "carrier": "Allstate",
+  "metric": "denial_rate",
+  "priorValue": 0.15,
+  "currentValue": 0.28,
+  "change": +0.13,
+  "threshold": 0.10,
+  "flagged": true,
+  "claimsAnalyzed": 45,
+  "confidence": 0.72
+}
+```
+
+### 4. Adjuster Intelligence Monitoring
+
+AI continuously evaluates adjuster behavior:
+
+- **Adjuster approval patterns** — approval rate, trend over time
+- **Adjuster denial patterns** — denial rate, trend over time
+- **Reinspection involvement** — frequency of adjuster presence during reinspection
+- **Documentation request frequency** — how often this adjuster requests more docs
+- **Communication response times** — average hours to respond to inquiries
+- **Outcome transition participation** — what claim transitions this adjuster is present for
+
+**AI identifies emerging patterns only when minimum sample thresholds are met:**
+- 3+ claims: note trend
+- 5+ claims: flag as emerging pattern
+- 10+ claims: flag as established pattern
+
+**Pattern flag format:**
+```json
+{
+  "adjuster": "<name>",
+  "pattern": "frequently_requests_reinspection",
+  "frequency": 0.67,
+  "claimsAnalyzed": 9,
+  "label": "Emerging Pattern",
+  "confidence": 0.65
+}
+```
+
+### 5. Executive Recommendations
+
+AI generates specific recommendations for each claim:
+
+- **Request reinspection** — claim denied, reinspection not yet requested
+- **Submit additional documentation** — claim missing critical documents
+- **Escalate to supervisor** — claim stalled, no adjuster response
+- **Submit code support** — code items omitted, documentation available
+- **Request engineering review** — engineer report disputed
+- **Challenge engineering findings** — engineering report contains errors
+- **Pursue supplement** — scope gap identified, supplement not submitted
+- **Release depreciation** — recoverable depreciation available, not yet released
+- **Close claim** — claim resolved, no further action needed
+- **Continue monitoring** — claim progressing normally, no action needed
+
+**Each recommendation must include:**
+- **Reasoning** — why this recommendation is made
+- **Evidence** — claim IDs, documents, timeline events
+- **Confidence score** — 0.0 to 1.0 based on evidence quality
+
+### 6. Confidence Requirements
+
+AI must never present speculation as fact.
+
+**Every recommendation must include:**
+- **Confidence score** — 0.0 to 1.0
+- **Sample size** — number of claims or events supporting the recommendation
+- **Supporting evidence** — specific claim IDs, documents, timeline events
+- **Source records** — which database records produced this recommendation
+
+**Confidence thresholds:**
+- `>= 0.85`: Recommend with high confidence
+- `0.60 – 0.84`: Recommend with medium confidence, note uncertainty
+- `< 0.60`: Do not recommend. Flag as "Needs Review" instead.
+
+### 7. Continuous Learning
+
+AI continuously learns from outcomes:
+
+- **Closed claims** — update patterns based on final outcomes
+- **Approved claims** — reinforce patterns that preceded approval
+- **Denied claims** — identify patterns that preceded denial
+- **Reopened claims** — identify patterns that led to reopening
+- **Supplement outcomes** — learn which supplement types succeed
+- **Reinspection outcomes** — learn which reinspection patterns succeed
+- **Playbook outcomes** — update playbook confidence scores based on real outcomes
+
+**Learning method:**
+1. When a claim closes, retrieve all AI recommendations made for that claim
+2. Compare the recommendation to the actual outcome
+3. If the recommendation was correct, increase the confidence score of the pattern
+4. If the recommendation was incorrect, decrease the confidence score and flag for review
+5. Update `playbookEntries` confidence scores based on real outcomes
+
+### 8. Auditability
+
+Every AI recommendation must be stored for audit:
+
+- **Recommendation date** — when the recommendation was generated
+- **AI confidence score** — confidence at the time of recommendation
+- **Evidence used** — claim IDs, documents, timeline events
+- **Claims referenced** — list of claim IDs
+- **User actions taken** — what the user did with the recommendation
+- **Final outcome** — what actually happened to the claim
+
+**Storage:** Store in a dedicated AI recommendations table or `intelligence_events` table with `eventCategory = "system"` and metadata containing the recommendation details.
+
+**Why:** Auditability allows ClaimSignal to measure whether AI recommendations actually improved outcomes. This is the feedback loop for continuous learning.
+
+### 9. Master Admin Visibility
+
+Master Admin can view:
+- All AI recommendations across all organizations
+- AI accuracy metrics (recommendation acceptance rate, success rate)
+- Recommendation confidence performance (how often high-confidence recommendations were correct)
+- AI learning history (pattern updates, confidence changes)
+- Cross-tenant intelligence (carrier trends, adjuster patterns across all data)
+
+**Master Admin:** claimsignal1@gmail.com
+
+**Why:** Master Admin oversight ensures AI recommendations are accurate, fair, and improving over time.
+
+### 10. AI Rule
+
+ClaimSignal is an AI-powered claim intelligence platform.
+
+**AI is responsible for:**
+- Extraction — pulling facts from documents
+- Classification — categorizing documents and events
+- Matching — linking documents to claims
+- Timeline creation — building claim lifecycles
+- Pattern detection — identifying trends in adjuster and carrier behavior
+- Adjuster intelligence — tracking adjuster outcomes and patterns
+- Carrier intelligence — tracking carrier outcomes and patterns
+- Playbook learning — identifying successful strategies
+- Executive intelligence — generating KPIs and summaries
+- Recommendation generation — suggesting next actions
+
+**Users review and act on recommendations.**
+**AI provides intelligence.**
+**Humans make final decisions.**
+
 ## Integration with ClaimSignal
 
 When working inside the ClaimSignal codebase:
