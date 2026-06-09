@@ -67,7 +67,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { computeDefensibility, type AiAnalysis } from "@/lib/claim-intelligence";
 import { ClaimAdjustersCard } from "@/components/claim-adjusters-card";
-import { claimAnalysisStatus, hasAiAnalysis } from "@/lib/data-source";
+import { hasAiAnalysis, getAiModuleBreakdown } from "@/lib/data-source";
 
 const LIFECYCLE_PHASES = [
   { key: "pre_claim", label: "Pre-Claim" },
@@ -1654,6 +1654,21 @@ export default function ClaimDetailPage() {
                 {claim.aiAnalysisAt && !aiResult && (
                   <p className="text-[10px] text-muted-foreground/70">Generated {new Date(claim.aiAnalysisAt).toLocaleString()}</p>
                 )}
+                <div className="pt-2 border-t border-border/50">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">AI Modules</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {getAiModuleBreakdown(claim).map((mod) => (
+                      <Badge
+                        key={mod.name}
+                        variant={mod.completed ? "default" : "outline"}
+                        className="text-[10px]"
+                        data-testid={`ai-module-${mod.name}`}
+                      >
+                        {mod.completed ? "✓" : "○"} {mod.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
               </div>
             );
           })()}

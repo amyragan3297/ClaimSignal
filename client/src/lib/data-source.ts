@@ -82,6 +82,29 @@ export function hasAiAnalysis(claim: ClaimLike): boolean {
   return countAiModulesDone(claim) >= 6;
 }
 
+export interface AiModuleStatus {
+  name: string;
+  label: string;
+  completed: boolean;
+}
+
+export function getAiModuleBreakdown(claim: ClaimLike): AiModuleStatus[] {
+  const done = Array.isArray(claim.aiModulesCompleted) ? claim.aiModulesCompleted : [];
+  const labels: Record<string, string> = {
+    claim_extraction: "Claim Extraction",
+    financial_extraction: "Financial Extraction",
+    code_analysis: "Code Analysis",
+    timeline_generation: "Timeline Generation",
+    risk_scoring: "Risk Scoring",
+    weather_analysis: "Weather Analysis",
+  };
+  return AI_MODULE_NAMES.map((name) => ({
+    name,
+    label: labels[name] || name,
+    completed: done.includes(name),
+  }));
+}
+
 /**
  * Derive an honest analysis-status badge for a claim row. Distinguishes
  * full AI analysis (all 6 AI modules were persisted) from partial or rule-based.

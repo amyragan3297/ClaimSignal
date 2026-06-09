@@ -27,7 +27,7 @@ import {
   PenLine, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { claimAnalysisStatus } from "@/lib/data-source";
+import { claimAnalysisStatus, hasAiAnalysis } from "@/lib/data-source";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 const createClaimSchema = z.object({
