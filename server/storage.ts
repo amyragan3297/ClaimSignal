@@ -43,6 +43,7 @@ import {
   supplementIntelligence, adjusterIrcBehavior, communicationSignals, playbookInsights,
   scoringWeights, intelligenceEvents, stormEvents,
   type Escalation, type InsertEscalation, escalations,
+  identityProfiles, identityAliases, identityMatches, identityReviewQueue,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, count, desc, gt, isNull, sql } from "drizzle-orm";
@@ -310,6 +311,20 @@ export interface IStorage {
   getFoundingPartnerRequests(): Promise<unknown[]>;
   createEnterpriseContactLead(data: { fullName: string; companyName: string; email: string; phone?: string; organizationType?: string; estimatedUsers?: number; estimatedMonthlyClaimVolume?: string; integrationNeeds?: string; message?: string }): Promise<unknown>;
   getEnterpriseContactLeads(): Promise<unknown[]>;
+
+  // Identity Resolution
+  createIdentityProfile(data: { canonicalName: string; entityType?: string; primaryRole?: string; primaryCarrier?: string; aliases?: string[]; email?: string; phone?: string }): Promise<unknown>;
+  getIdentityProfiles(): Promise<unknown[]>;
+  getIdentityProfile(id: string): Promise<unknown | undefined>;
+  createIdentityAlias(data: { identityProfileId: string; aliasName: string; extractedName?: string; sourceDocumentId?: string; claimId?: string; carrier?: string; role?: string; confidenceScore?: number; matchReason?: string; needsReview?: boolean }): Promise<unknown>;
+  getIdentityAliases(profileId: string): Promise<unknown[]>;
+  createIdentityMatch(data: { proposedIdentityProfileId: string; extractedName: string; claimId?: string; carrier?: string; sourceDocumentId?: string; confidenceScore?: number; matchReason?: string; status?: string }): Promise<unknown>;
+  getIdentityMatches(status?: string): Promise<unknown[]>;
+  getIdentityMatch(id: string): Promise<unknown | undefined>;
+  updateIdentityMatch(id: string, data: { status?: string; reviewedBy?: string; reviewedAt?: Date }): Promise<unknown | undefined>;
+  createIdentityReviewQueue(data: { identityMatchId: string; reviewReason?: string; priority?: string; status?: string; reviewedBy?: string; reviewedAt?: Date }): Promise<unknown>;
+  getIdentityReviewQueue(): Promise<unknown[]>;
+  updateIdentityReviewQueue(id: string, data: { status?: string; reviewedBy?: string; reviewedAt?: Date }): Promise<unknown | undefined>;
 
   getGovernanceOverview(): Promise<{
     claims: { active: number; archived: number };
@@ -1443,6 +1458,66 @@ export class DatabaseStorage implements IStorage {
 
   async getEnterpriseContactLeads() {
     return db.select().from(enterpriseContactLeads).orderBy(desc(enterpriseContactLeads.createdAt));
+  }
+
+  // Identity Resolution
+  async createIdentityProfile(data: { canonicalName: string; entityType?: string; primaryRole?: string; primaryCarrier?: string; aliases?: string[]; email?: string; phone?: string }) {
+    const [created] = await db.insert(identityProfiles).values(data).returning();
+    return created;
+  }
+
+  async getIdentityProfiles() {
+    return db.select().from(identityProfiles).orderBy(identityProfiles.canonicalName);
+  }
+
+  async getIdentityProfile(id: string) {
+    const [profile] = await db.select().from(identityProfiles).where(eq(identityProfiles.id, id));
+    return profile;
+  }
+
+  async createIdentityAlias(data: { identityProfileId: string; aliasName: string; extractedName?: string; sourceDocumentId?: string; claimId?: string; carrier?: string; role?: string; confidenceScore?: number; matchReason?: string; needsReview?: boolean }) {
+    const [created] = await db.insert(identityAliases).values(data).returning();
+    return created;
+  }
+
+  async getIdentityAliases(profileId: string) {
+    return db.select().from(identityAliases).where(eq(identityAliases.identityProfileId, profileId)).orderBy(desc(identityAliases.confidenceScore));
+  }
+
+  async createIdentityMatch(data: { proposedIdentityProfileId: string; extractedName: string; claimId?: string; carrier?: string; sourceDocumentId?: string; confidenceScore?: number; matchReason?: string; status?: string }) {
+    const [created] = await db.insert(identityMatches).values(data).returning();
+    return created;
+  }
+
+  async getIdentityMatches(status?: string) {
+    if (status) {
+      return db.select().from(identityMatches).where(eq(identityMatches.status, status)).orderBy(desc(identityMatches.confidenceScore));
+    }
+    return db.select().from(identityMatches).orderBy(desc(identityMatches.confidenceScore));
+  }
+
+  async getIdentityMatch(id: string) {
+    const [match] = await db.select().from(identityMatches).where(eq(identityMatches.id, id));
+    return match;
+  }
+
+  async updateIdentityMatch(id: string, data: { status?: string; reviewedBy?: string; reviewedAt?: Date }) {
+    const [updated] = await db.update(identityMatches).set(data).where(eq(identityMatches.id, id)).returning();
+    return updated;
+  }
+
+  async createIdentityReviewQueue(data: { identityMatchId: string; reviewReason?: string; priority?: string; status?: string; reviewedBy?: string; reviewedAt?: Date }) {
+    const [created] = await db.insert(identityReviewQueue).values(data).returning();
+    return created;
+  }
+
+  async getIdentityReviewQueue() {
+    return db.select().from(identityReviewQueue).where(eq(identityReviewQueue.status, "pending")).orderBy(identityReviewQueue.priority);
+  }
+
+  async updateIdentityReviewQueue(id: string, data: { status?: string; reviewedBy?: string; reviewedAt?: Date }) {
+    const [updated] = await db.update(identityReviewQueue).set(data).where(eq(identityReviewQueue.id, id)).returning();
+    return updated;
   }
 }
 

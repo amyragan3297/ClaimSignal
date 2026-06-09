@@ -1,0 +1,99 @@
+Create a reusable skill called:
+
+ClaimSignal Revenue Intelligence
+
+Purpose:
+Identify financial opportunities, claim value gaps, underpayment patterns, supplement opportunities, recoverable depreciation, missing scope, and revenue impact across all claims.
+
+AI Responsibilities:
+
+1. Extract financial data from claim documents:
+- RCV
+- ACV
+- Deductible
+- Depreciation
+- Payments issued
+- Supplement requested
+- Supplement approved
+- Amount still owed
+- Price list changes
+- Line item totals
+
+2. Detect revenue opportunities:
+- Missing scope
+- Omitted code items
+- Underpaid line items
+- Depreciation not released
+- Supplement not submitted
+- Supplement pending
+- Payment delay
+- Reinspection opportunity
+- Matching issue
+- O&P opportunity
+
+3. Estimate financial impact:
+- Potential recovery amount
+- Confirmed recovery amount
+- Pending supplement amount
+- Approved supplement amount
+- Lost opportunity amount
+
+4. Track revenue by:
+- Claim
+- Carrier
+- Adjuster
+- Contractor
+- Organization
+- Region
+- Claim type
+- Damage type
+- Playbook pattern
+
+5. Generate AI revenue alerts:
+- Claim may be underpaid
+- Supplement opportunity detected
+- Depreciation may be recoverable
+- Missing code item detected
+- Payment delay detected
+- Approved amount differs from requested amount
+- Price list update may increase claim value
+
+6. Preserve source evidence for every financial insight:
+- Estimate
+- Carrier letter
+- Payment document
+- Supplement
+- Invoice
+- Email
+- Screenshot
+- Page number if available
+- Confidence score
+
+7. Do not invent dollar amounts.
+
+If a financial number is uncertain, mark:
+Needs Review
+
+8. Use careful language.
+
+Use:
+- Potential opportunity
+- Estimated recovery
+- Possible underpayment
+- Needs review
+- Supported by document
+
+Avoid:
+- Guaranteed recovery
+- Carrier owes
+- Bad faith unless legally documented
+
+9. Master Admin can view all revenue intelligence unmasked.
+
+Master Admin:
+claimsignal1@gmail.com
+
+10. Non-Master users may view shared revenue patterns, but private claim financial details are only visible when they own or are assigned to the claim.
+
+Primary objective:
+Turn claim financial data into revenue intelligence that helps users identify underpaid claims, supplement opportunities, recoverable money, and business value.

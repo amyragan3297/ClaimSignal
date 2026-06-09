@@ -2421,6 +2421,82 @@ export async function registerRoutes(
     }
   });
 
+  // Identity Resolution
+  app.get("/api/identity/review-queue", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
+    try {
+      const queue = await storage.getIdentityReviewQueue();
+      const matches = await storage.getIdentityMatches("pending_review");
+      const profiles = await storage.getIdentityProfiles();
+      const enriched = await Promise.all(
+        queue.map(async (q) => {
+          const match = matches.find((m) => (m as Record<string, unknown>).id === (q as Record<string, unknown>).matchId);
+          const source = match ? profiles.find((p) => (p as Record<string, unknown>).id === (match as Record<string, unknown>).sourceIdentityId) : null;
+          const target = match ? profiles.find((p) => (p as Record<string, unknown>).id === (match as Record<string, unknown>).targetIdentityId) : null;
+          return { ...q, match, source, target };
+        })
+      );
+      res.json(enriched);
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/identity/matches/:id/approve", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const matchId = req.params.id as string;
+      const match = await storage.getIdentityMatch(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+      await storage.updateIdentityMatch(matchId, {
+        status: "approved",
+        reviewedBy: req.auth!.userId,
+        reviewedAt: new Date(),
+      });
+      await storage.updateIdentityReviewQueue((match as Record<string, unknown>).id as string, { status: "approved" });
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId,
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "IDENTITY_MERGE_APPROVED",
+        entityType: "identity_match",
+        entityId: matchId,
+        beforeJson: match,
+        afterJson: { status: "approved", reviewedBy: req.auth!.userId },
+        ipAddress: getClientIp(req),
+      });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
+  app.post("/api/identity/matches/:id/reject", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
+    try {
+      const matchId = req.params.id as string;
+      const match = await storage.getIdentityMatch(matchId);
+      if (!match) return res.status(404).json({ message: "Match not found" });
+      await storage.updateIdentityMatch(matchId, {
+        status: "rejected",
+        reviewedBy: req.auth!.userId,
+        reviewedAt: new Date(),
+      });
+      await storage.updateIdentityReviewQueue((match as Record<string, unknown>).id as string, { status: "rejected" });
+      await storage.createAuditLog({
+        organizationId: req.auth!.organizationId,
+        actorUserId: req.auth!.userId,
+        actorRole: req.auth!.role,
+        actionType: "IDENTITY_MERGE_REJECTED",
+        entityType: "identity_match",
+        entityId: matchId,
+        beforeJson: match,
+        afterJson: { status: "rejected", reviewedBy: req.auth!.userId },
+        ipAddress: getClientIp(req),
+      });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: (err as Error).message });
+    }
+  });
+
   app.get("/api/admin/users", requireAuth, requirePlatformOwner, async (_req: AuthRequest, res) => {
     try {
       const allUsers = await storage.getAllUsers();

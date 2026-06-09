@@ -1,0 +1,121 @@
+Implement ClaimSignal Identity Resolution.
+
+Use the ClaimSignal Identity Resolution skill as the ruleset.
+
+Build the identity resolution system in the application code and database.
+
+Required database tables or fields:
+
+1. identity_profiles
+Stores the canonical person or company.
+
+Fields:
+- id
+- canonical_name
+- entity_type
+- primary_role
+- primary_carrier
+- created_at
+- updated_at
+
+2. identity_aliases
+Stores spelling variations, OCR mistakes, partial names, and extracted names.
+
+Fields:
+- id
+- identity_profile_id
+- alias_name
+- extracted_name
+- source_document_id
+- claim_id
+- carrier
+- role
+- confidence_score
+- match_reason
+- needs_review
+- created_at
+
+3. identity_matches
+Stores suggested matches before merge.
+
+Fields:
+- id
+- proposed_identity_profile_id
+- extracted_name
+- claim_id
+- carrier
+- source_document_id
+- confidence_score
+- match_reason
+- status
+- created_at
+
+Allowed status values:
+- pending_review
+- approved
+- rejected
+- auto_linked
+
+4. identity_review_queue
+Shows Master Admin all possible identity conflicts.
+
+Fields:
+- id
+- identity_match_id
+- review_reason
+- priority
+- status
+- reviewed_by
+- reviewed_at
+- created_at
+
+Required functionality:
+
+1. Before creating any new person, adjuster, vendor, contractor, homeowner, engineer, ladder assist, attorney, or carrier representative, run identity resolution.
+
+2. Use fuzzy matching, OCR correction, alias matching, email matching, carrier matching, claim number matching, address matching, document matching, and timeline context.
+
+3. Do not merge based on name alone.
+
+4. Confidence rules:
+- 90% or higher with supporting context: auto-link as alias
+- 75% to 89%: send to Needs Review
+- Below 75%: create separate record but keep possible match note
+
+5. Never delete original extracted text.
+
+6. Store:
+- canonical_name
+- extracted_name
+- alias_name
+- claim_id
+- carrier
+- role
+- source_document
+- confidence_score
+- match_reason
+
+7. Add Master Admin review controls:
+- approve alias
+- reject alias
+- merge identities
+- split identities
+- mark not same person
+
+8. Only Master Admin can approve permanent merges.
+
+Master Admin:
+claimsignal1@gmail.com
+
+9. Audit log every:
+- auto-linked alias
+- suggested match
+- approved merge
+- rejected merge
+- split identity
+- manual correction
+
+10. Apply this to all future uploads and existing extracted data.
+
+Primary objective:
+ClaimSignal must stop creating duplicate people from misspellings and OCR errors while still protecting against incorrect merges.

@@ -28,6 +28,7 @@ import BrandAssetsPage from "@/pages/brand-assets";
 import PricingPage from "@/pages/pricing";
 import FoundingPartnerApplyPage from "@/pages/founding-partner-apply";
 import EnterpriseContactPage from "@/pages/enterprise-contact";
+import IdentityResolutionPage from "@/pages/identity-resolution";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -51,6 +52,7 @@ function AppRoutes() {
         <Route path="/adjusters" component={AdjustersPage} />
         <Route path="/billing" component={BillingPage} />
         <Route path="/brand-assets" component={BrandAssetsPage} />
+        <Route path="/identity-resolution" component={IdentityResolutionPage} />
         <Route path="/legal/founder" component={FounderLegalPage} />
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />

@@ -1,0 +1,83 @@
+Create a reusable skill called:
+
+ClaimSignal Identity Resolution
+
+Purpose:
+Resolve people, companies, vendors, adjusters, homeowners, contractors, engineers, ladder assist representatives, public adjusters, attorneys, and carrier representatives across ClaimSignal without creating unnecessary duplicate records.
+
+AI Responsibilities:
+
+1. Detect identity variations caused by:
+- OCR mistakes
+- Misspellings
+- Partial names
+- Initials
+- Email signatures
+- Transcription errors
+- Nicknames
+- Carrier formatting differences
+- Screenshot extraction errors
+
+2. Before creating a new person or company record, compare against existing records using:
+- Similar spelling
+- Email address
+- Phone number
+- Carrier
+- Claim number
+- Property address
+- Organization
+- Role
+- Email thread
+- Source document
+- Timeline context
+
+3. Do not merge based on name alone.
+
+4. If confidence is 90% or higher and claim context supports the match:
+Auto-link as alias.
+
+5. If confidence is 75% to 89%:
+Flag as Possible Alias / Needs Review.
+
+6. If confidence is below 75%:
+Create a separate record but preserve the possible match note.
+
+7. Store every identity match with:
+- Canonical name
+- Extracted name
+- Alias name
+- Role
+- Carrier
+- Claim ID
+- Source document
+- Source location
+- Confidence score
+- Match reason
+- Needs review status
+
+8. Never delete the original extracted name.
+
+9. Preserve the original text exactly as extracted.
+
+10. Master Admin may approve, reject, split, or merge identities.
+
+Master Admin:
+claimsignal1@gmail.com
+
+11. All identity merge, split, approve, and reject actions must be audit logged.
+
+12. Apply identity resolution to:
+- Adjusters
+- Field adjusters
+- Supervisors
+- Homeowners
+- Contractors
+- Vendors
+- Engineers
+- Ladder assist companies
+- Carrier representatives
+- Attorneys
+- Public adjusters
+
+Primary objective:
+Prevent duplicate identities while protecting against incorrect merges. ClaimSignal must recognize that misspelled names may still belong to the same person when the claim, carrier, document, and timeline context supports it.

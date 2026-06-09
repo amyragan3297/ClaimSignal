@@ -944,3 +944,70 @@ export type ScoringWeight = typeof scoringWeights.$inferSelect;
 export type InsertScoringWeight = z.infer<typeof insertScoringWeightSchema>;
 export type IntelligenceEvent = typeof intelligenceEvents.$inferSelect;
 export type InsertIntelligenceEvent = z.infer<typeof insertIntelligenceEventSchema>;
+
+// Identity Resolution tables
+export const identityProfiles = pgTable("identity_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  canonicalName: text("canonical_name").notNull(),
+  entityType: text("entity_type").notNull().default("adjuster"),
+  primaryRole: text("primary_role"),
+  primaryCarrier: text("primary_carrier"),
+  aliases: text("aliases").array(),
+  email: text("email"),
+  phone: text("phone"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const identityAliases = pgTable("identity_aliases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  identityProfileId: varchar("identity_profile_id").notNull(),
+  aliasName: text("alias_name").notNull(),
+  extractedName: text("extracted_name"),
+  sourceDocumentId: varchar("source_document_id"),
+  claimId: varchar("claim_id"),
+  carrier: text("carrier"),
+  role: text("role"),
+  confidenceScore: real("confidence_score"),
+  matchReason: text("match_reason"),
+  needsReview: boolean("needs_review").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const identityMatches = pgTable("identity_matches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  proposedIdentityProfileId: varchar("proposed_identity_profile_id").notNull(),
+  extractedName: text("extracted_name").notNull(),
+  claimId: varchar("claim_id"),
+  carrier: text("carrier"),
+  sourceDocumentId: varchar("source_document_id"),
+  confidenceScore: real("confidence_score"),
+  matchReason: text("match_reason"),
+  status: text("status").notNull().default("pending_review"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const identityReviewQueue = pgTable("identity_review_queue", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  identityMatchId: varchar("identity_match_id").notNull(),
+  reviewReason: text("review_reason"),
+  priority: text("priority").notNull().default("medium"),
+  status: text("status").notNull().default("pending"),
+  reviewedBy: varchar("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertIdentityProfileSchema = createInsertSchema(identityProfiles).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertIdentityAliasSchema = createInsertSchema(identityAliases).omit({ id: true, createdAt: true });
+export const insertIdentityMatchSchema = createInsertSchema(identityMatches).omit({ id: true, createdAt: true });
+export const insertIdentityReviewQueueSchema = createInsertSchema(identityReviewQueue).omit({ id: true, createdAt: true, reviewedAt: true });
+
+export type IdentityProfile = typeof identityProfiles.$inferSelect;
+export type InsertIdentityProfile = z.infer<typeof insertIdentityProfileSchema>;
+export type IdentityAlias = typeof identityAliases.$inferSelect;
+export type InsertIdentityAlias = z.infer<typeof insertIdentityAliasSchema>;
+export type IdentityMatch = typeof identityMatches.$inferSelect;
+export type InsertIdentityMatch = z.infer<typeof insertIdentityMatchSchema>;
+export type IdentityReviewQueue = typeof identityReviewQueue.$inferSelect;
+export type InsertIdentityReviewQueue = z.infer<typeof insertIdentityReviewQueueSchema>;
