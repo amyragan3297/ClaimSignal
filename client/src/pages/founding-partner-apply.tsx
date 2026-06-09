@@ -93,7 +93,7 @@ export default function FoundingPartnerApplyPage() {
             <img src={logoImg} alt="ClaimSignal" className="h-20 w-auto object-contain" />
           </div>
           <h1 className="text-xl font-bold tracking-tight">Founding Partner Application</h1>
-          <p className="text-sm text-muted-foreground">$79/mo · Limited to first 100 organizations</p>
+          <p className="text-sm text-muted-foreground">$79/mo · Limited availability</p>
         </div>
 
         <Card>
