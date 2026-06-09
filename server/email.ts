@@ -39,7 +39,7 @@ export async function sendFounderInvitationEmail(opts: {
   companyName: string;
   expiresAt: Date;
 }): Promise<void> {
-  const appUrl = process.env.APP_URL || `https://ClaimSignalOne.com`;
+  const appUrl = process.env.APP_URL || `https://claimsignal1.com`;
   const redeemUrl = `${appUrl}/founder-access`;
   const expiresDate = opts.expiresAt.toLocaleDateString("en-US", {
     month: "long",

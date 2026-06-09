@@ -111,7 +111,7 @@ ClaimSignal incorporates six core intelligence engines: Friction Scoring, Inspec
 
 ## Production Deployment
 
-- **Production Domain:** `ClaimSignalOne.com` (purchased via Replit). To be attached to the production deployment with SSL enabled.
+- **Production Domain:** `claimsignal1.com` (purchased via Replit). To be attached to the production deployment with SSL enabled.
 - **Official Contact Email:** `claimsignal1@gmail.com` — used for all platform contact, support, billing, founder applications, and Stripe customer support.
 - **Stripe Webhook:** Must be configured to use the production domain after deployment.
 - **Domain Review Task:** Before final launch, confirm availability and trademark risk for `claimsignal.com` and potential domain upgrades.
