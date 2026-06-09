@@ -241,7 +241,7 @@ export async function findOrCreateClaimFromExtraction(
   const gate = evaluateClaimCreationGate({
     propertyAddress: extraction.propertyAddress,
     homeownerName: extraction.homeownerName || extraction.insuredName,
-    lossType: null,
+    lossType: extraction.lossType,
     dateOfLoss: extraction.dateOfLoss ? String(extraction.dateOfLoss) : null,
     carrierName: extraction.carrier,
     hasEvidence: true,

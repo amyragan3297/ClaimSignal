@@ -117,6 +117,12 @@ export function evaluateClaimCreationGate(claimData: {
   }
   if (!claimData.carrierName || claimData.carrierName.trim().length === 0) {
     missingFields.push("carrierName");
+  } else if (isProtectedEntity(claimData.carrierName)) {
+    return {
+      allowed: false,
+      reason: `Protected entity detected as carrier: "${claimData.carrierName}". This entity cannot be classified as a claim carrier.`,
+      missingFields: ["carrierName"],
+    };
   }
   if (!claimData.hasEvidence) {
     missingFields.push("evidence");
