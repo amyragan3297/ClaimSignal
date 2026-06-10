@@ -7,17 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/lib/auth";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import logoImg from "@assets/claimsignal_logo_transparent.png";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import { loginSchema as baseLoginSchema } from "@shared/schema";
-
-const loginSchema = baseLoginSchema.extend({
-  agreeToTerms: z.boolean().refine((v) => v === true, "You must acknowledge the terms to continue"),
-});
+import { loginSchema } from "@shared/schema";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -26,7 +21,7 @@ export default function LoginPage() {
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "", agreeToTerms: false },
+    defaultValues: { email: "", password: "" },
   });
 
   const [loginLoading, setLoginLoading] = useState(false);
@@ -77,6 +72,7 @@ export default function LoginPage() {
         <Card>
           <CardContent className="p-6">
             <h2 className="text-base font-semibold mb-5 text-center">Log In</h2>
+
             <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="login-email">Email</Label>
@@ -108,31 +104,6 @@ export default function LoginPage() {
                   <p className="text-xs text-destructive">{loginForm.formState.errors.password.message}</p>
                 )}
               </div>
-              <div className="flex items-start gap-2 pt-1">
-                <Checkbox
-                  id="login-terms"
-                  data-testid="checkbox-login-terms"
-                  checked={loginForm.watch("agreeToTerms")}
-                  onCheckedChange={(checked) =>
-                    loginForm.setValue("agreeToTerms", checked === true, { shouldValidate: true })
-                  }
-                />
-                <label htmlFor="login-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
-                  I acknowledge that ClaimSignal is a data analysis platform and does not create any employment
-                  restriction or non-compete obligation. I agree to the{" "}
-                  <Link href="/terms" target="_blank" className="text-primary hover:underline">
-                    Terms of Service
-                  </Link>{" "}
-                  and{" "}
-                  <Link href="/privacy" target="_blank" className="text-primary hover:underline">
-                    Privacy Policy
-                  </Link>
-                  .
-                </label>
-              </div>
-              {loginForm.formState.errors.agreeToTerms && (
-                <p className="text-xs text-destructive">{loginForm.formState.errors.agreeToTerms.message}</p>
-              )}
               <Button type="submit" className="w-full" disabled={loginLoading} data-testid="button-login-submit">
                 {loginLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                 Log In
@@ -155,6 +126,19 @@ export default function LoginPage() {
             </div>
           </CardContent>
         </Card>
+
+        <p className="mt-4 text-center text-[11px] text-muted-foreground/60 leading-relaxed px-2">
+          By registering, you acknowledge that ClaimSignal is a data analysis platform and does not
+          create any employment restriction or non-compete obligation. See our{" "}
+          <Link href="/terms" target="_blank" className="underline hover:text-muted-foreground">
+            Terms of Service
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" target="_blank" className="underline hover:text-muted-foreground">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </div>
     </div>
   );
