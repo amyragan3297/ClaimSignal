@@ -22,12 +22,6 @@ export default function Homepage() {
             <Link href="/login">
               <Button variant="ghost" size="sm" data-testid="link-login">Log In</Button>
             </Link>
-            <Link href="/founding-partner-apply">
-              <Button size="sm" data-testid="button-nav-request-access">
-                Request Founder Access
-                <ArrowRight className="w-3.5 h-3.5 ml-1" />
-              </Button>
-            </Link>
           </div>
         </div>
       </nav>
