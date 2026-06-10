@@ -333,6 +333,7 @@ function CompanyListTab() {
                   <TableHead>Company</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Contact</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>State</TableHead>
                   <TableHead>Status</TableHead>
@@ -377,6 +378,9 @@ function CompanyListTab() {
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {c.directPhone || c.mainPhone || "—"}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {c.directEmail || c.generalEmail || "—"}

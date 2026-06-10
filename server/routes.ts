@@ -4650,8 +4650,9 @@ export async function registerRoutes(
 
   app.get("/api/biz/outreach-list", requireAuth, requirePlatformOwner, async (req: AuthRequest, res) => {
     try {
-      const companyType = req.query.companyType as string | undefined;
-      const outreachPurpose = req.query.outreachPurpose as string | undefined;
+      // Accept both short-form (type/purpose) and long-form (companyType/outreachPurpose) params
+      const companyType = (req.query.type || req.query.companyType) as string | undefined;
+      const outreachPurpose = (req.query.purpose || req.query.outreachPurpose) as string | undefined;
       const companies = await storage.getBizCompanies({
         companyType: companyType || undefined,
         outreachPurpose: outreachPurpose || undefined,
