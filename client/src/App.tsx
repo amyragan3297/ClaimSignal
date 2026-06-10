@@ -39,6 +39,8 @@ import PlatformOverviewPage from "@/pages/platform-overview";
 import TermsPage from "@/pages/terms";
 import IdentityResolutionPage from "@/pages/identity-resolution";
 import RevenueIntelligencePage from "@/pages/revenue-intelligence";
+import BizPage from "@/pages/biz";
+import BizDetailPage from "@/pages/biz-detail";
 import AppLayout from "@/components/app-layout";
 import { useEffect } from "react";
 
@@ -73,6 +75,8 @@ function AppRoutes() {
         <Route path="/brand-assets" component={BrandAssetsPage} />
         <Route path="/identity-resolution" component={IdentityResolutionPage} />
         <Route path="/revenue" component={RevenueIntelligencePage} />
+        <Route path="/biz/:id" component={BizDetailPage} />
+        <Route path="/biz" component={BizPage} />
         <Route path="/legal/founder" component={FounderLegalPage} />
         <Route component={NotFound} />
       </Switch>

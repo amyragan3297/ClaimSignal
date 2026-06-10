@@ -41,6 +41,7 @@ import {
   MapPin,
   Image,
   DollarSign,
+  Briefcase,
 } from "lucide-react";
 import { getPlanLabel } from "@/lib/pricing";
 
@@ -183,6 +184,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     {navItem("Audio / Transcripts", "/audio", Mic)}
                     {navItem("Communications", "/communications", MessageSquare)}
                     {navItem("Storm Events", "/storm-events", CloudLightning)}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+
+            {/* Business Dev — Master only */}
+            {isMaster && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Business Dev</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {navItem("Company Intelligence", "/biz", Briefcase, "nav-biz-companies")}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>

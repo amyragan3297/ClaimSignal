@@ -36,6 +36,7 @@ import {
   type EntityClassification, type InsertEntityClassification,
   type PrivacyGuardLog, type InsertPrivacyGuardLog,
   type EntityCleanupFlag, type InsertEntityCleanupFlag,
+  type BizCompany, type InsertBizCompany,
   organizations, users, userSessions, billingAccounts,
   claims, claimVersions, adjusters, claimAdjusters,
   foundingPartnerRequests, enterpriseContactLeads,
@@ -48,6 +49,7 @@ import {
   scoringWeights, intelligenceEvents, stormEvents,
   revenueOpportunities,
   entityClassifications, privacyGuardLogs, entityCleanupFlags,
+  bizCompanies,
   type Escalation, type InsertEscalation, escalations,
   identityProfiles, identityAliases, identityMatches, identityReviewQueue,
   type LoginAttempt, type InsertLoginAttempt, type InvestorAccess, type InsertInvestorAccess,
@@ -384,6 +386,13 @@ export interface IStorage {
   createEntityCleanupFlag(data: InsertEntityCleanupFlag): Promise<EntityCleanupFlag>;
   getEntityCleanupFlags(status?: string, severity?: string): Promise<EntityCleanupFlag[]>;
   updateEntityCleanupFlag(id: string, data: Partial<EntityCleanupFlag>): Promise<EntityCleanupFlag | undefined>;
+
+  // Business Intelligence & Outreach CRM (Master-only)
+  getBizCompanies(filters?: { companyType?: string; relationshipStatus?: string; outreachPurpose?: string }): Promise<BizCompany[]>;
+  getBizCompany(id: string): Promise<BizCompany | undefined>;
+  createBizCompany(data: InsertBizCompany): Promise<BizCompany>;
+  updateBizCompany(id: string, data: Partial<BizCompany>): Promise<BizCompany | undefined>;
+  deleteBizCompany(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1770,6 +1779,40 @@ export class DatabaseStorage implements IStorage {
   async updateEntityCleanupFlag(id: string, data: Partial<EntityCleanupFlag>): Promise<EntityCleanupFlag | undefined> {
     const [updated] = await db.update(entityCleanupFlags).set({ ...data, reviewedAt: data.reviewedAt ?? new Date() }).where(eq(entityCleanupFlags.id, id)).returning();
     return updated;
+  }
+
+  async getBizCompanies(filters?: { companyType?: string; relationshipStatus?: string; outreachPurpose?: string }): Promise<BizCompany[]> {
+    let query = db.select().from(bizCompanies).$dynamic();
+    if (filters?.companyType) {
+      query = query.where(eq(bizCompanies.companyType, filters.companyType as BizCompany["companyType"]));
+    }
+    if (filters?.relationshipStatus) {
+      query = query.where(eq(bizCompanies.relationshipStatus, filters.relationshipStatus as BizCompany["relationshipStatus"]));
+    }
+    const rows = await query.orderBy(desc(bizCompanies.createdAt));
+    if (filters?.outreachPurpose) {
+      return rows.filter(r => r.outreachPurposes?.includes(filters.outreachPurpose!));
+    }
+    return rows;
+  }
+
+  async getBizCompany(id: string): Promise<BizCompany | undefined> {
+    const [row] = await db.select().from(bizCompanies).where(eq(bizCompanies.id, id));
+    return row;
+  }
+
+  async createBizCompany(data: InsertBizCompany): Promise<BizCompany> {
+    const [created] = await db.insert(bizCompanies).values(data).returning();
+    return created;
+  }
+
+  async updateBizCompany(id: string, data: Partial<BizCompany>): Promise<BizCompany | undefined> {
+    const [updated] = await db.update(bizCompanies).set({ ...data, updatedAt: new Date() }).where(eq(bizCompanies.id, id)).returning();
+    return updated;
+  }
+
+  async deleteBizCompany(id: string): Promise<void> {
+    await db.delete(bizCompanies).where(eq(bizCompanies.id, id));
   }
 }
 
