@@ -46,15 +46,15 @@ export default function Homepage() {
             ClaimSignal automatically extracts claim data, identifies risks, tracks adjuster and carrier patterns, analyzes claim activity, and recommends next actions from every document you upload.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
-            <Link href="/founding-partner-apply">
+            <Link href="/platform-overview">
               <Button size="lg" className="px-8" data-testid="button-hero-cta">
-                Request Founder Access
+                View Platform
                 <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </Link>
-            <Link href="/platform-overview">
+            <Link href="/login">
               <Button variant="outline" size="lg" className="px-8" data-testid="button-hero-secondary">
-                View Platform
+                Log In
               </Button>
             </Link>
           </div>
