@@ -64,9 +64,10 @@ export default function Homepage() {
       {/* Minimal footer */}
       <footer className="border-t border-border/40 py-5 px-6">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-muted-foreground">
-          <span>© {new Date().getFullYear()} ClaimSignal™. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} ClaimSignal™. All Rights Reserved.</span>
           <div className="flex items-center gap-4">
             <Link href="/investor-access" className="hover:text-foreground transition-colors" data-testid="link-investor-access">Investor Access</Link>
+            <a href="https://www.claimsignal1.com" className="hover:text-foreground transition-colors">www.claimsignal1.com</a>
             <a href="mailto:claimsignal1@gmail.com" className="hover:text-foreground transition-colors">claimsignal1@gmail.com</a>
           </div>
         </div>
