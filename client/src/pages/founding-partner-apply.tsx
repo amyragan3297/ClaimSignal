@@ -152,16 +152,11 @@ export default function FoundingPartnerApplyPage() {
                   onCheckedChange={(checked) => form.setValue("agreeToTerms", checked === true, { shouldValidate: true })}
                 />
                 <label htmlFor="apply-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
-                  I acknowledge that ClaimSignal is a data analysis platform and does not create any employment
-                  restriction or non-compete obligation. I agree to the{" "}
+                  I agree to the{" "}
                   <Link href="/terms" target="_blank" className="text-primary hover:underline">
                     Terms of Service
                   </Link>
-                  ,{" "}
-                  <Link href="/privacy" target="_blank" className="text-primary hover:underline">
-                    Privacy Policy
-                  </Link>
-                  , and the{" "}
+                  {" "}and the{" "}
                   <Link href="/legal/founder" target="_blank" className="text-primary hover:underline">
                     Founding Partner Agreement
                   </Link>

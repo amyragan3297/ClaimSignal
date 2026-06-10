@@ -72,7 +72,6 @@ export default function LoginPage() {
         <Card>
           <CardContent className="p-6">
             <h2 className="text-base font-semibold mb-5 text-center">Log In</h2>
-
             <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="login-email">Email</Label>
@@ -126,19 +125,6 @@ export default function LoginPage() {
             </div>
           </CardContent>
         </Card>
-
-        <p className="mt-4 text-center text-[11px] text-muted-foreground/60 leading-relaxed px-2">
-          By registering, you acknowledge that ClaimSignal is a data analysis platform and does not
-          create any employment restriction or non-compete obligation. See our{" "}
-          <Link href="/terms" target="_blank" className="underline hover:text-muted-foreground">
-            Terms of Service
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" target="_blank" className="underline hover:text-muted-foreground">
-            Privacy Policy
-          </Link>
-          .
-        </p>
       </div>
     </div>
   );
