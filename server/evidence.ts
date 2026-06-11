@@ -532,12 +532,85 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     const sha256 = computeSha256(buffer);
     
     const existing = await storage.getEvidenceFileBySha256(sha256, organizationId);
-    if (existing && existing.claimId === req.body.claimId) {
-      return res.status(409).json({
-        message: "This document already exists on this claim",
-        existingFile: existing,
-        duplicate: true,
-      });
+    if (existing) {
+      const existingExtractionJson = existing.extractedJson as { extraction?: unknown } | null;
+      const existingHasExtraction = !!(existingExtractionJson?.extraction);
+      const existingExtractionFailed = existing.extractionStatus === "failed" || !existingHasExtraction;
+
+      // If the existing file had a successful extraction, block the duplicate.
+      if (!existingExtractionFailed && existing.claimId === req.body.claimId) {
+        return res.status(409).json({
+          message: "This document already exists on this claim",
+          existingFile: existing,
+          duplicate: true,
+        });
+      }
+
+      // If extraction previously failed, re-run it now and patch the record.
+      if (existingExtractionFailed && isOpenAIConfigured()) {
+        try {
+          const reFileType = detectFileType(req.file.originalname);
+          let reText = "";
+          if (reFileType === "txt" || reFileType === "eml") {
+            reText = buffer.toString("utf-8");
+          } else if (reFileType === "pdf") {
+            try {
+              const { PDFParse } = await import("pdf-parse");
+              const reParser = new PDFParse({ data: new Uint8Array(buffer) });
+              const rePdfData = await reParser.getText();
+              await reParser.destroy().catch(() => {});
+              reText = rePdfData.text || "";
+            } catch { /* silent */ }
+          }
+          const reMeaningfulText = reText.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "").trim();
+          const reHasText = reMeaningfulText.length > 80;
+          const reNeedsVision = !reHasText && reFileType === "pdf";
+          let reLlmExtraction: ExtractionResult | null = null;
+
+          if (reHasText) {
+            reLlmExtraction = await extractClaimFieldsFromText(reMeaningfulText, "unknown");
+          } else if (reNeedsVision) {
+            const reImages = await renderPdfToImages(buffer);
+            if (reImages.length > 0) {
+              reLlmExtraction = await extractClaimFieldsFromImages(reImages, "unknown");
+            }
+          }
+
+          if (reLlmExtraction) {
+            const existingEntities = (existingExtractionJson as { entities?: unknown[] } | null)?.entities || [];
+            await storage.updateEvidenceFile(existing.id, organizationId, {
+              extractionStatus: "complete",
+              extractedJson: { entities: existingEntities, extraction: reLlmExtraction },
+            });
+            const updated = await storage.getEvidenceFileBySha256(sha256, organizationId);
+            console.log(`[re-extract] success for "${req.file.originalname}" id=${existing.id} confidence=${reLlmExtraction.confidence}`);
+            return res.status(200).json({
+              file: updated || existing,
+              extraction: reLlmExtraction,
+              matchedClaimId: existing.claimId || null,
+              createdClaim: null,
+              reExtracted: true,
+            });
+          }
+        } catch (reErr) {
+          console.error("[re-extract] non-fatal:", (reErr as Error)?.message);
+        }
+        // Re-extraction failed — fall through so we return the existing record below.
+        return res.status(409).json({
+          message: "Document already in library (re-extraction failed)",
+          existingFile: existing,
+          duplicate: true,
+        });
+      }
+
+      // Existing file matches — return it as-is.
+      if (existing.claimId === req.body.claimId) {
+        return res.status(409).json({
+          message: "This document already exists on this claim",
+          existingFile: existing,
+          duplicate: true,
+        });
+      }
     }
     
     const fileType = detectFileType(req.file.originalname);
@@ -571,8 +644,14 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       }
     }
     
-    const classification = classifyDocument(textContent);
-    const entities = extractEntities(textContent);
+    // Strip pdf-parse page-number artifacts (e.g. "-- 1 of 9 --") that appear
+    // when a PDF has no embedded text layer. These markers look like real content
+    // (they push the length above 80) but contain zero claim data, causing the
+    // vision fallback to be skipped and the LLM to receive useless input.
+    const meaningfulText = textContent.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "").trim();
+
+    const classification = classifyDocument(meaningfulText || textContent);
+    const entities = extractEntities(meaningfulText || textContent);
 
     // ── Diagnostics ──────────────────────────────────────────────────────────
     // The length-only line is PII-safe and is logged for PDFs to help diagnose
@@ -580,16 +659,18 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     // homeowner PII, so they are gated behind the explicit DEBUG_EXTRACTION flag.
     const debugExtraction = process.env.DEBUG_EXTRACTION === "true";
     if (fileType === "pdf" || debugExtraction) {
-      console.log(`[extraction] file="${req.file.originalname}" fileType=${fileType} text_length=${textContent.length}`);
+      console.log(`[extraction] file="${req.file.originalname}" fileType=${fileType} text_length=${textContent.length} meaningful_length=${meaningfulText.length}`);
     }
-    if (debugExtraction && textContent.length > 0) {
-      console.log(`[extraction-debug] text_preview=\n${textContent.slice(0, 2000)}`);
+    if (debugExtraction && meaningfulText.length > 0) {
+      console.log(`[extraction-debug] text_preview=\n${meaningfulText.slice(0, 2000)}`);
     }
 
     // ── LLM field extraction (runs after rule-based, non-blocking on failure) ──
     let llmExtraction: ExtractionResult | null = null;
     let llmExtractionError: string | null = null;
-    const hasText = !!textContent && textContent.trim().length > 80;
+    // Use meaningful text (page markers stripped) so image-only PDFs correctly
+    // fall through to the vision branch instead of tripping the length threshold.
+    const hasText = meaningfulText.length > 80;
     // Trust the upload's MIME type too, so image formats that detectFileType maps
     // to "other" (bmp/tiff/webp) still get the vision fallback.
     const isImageUpload = fileType === "image" || !!req.file.mimetype?.startsWith("image/");
@@ -599,7 +680,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
 
     if (isOpenAIConfigured() && hasText) {
       try {
-        llmExtraction = await extractClaimFieldsFromText(textContent, classification.category);
+        llmExtraction = await extractClaimFieldsFromText(meaningfulText, classification.category);
         console.log(`[ai-extraction] success for ${req.file.originalname}, confidence=${llmExtraction.confidence}`);
         if (debugExtraction) {
           console.log(`[extraction-debug] llm_result=${JSON.stringify(llmExtraction)}`);
@@ -687,7 +768,7 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       fileSize: buffer.length,
       docCategory: effectiveCategory as "denial_letter" | "estimate" | "scope" | "supplement" | "payment_letter" | "invoice" | "photo_report" | "policy" | "email_thread" | "unknown",
       confidence: classification.confidence,
-      extractionStatus: llmExtraction ? "complete" : (!isOpenAIConfigured() ? "pending" : (textContent && textContent.trim().length > 80 ? "failed" : (fileType === "pdf" || fileType === "docx" || fileType === "image" ? "failed" : "pending"))),
+      extractionStatus: llmExtraction ? "complete" : (!isOpenAIConfigured() ? "pending" : (hasText || needsVision ? "failed" : "pending")),
       extractedJson: (entities.length > 0 || llmExtraction)
         ? { entities, extraction: llmExtraction || null }
         : undefined,
