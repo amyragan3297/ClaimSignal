@@ -845,10 +845,21 @@ export class DatabaseStorage implements IStorage {
   async getEvidenceFiles(orgId: string, claimId?: string): Promise<EvidenceFile[]> {
     if (claimId) {
       return db.select().from(evidenceFiles).where(
-        and(eq(evidenceFiles.organizationId, orgId), eq(evidenceFiles.claimId, claimId))
+        and(
+          eq(evidenceFiles.organizationId, orgId),
+          eq(evidenceFiles.claimId, claimId),
+          isNull(evidenceFiles.archivedAt),
+          isNull(evidenceFiles.deletedAt),
+        )
       ).orderBy(desc(evidenceFiles.uploadedAt));
     }
-    return db.select().from(evidenceFiles).where(eq(evidenceFiles.organizationId, orgId)).orderBy(desc(evidenceFiles.uploadedAt));
+    return db.select().from(evidenceFiles).where(
+      and(
+        eq(evidenceFiles.organizationId, orgId),
+        isNull(evidenceFiles.archivedAt),
+        isNull(evidenceFiles.deletedAt),
+      )
+    ).orderBy(desc(evidenceFiles.uploadedAt));
   }
 
   async getAllEvidenceFilesAcrossTenants(): Promise<EvidenceFile[]> {
@@ -875,7 +886,12 @@ export class DatabaseStorage implements IStorage {
 
   async getEvidenceFileBySha256(sha256: string, orgId: string): Promise<EvidenceFile | undefined> {
     const [file] = await db.select().from(evidenceFiles).where(
-      and(eq(evidenceFiles.sha256, sha256), eq(evidenceFiles.organizationId, orgId))
+      and(
+        eq(evidenceFiles.sha256, sha256),
+        eq(evidenceFiles.organizationId, orgId),
+        isNull(evidenceFiles.archivedAt),
+        isNull(evidenceFiles.deletedAt),
+      )
     );
     return file;
   }
@@ -1326,8 +1342,8 @@ export class DatabaseStorage implements IStorage {
   // ── Governance: Evidence Files ────────────────────────────────────────────
   async archiveEvidenceFile(id: string, orgId?: string): Promise<boolean> {
     const where = orgId
-      ? and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId), sql`${evidenceFiles.archivedAt} IS NULL`)
-      : and(eq(evidenceFiles.id, id), sql`${evidenceFiles.archivedAt} IS NULL`);
+      ? and(eq(evidenceFiles.id, id), eq(evidenceFiles.organizationId, orgId))
+      : eq(evidenceFiles.id, id);
     const result = await db.update(evidenceFiles).set({ archivedAt: new Date() } as { archivedAt: Date | null }).where(where!).returning();
     return result.length > 0;
   }
