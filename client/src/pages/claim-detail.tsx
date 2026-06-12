@@ -1013,7 +1013,7 @@ export default function ClaimDetailPage() {
               setVendorDialogOpen(open);
               if (open) {
                 vendorForm.reset({
-                  iaFirm: (claim as any).iaFirm || "",
+                  iaFirm: claim.iaFirm || "",
                   vendorName: claim.vendorName || "",
                   inspectionVendor: claim.inspectionVendor || "",
                   ladderAssistVendor: claim.ladderAssistVendor || "",
@@ -1083,7 +1083,7 @@ export default function ClaimDetailPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Carrier Side</p>
-            <InfoRow label="IA Firm" value={(claim as any).iaFirm || "\u2014"} testId="detail-ia-firm" />
+            <InfoRow label="IA Firm" value={claim.iaFirm || "\u2014"} testId="detail-ia-firm" />
             <InfoRow label="Aerial Measurement" value={claim.vendorName || "\u2014"} testId="detail-vendor-name" />
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 pt-1">Claim Vendors</p>
             <InfoRow label="Inspection Vendor" value={claim.inspectionVendor || "\u2014"} testId="detail-inspection-vendor" />

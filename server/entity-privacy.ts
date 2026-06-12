@@ -91,7 +91,7 @@ export function evaluateClaimCreationGate(claimData: {
   propertyAddress?: string | null;
   homeownerName?: string | null;
   lossType?: string | null;
-  dateOfLoss?: string | null;
+  dateOfLoss?: string | Date | null;
   carrierName?: string | null;
   hasEvidence?: boolean;
 }): ClaimCreationGateResult {
@@ -112,7 +112,7 @@ export function evaluateClaimCreationGate(claimData: {
   if (!claimData.lossType || claimData.lossType.trim().length === 0) {
     missingFields.push("lossType");
   }
-  if (!claimData.dateOfLoss || claimData.dateOfLoss.trim().length === 0) {
+  if (!claimData.dateOfLoss) {
     missingFields.push("dateOfLoss");
   }
   if (!claimData.carrierName || claimData.carrierName.trim().length === 0) {
