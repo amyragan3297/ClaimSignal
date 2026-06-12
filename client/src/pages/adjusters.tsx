@@ -15,10 +15,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { Adjuster } from "@shared/schema";
+import type { Adjuster as AdjusterBase } from "@shared/schema";
 import { Plus, Users, Loader2, Search, X, ChevronLeft, Activity, BarChart3, Target, MoreHorizontal, Archive, Trash2, Download, MessageSquare, Zap, Merge } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Link } from "wouter";
+
+type Adjuster = AdjusterBase & {
+  linkedClaimCount?: number;
+  computedDenialRate?: number | null;
+};
 
 const createAdjusterSchema = z.object({
   carrierName: z.string().min(1, "Carrier name required"),
@@ -837,9 +842,9 @@ export default function AdjustersPage() {
                         {adj.carrierName}{adj.region ? ` · ${adj.region}` : ""}
                       </p>
                       <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
-                        <span>{adj.totalClaimsTracked ?? 0} claims</span>
-                        <span>Friction <span className={`font-medium ${(adj.frictionScore ?? 0) > 6 ? "text-red-500" : (adj.frictionScore ?? 0) > 3 ? "text-yellow-500" : "text-green-500"}`}>{formatScore(adj.frictionScore)}</span></span>
-                        <span>Denial {formatPercent(adj.denialRate)}</span>
+                        <span data-testid={`text-claim-count-${adj.id}`}>{adj.linkedClaimCount ?? adj.totalClaimsTracked ?? 0} claims</span>
+                        <span>Friction <span className={`font-medium ${(adj.frictionScore ?? 0) > 6 ? "text-red-500" : (adj.frictionScore ?? 0) > 3 ? "text-yellow-500" : "text-green-500"}`} data-testid={`text-friction-${adj.id}`}>{(adj.linkedClaimCount ?? 0) === 0 ? "—" : formatScore(adj.frictionScore)}</span></span>
+                        <span>Denial <span data-testid={`text-denial-${adj.id}`}>{adj.computedDenialRate != null ? `${Math.round(adj.computedDenialRate * 100)}%` : (adj.linkedClaimCount ?? 0) === 0 ? "—" : formatPercent(adj.denialRate)}</span></span>
                       </div>
                     </div>
                     {canArchive && (

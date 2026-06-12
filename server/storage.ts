@@ -121,6 +121,7 @@ export interface IStorage {
   // Multi-adjuster / cross-claim linkage (Item 7)
   getClaimAdjusters(claimId: string, orgId?: string): Promise<ClaimAdjuster[]>;
   getAdjusterClaims(adjusterId: string, orgId?: string): Promise<ClaimAdjuster[]>;
+  getAllClaimAdjustersByOrg(orgId?: string): Promise<ClaimAdjuster[]>;
   getClaimAdjusterLink(id: string, orgId?: string): Promise<ClaimAdjuster | undefined>;
   linkAdjusterToClaim(link: InsertClaimAdjuster): Promise<ClaimAdjuster>;
   updateClaimAdjusterLink(id: string, orgId: string, data: Partial<InsertClaimAdjuster>): Promise<ClaimAdjuster | undefined>;
@@ -638,6 +639,13 @@ export class DatabaseStorage implements IStorage {
     const conds = [eq(claimAdjusters.adjusterId, adjusterId)];
     if (orgId !== undefined) conds.push(eq(claimAdjusters.organizationId, orgId));
     return db.select().from(claimAdjusters).where(and(...conds)).orderBy(desc(claimAdjusters.createdAt));
+  }
+
+  async getAllClaimAdjustersByOrg(orgId?: string): Promise<ClaimAdjuster[]> {
+    if (orgId !== undefined) {
+      return db.select().from(claimAdjusters).where(eq(claimAdjusters.organizationId, orgId));
+    }
+    return db.select().from(claimAdjusters);
   }
 
   async getClaimAdjusterLink(id: string, orgId?: string): Promise<ClaimAdjuster | undefined> {

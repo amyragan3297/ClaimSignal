@@ -1,0 +1,77 @@
+Fix the Adjusters page data-linking logic.
+
+Problem:
+The Adjusters list is showing every adjuster with 0 claims, friction 0.0, and denial 0.0%. That means the adjuster records are being displayed, but the system is not connecting them back to uploaded claim records, claim headers, estimates, denial letters, or extracted claim metadata.
+
+Required fix:
+Adjuster intelligence must be calculated from claims, not from manually created adjuster records only.
+
+For every uploaded claim document, estimate, denial letter, inspection report, carrier letter, or claim record, extract and normalize these header fields:
+
+- adjuster_name
+- carrier_name
+- claim_number
+- homeowner_name
+- property_address
+- date_of_loss
+- inspection_date
+- claim_status
+- decision_type
+- denial_reason
+- payment_status
+- supplement_status
+- reinspection_status
+- source_document_id
+
+Adjuster matching rules:
+1. Match adjusters by normalized name, not exact raw text only.
+2. Trim spaces, fix capitalization, and handle reversed names like “Griggs, Shay” as “Shay Griggs”.
+3. Do not treat carrier names as adjuster names.
+4. Do not create duplicate adjusters when the same person appears in multiple documents.
+5. If an adjuster is found in a claim header, carrier letter, estimate, email, or inspection note, link that claim to the adjuster.
+6. If no adjuster is detected, place the claim in an “Unassigned Adjuster” bucket instead of showing false zero analytics.
+
+Adjuster page display requirements:
+Each adjuster card must show:
+
+- total linked claims
+- carrier or carriers tied to that adjuster
+- claim numbers linked to that adjuster
+- homeowner/property references available to Master Admin only
+- denial percentage based on linked claims
+- supplement success rate if available
+- reinspection frequency
+- average response delay if dates exist
+- friction score based on delays, denials, repeated omissions, reinspections, and escalation history
+
+The claim count cannot remain 0 if uploaded claims contain that adjuster’s name.
+
+Add a “View Linked Claims” action on each adjuster card.
+When clicked, show all claims connected to that adjuster with claim number, homeowner, property address, carrier, status, source document, and confidence score.
+
+Add a debug panel for Master Admin only:
+- show which documents were scanned
+- show what adjuster names were extracted
+- show what claims were linked
+- show why any claim was not linked
+- show extraction confidence
+
+Also fix header detection:
+The AI must scan the top section and summary sections of claim documents for claim headers, not just body text. It must detect common labels including:
+
+Claim Number
+Policy Number
+Insured
+Property Address
+Loss Address
+Date of Loss
+Adjuster
+Claims Specialist
+Claim Representative
+Field Adjuster
+Desk Adjuster
+Carrier
+Insurance Company
+
+Acceptance criteria:
+After upload, adjusters appearing in claim documents must no longer show 0 claims unless there are truly no linked claims. Adjuster analytics must populate from actual claim records and uploaded documents.

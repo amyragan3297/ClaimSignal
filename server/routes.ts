@@ -26,7 +26,7 @@ import intelligenceRouter from "./intelligence";
 import { computeLifecycleVelocity, computeFullClaimScoring } from "./scoring";
 import { seedDefaultWeights } from "./scoring";
 import { generateClaimAnalysis, transcribeAudio, isOpenAIConfigured, extractClaimFieldsFromText, extractAdjustersFromTranscript, recordAiError, getAiStatus, generatePlaybookEntry, generateAiFallbackPlaybookRecs, generatePlaybookDraft } from "./ai-services";
-import { extractAndLinkAdjustersForClaim, type AdjusterMention } from "./adjuster-linking";
+import { extractAndLinkAdjustersForClaim, syncAdjusterStoredMetrics, type AdjusterMention } from "./adjuster-linking";
 import { getClaimWeather, geocodeZip, geocodeCity } from "./weather";
 import { findDuplicateClaims } from "./claim-matching";
 import express from "express";
@@ -853,6 +853,10 @@ export async function registerRoutes(
         ipAddress: getClientIp(req),
       });
 
+      syncAdjusterStoredMetrics(link.adjusterId, scopeOrg).catch((e) =>
+        console.error("[routes] adjuster metric-sync non-fatal:", (e as Error)?.message)
+      );
+
       res.json(link);
     } catch (err) {
       res.status(400).json({ message: (err as Error).message });
@@ -915,6 +919,10 @@ export async function registerRoutes(
 
       const ok = await storage.unlinkClaimAdjuster(req.params.linkId as string, scopeOrg);
       if (!ok) return res.status(404).json({ message: "Link not found" });
+
+      syncAdjusterStoredMetrics(existing.adjusterId, scopeOrg).catch((e) =>
+        console.error("[routes] adjuster metric-sync non-fatal:", (e as Error)?.message)
+      );
 
       await storage.createAuditLog({
         organizationId: scopeOrg,
@@ -1094,10 +1102,56 @@ export async function registerRoutes(
   app.get("/api/adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
     try {
       const role = req.auth!.role;
-      const adjustersList = role === "master_admin"
-        ? await storage.getAllAdjustersAcrossTenants()
-        : await storage.getAdjusters(req.auth!.organizationId);
-      res.json(adjustersList);
+      const orgId = req.auth!.organizationId;
+
+      const [adjustersList, allLinks, allClaims] = await Promise.all([
+        isMaster(role) ? storage.getAllAdjustersAcrossTenants() : storage.getAdjusters(orgId),
+        isMaster(role) ? storage.getAllClaimAdjustersByOrg() : storage.getAllClaimAdjustersByOrg(orgId),
+        isMaster(role) ? storage.getAllClaimsAcrossTenants() : storage.getClaims(orgId),
+      ]);
+
+      // Build lookup: adjuster_id → set of linked claim ids (from junction table)
+      const junctionClaimIds = new Map<string, Set<string>>();
+      for (const link of allLinks) {
+        let s = junctionClaimIds.get(link.adjusterId);
+        if (!s) { s = new Set(); junctionClaimIds.set(link.adjusterId, s); }
+        s.add(link.claimId);
+      }
+
+      // Build lookup: adjuster_id → set of legacy claim ids (from claims.adjusterId column)
+      const legacyClaimIds = new Map<string, Set<string>>();
+      for (const claim of allClaims) {
+        if (claim.adjusterId) {
+          const jSet = junctionClaimIds.get(claim.adjusterId);
+          if (!jSet?.has(claim.id)) {
+            let s = legacyClaimIds.get(claim.adjusterId);
+            if (!s) { s = new Set(); legacyClaimIds.set(claim.adjusterId, s); }
+            s.add(claim.id);
+          }
+        }
+      }
+
+      // Build claim map for denial count computation
+      const claimMap = new Map(allClaims.map((c) => [c.id, c]));
+      const isDenied = (v: unknown) => { const s = (typeof v === "string" ? v : "").toLowerCase(); return s.includes("deni") || s.includes("reject"); };
+
+      const enriched = adjustersList.map((adj) => {
+        const jIds = junctionClaimIds.get(adj.id) ?? new Set<string>();
+        const lIds = legacyClaimIds.get(adj.id) ?? new Set<string>();
+        const allClaimIds = new Set([...jIds, ...lIds]);
+        const linkedClaimCount = allClaimIds.size;
+
+        let initialDenials = 0;
+        for (const cid of allClaimIds) {
+          const c = claimMap.get(cid);
+          if (c && isDenied(c.initialOutcome)) initialDenials++;
+        }
+        const computedDenialRate = linkedClaimCount > 0 ? initialDenials / linkedClaimCount : null;
+
+        return { ...adj, linkedClaimCount, computedDenialRate };
+      });
+
+      res.json(enriched);
     } catch (err) {
       res.status(500).json({ message: (err as Error).message });
     }

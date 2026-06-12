@@ -251,7 +251,77 @@ export async function extractAndLinkAdjustersForClaim(
     } catch (dedupErr: unknown) {
       console.error("[adjuster-linking] auto-dedup non-fatal:", (dedupErr as Error)?.message);
     }
+
+    // Write real computed metrics back to the adjuster record so the list view
+    // always shows accurate claim counts / rates without a separate scorecard fetch.
+    const uniqueAdjIds = Array.from(new Set(linked.map((l) => l.adjusterId)));
+    for (const adjId of uniqueAdjIds) {
+      syncAdjusterStoredMetrics(adjId, orgId).catch((e) =>
+        console.error("[adjuster-linking] metric-sync non-fatal:", (e as Error)?.message)
+      );
+    }
   }
 
   return linked;
+}
+
+/**
+ * Recompute and persist an adjuster's aggregate metrics from real linked claims.
+ * Called asynchronously after any claim-adjuster link is created or removed.
+ * Never throws — caller should .catch() to log non-fatally.
+ */
+export async function syncAdjusterStoredMetrics(adjusterId: string, orgId: string): Promise<void> {
+  try {
+    const { computeAdjusterScorecard } = await import("./adjuster-scorecard");
+    const links = await storage.getAdjusterClaims(adjusterId, orgId);
+    const allClaims = await storage.getClaims(orgId);
+
+    // Include legacy claims linked via claims.adjusterId for the count
+    const junctionClaimIds = new Set(links.map((l) => l.claimId));
+    const legacyClaims = allClaims.filter(
+      (c) => c.adjusterId === adjusterId && !junctionClaimIds.has(c.id)
+    );
+    const legacyLinks: typeof links = legacyClaims.map((c) => ({
+      id: `legacy-${c.id}`,
+      organizationId: c.organizationId,
+      claimId: c.id,
+      adjusterId,
+      carrierId: null,
+      roleOnClaim: "primary_adjuster",
+      involvementType: "unknown",
+      firstSeenDate: null,
+      lastSeenDate: null,
+      sourceDocumentId: null,
+      sourceAudioId: null,
+      sourceTranscriptId: null,
+      sourceCommunicationId: null,
+      sourceType: "legacy_backfill",
+      confidenceScore: 1,
+      needsReview: false,
+      notes: null,
+      createdAt: c.createdAt ?? null,
+      updatedAt: c.updatedAt ?? null,
+    } as unknown as (typeof links)[0]));
+
+    const allLinks = [...links, ...legacyLinks];
+    const scorecard = computeAdjusterScorecard(allLinks, allClaims);
+
+    const linkedClaimCount = scorecard.linkedClaimCount;
+    const denialRate = linkedClaimCount > 0
+      ? (scorecard.counts.initialDenials / linkedClaimCount)
+      : 0;
+    const denialRatio = denialRate;
+
+    await storage.updateAdjuster(adjusterId, orgId, {
+      totalClaimsTracked: linkedClaimCount,
+      totalDenials: scorecard.counts.initialDenials,
+      totalReinspections: scorecard.counts.reinspectionsRequested,
+      denialRate,
+      denialRatio,
+    });
+
+    console.log(`[adjuster-linking] synced metrics for adjuster ${adjusterId}: ${linkedClaimCount} claims, denial ${Math.round(denialRate * 100)}%`);
+  } catch (err) {
+    throw err;
+  }
 }
