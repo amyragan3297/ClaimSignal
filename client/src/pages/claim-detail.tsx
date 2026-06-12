@@ -1007,12 +1007,13 @@ export default function ClaimDetailPage() {
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <Wrench className="w-4 h-4 text-primary" />
-              Vendor Tracking
+              Claim Resources
             </CardTitle>
             <Dialog open={vendorDialogOpen} onOpenChange={(open) => {
               setVendorDialogOpen(open);
               if (open) {
                 vendorForm.reset({
+                  iaFirm: (claim as any).iaFirm || "",
                   vendorName: claim.vendorName || "",
                   inspectionVendor: claim.inspectionVendor || "",
                   ladderAssistVendor: claim.ladderAssistVendor || "",
@@ -1033,11 +1034,21 @@ export default function ClaimDetailPage() {
               </DialogTrigger>
               <DialogContent className="max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Edit Vendor Tracking</DialogTitle>
+                  <DialogTitle>Edit Claim Resources</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={vendorForm.handleSubmit((d) => vendorMutation.mutate(d))} className="space-y-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 pt-1">Carrier Side</p>
                   {[
-                    { name: "vendorName", label: "Primary Vendor" },
+                    { name: "iaFirm", label: "IA Firm (Independent Adjuster Firm)" },
+                    { name: "vendorName", label: "Aerial Measurement" },
+                  ].map((f) => (
+                    <div className="space-y-1.5" key={f.name}>
+                      <Label>{f.label}</Label>
+                      <Input data-testid={`input-${f.name}`} {...vendorForm.register(f.name)} />
+                    </div>
+                  ))}
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 pt-2">Claim Vendors</p>
+                  {[
                     { name: "inspectionVendor", label: "Inspection Vendor" },
                     { name: "ladderAssistVendor", label: "Ladder Assist Vendor" },
                     { name: "engineeringFirm", label: "Engineering Firm" },
@@ -1070,8 +1081,11 @@ export default function ClaimDetailPage() {
               </DialogContent>
             </Dialog>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <InfoRow label="Primary Vendor" value={claim.vendorName || "\u2014"} testId="detail-vendor-name" />
+          <CardContent className="space-y-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Carrier Side</p>
+            <InfoRow label="IA Firm" value={(claim as any).iaFirm || "\u2014"} testId="detail-ia-firm" />
+            <InfoRow label="Aerial Measurement" value={claim.vendorName || "\u2014"} testId="detail-vendor-name" />
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 pt-1">Claim Vendors</p>
             <InfoRow label="Inspection Vendor" value={claim.inspectionVendor || "\u2014"} testId="detail-inspection-vendor" />
             <InfoRow label="Ladder Assist" value={claim.ladderAssistVendor || "\u2014"} testId="detail-ladder-vendor" />
             <InfoRow label="Engineering Firm" value={claim.engineeringFirm || "\u2014"} testId="detail-engineering-firm" />
