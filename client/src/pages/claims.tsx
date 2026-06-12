@@ -645,7 +645,7 @@ function CreateClaimDialog({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground text-center">
-                File is already saved in your Evidence Library. Adjuster, timeline, and Signal Engine will be updated on claim creation.
+                File is already saved in your Claim Documents. Adjuster, timeline, and Signal Engine will be updated on claim creation.
               </p>
             </div>
           </>
