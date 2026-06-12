@@ -1138,14 +1138,14 @@ export async function registerRoutes(
       const enriched = adjustersList.map((adj) => {
         const jIds = junctionClaimIds.get(adj.id) ?? new Set<string>();
         const lIds = legacyClaimIds.get(adj.id) ?? new Set<string>();
-        const allClaimIds = new Set([...jIds, ...lIds]);
+        const allClaimIds = new Set(Array.from(jIds).concat(Array.from(lIds)));
         const linkedClaimCount = allClaimIds.size;
 
         let initialDenials = 0;
-        for (const cid of allClaimIds) {
+        Array.from(allClaimIds).forEach((cid) => {
           const c = claimMap.get(cid);
           if (c && isDenied(c.initialOutcome)) initialDenials++;
-        }
+        });
         const computedDenialRate = linkedClaimCount > 0 ? initialDenials / linkedClaimCount : null;
 
         return { ...adj, linkedClaimCount, computedDenialRate };
