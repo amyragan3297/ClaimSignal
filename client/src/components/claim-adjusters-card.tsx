@@ -193,49 +193,69 @@ export function ClaimAdjustersCard({ claimId, canEdit }: { claimId: string; canE
             <span>No adjusters linked to this claim yet.</span>
           </div>
         ) : (
-          links.map((link) => (
-            <div
-              key={link.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-border bg-card/50 px-3 py-2"
-              data-testid={`row-claim-adjuster-${link.id}`}
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium" data-testid={`text-adjuster-name-${link.id}`}>
-                    {link.adjusterName ?? "Unknown adjuster"}
-                  </span>
-                  {link.roleOnClaim === "unknown" ? (
-                    <Badge variant="outline" className="text-amber-500 border-amber-500/40">role pending review</Badge>
-                  ) : (
-                    <Badge variant="secondary" data-testid={`badge-role-${link.id}`}>{roleLabel(link.roleOnClaim)}</Badge>
-                  )}
-                  {link.needsReview && <Badge variant="outline" className="text-amber-500 border-amber-500/40">needs review</Badge>}
+          // Group links by adjusterId so the same person only appears once,
+          // even if they have multiple roles on the same claim.
+          Object.values(
+            links.reduce<Record<string, EnrichedLink[]>>((acc, link) => {
+              const key = link.adjusterId ?? link.id;
+              if (!acc[key]) acc[key] = [];
+              acc[key].push(link);
+              return acc;
+            }, {})
+          ).map((group) => {
+            const primary = group[0];
+            const needsReview = group.some((l) => l.needsReview);
+            return (
+              <div
+                key={primary.adjusterId ?? primary.id}
+                className="flex items-center justify-between gap-3 rounded-md border border-border bg-card/50 px-3 py-2"
+                data-testid={`row-claim-adjuster-${primary.adjusterId ?? primary.id}`}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium" data-testid={`text-adjuster-name-${primary.id}`}>
+                      {primary.adjusterName ?? "Unknown adjuster"}
+                    </span>
+                    {group.map((link) =>
+                      link.roleOnClaim === "unknown" ? (
+                        <Badge key={link.id} variant="outline" className="text-amber-500 border-amber-500/40">role pending review</Badge>
+                      ) : (
+                        <Badge key={link.id} variant="secondary" data-testid={`badge-role-${link.id}`}>{roleLabel(link.roleOnClaim)}</Badge>
+                      )
+                    )}
+                    {needsReview && <Badge variant="outline" className="text-amber-500 border-amber-500/40">needs review</Badge>}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {primary.carrierName ?? "Carrier unknown"}
+                    {primary.involvementType && primary.involvementType !== "unknown" ? ` · ${involvementLabel(primary.involvementType)}` : ""}
+                    {primary.sourceType === "legacy_backfill" ? " · source: legacy" : ""}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {link.carrierName ?? "Carrier unknown"} · {involvementLabel(link.involvementType)}
-                  {link.sourceType === "legacy_backfill" ? " · source: legacy" : ""}
-                </p>
+                {canEdit && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Select value={primary.roleOnClaim} onValueChange={(v) => roleMutation.mutate({ linkId: primary.id, role: v })}>
+                      <SelectTrigger className="h-8 w-[170px]" data-testid={`select-edit-role-${primary.id}`}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ROLE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={() => {
+                        if (confirm("Unlink this adjuster from the claim?")) {
+                          group.forEach((link) => unlinkMutation.mutate(link.id));
+                        }
+                      }}
+                      disabled={unlinkMutation.isPending}
+                      data-testid={`button-unlink-adjuster-${primary.id}`}
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                )}
               </div>
-              {canEdit && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <Select value={link.roleOnClaim} onValueChange={(v) => roleMutation.mutate({ linkId: link.id, role: v })}>
-                    <SelectTrigger className="h-8 w-[170px]" data-testid={`select-edit-role-${link.id}`}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {ROLE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="ghost" size="icon"
-                    onClick={() => { if (confirm("Unlink this adjuster from the claim?")) unlinkMutation.mutate(link.id); }}
-                    disabled={unlinkMutation.isPending}
-                    data-testid={`button-unlink-adjuster-${link.id}`}
-                  >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </CardContent>
     </Card>
