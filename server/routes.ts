@@ -629,6 +629,29 @@ export async function registerRoutes(
         organizationId: orgId,
       });
 
+      // Auto-link adjuster by name when the form text matches an existing adjuster record
+      const rawAdjNameCreate = (req.body.adjusterName || "").trim();
+      if (rawAdjNameCreate && !claim.adjusterId) {
+        try {
+          const adjList = await storage.getAdjusters(orgId);
+          const matched = adjList.find(a => (a.adjusterName || "").trim().toLowerCase() === rawAdjNameCreate.toLowerCase());
+          if (matched) {
+            await storage.updateClaim(claim.id, orgId, { adjusterId: matched.id });
+            const existingLinks = await storage.getClaimAdjusters(claim.id, orgId);
+            const alreadyLinked = existingLinks.some(l => l.adjusterId === matched.id);
+            if (!alreadyLinked) {
+              await storage.linkAdjusterToClaim({
+                claimId: claim.id,
+                adjusterId: matched.id,
+                organizationId: orgId,
+                roleOnClaim: "primary_adjuster",
+                sourceType: "manual",
+              });
+            }
+          }
+        } catch (_autoLinkErr) { /* non-fatal — claim still saved */ }
+      }
+
       await storage.createClaimVersion({
         claimId: claim.id,
         organizationId: orgId,
@@ -673,6 +696,31 @@ export async function registerRoutes(
 
       const claim = await storage.updateClaim(req.params.id as string, orgId, normalizeClaimInput(req.body));
       if (!claim) return res.status(404).json({ message: "Claim not found" });
+
+      // Auto-link adjuster by name if adjusterName was sent and we can match a record
+      const rawAdjNamePatch = (req.body.adjusterName || "").trim();
+      if (rawAdjNamePatch) {
+        try {
+          const adjList = await storage.getAdjusters(orgId);
+          const matched = adjList.find(a => (a.adjusterName || "").trim().toLowerCase() === rawAdjNamePatch.toLowerCase());
+          if (matched) {
+            if (claim.adjusterId !== matched.id) {
+              await storage.updateClaim(claim.id, orgId, { adjusterId: matched.id });
+            }
+            const existingLinks = await storage.getClaimAdjusters(claim.id, orgId);
+            const alreadyLinked = existingLinks.some(l => l.adjusterId === matched.id);
+            if (!alreadyLinked) {
+              await storage.linkAdjusterToClaim({
+                claimId: claim.id,
+                adjusterId: matched.id,
+                organizationId: orgId,
+                roleOnClaim: "primary_adjuster",
+                sourceType: "manual",
+              });
+            }
+          }
+        } catch (_autoLinkErr) { /* non-fatal */ }
+      }
 
       const velocity = computeLifecycleVelocity(
         claim.dateOfLoss ? new Date(claim.dateOfLoss) : null,

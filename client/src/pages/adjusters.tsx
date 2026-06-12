@@ -165,8 +165,8 @@ function LinkedClaimsCard({ adjusterId }: { adjusterId: string }) {
           <div className="text-center py-4" data-testid="text-no-linked-claims">
             <Activity className="w-8 h-8 text-muted-foreground/20 mx-auto mb-2" />
             <p className="text-sm text-muted-foreground font-medium">No linked claims yet</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              Link this adjuster to claims to unlock cross-claim behavioral history and pattern analysis.
+            <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs mx-auto">
+              To link this adjuster, open a claim and use the <span className="font-medium text-muted-foreground">Adjusters</span> section to attach them. Claims created with a matching adjuster name will also link automatically.
             </p>
           </div>
         ) : (
