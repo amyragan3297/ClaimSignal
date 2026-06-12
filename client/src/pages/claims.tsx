@@ -147,6 +147,14 @@ const REVIEW_SECTIONS = [
   },
 ];
 
+/** Placeholder values the AI may hallucinate — never show these as real extracted data. */
+const PLACEHOLDER_VALUES = new Set([
+  "clm-00001", "john doe", "jane doe", "123 main street", "123 main st",
+  "pol-12345", "555-0100", "john@example.com", "jane@example.com",
+  "unknown", "n/a", "na", "tbd", "placeholder", "homeowner name",
+  "insured name", "adjuster name", "carrier name",
+]);
+
 type ExtractionRecord = Record<string, string | number | boolean | string[] | null | undefined>;
 
 interface UploadResult {
@@ -244,8 +252,11 @@ function CreateClaimDialog({
     const out: Record<string, string> = {};
     for (const [exKey, stateKey] of fieldMap) {
       const v = extraction[exKey];
-      if (v != null && typeof v !== "object" && String(v).trim()) {
-        out[stateKey] = String(v).trim();
+      if (v != null && typeof v !== "object") {
+        const s = String(v).trim();
+        if (s && !PLACEHOLDER_VALUES.has(s.toLowerCase())) {
+          out[stateKey] = s;
+        }
       }
     }
     setExtractionFields(out);

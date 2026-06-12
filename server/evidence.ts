@@ -86,6 +86,143 @@ function sanitizeAddress(val: string): string | null {
   return s;
 }
 
+/**
+ * Insurance claim indicator terms. A PDF is only treated as having real
+ * extractable text if at least one of these appears in the cleaned output.
+ * Prevents image-only PDFs (whose pdf-parse output is junk markers) from
+ * bypassing vision OCR simply because they emit enough garbage characters
+ * to exceed a pure length threshold.
+ */
+const CLAIM_INDICATOR_TERMS = [
+  "claim number", "claim no", "claim #",
+  "policy number", "policy no", "policy #",
+  "insured", "insured name",
+  "property address",
+  "carrier", "insurance company",
+  "date of loss", "loss date", "d.o.l",
+  "replacement cost", "rcv",
+  "actual cash value", "acv",
+  "deductible",
+  "depreciation",
+  "estimate", "line item", "xactimate",
+  "coverage",
+  "adjuster",
+  "denial", "denied",
+  "supplement",
+  "payment",
+];
+
+/**
+ * Strip pdf-parse noise: page markers, standalone page numbers, separator
+ * lines, and very short lines that carry no claim data.
+ */
+function cleanPdfText(raw: string): string {
+  return raw
+    .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "")      // "-- 1 of 9 --"
+    .replace(/^\s*\d{1,4}\s*$/gm, "")                  // bare page numbers
+    .replace(/^\s*[-=_*]{3,}\s*$/gm, "")               // separator lines
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l.length > 2)
+    .join("\n")
+    .trim();
+}
+
+/**
+ * Returns true only when text is at least 200 characters AND contains at
+ * least one recognised insurance claim term. Both conditions must hold:
+ * a length-only check is defeated by repeated headers and junk markers.
+ */
+function hasUsableClaimText(text: string): boolean {
+  if (text.length < 200) return false;
+  const lower = text.toLowerCase();
+  return CLAIM_INDICATOR_TERMS.some(term => lower.includes(term));
+}
+
+/**
+ * AI-hallucinated placeholder values that must never be treated as real
+ * extracted data and must be blocked before populating the review form.
+ */
+const KNOWN_PLACEHOLDERS = new Set([
+  "clm-00001", "john doe", "jane doe", "123 main street", "123 main st",
+  "pol-12345", "555-0100", "john@example.com", "jane@example.com",
+  "unknown", "n/a", "na", "tbd", "placeholder", "homeowner name",
+  "insured name", "adjuster name", "carrier name",
+]);
+
+function isPlaceholderValue(val: string): boolean {
+  return KNOWN_PLACEHOLDERS.has(val.toLowerCase().trim());
+}
+
+/**
+ * Remove hallucinated placeholder fields from an ExtractionResult.
+ * Returns a sanitised copy — never mutates the original.
+ */
+function sanitizePlaceholders(result: ExtractionResult): ExtractionResult {
+  const out = { ...result };
+  const textFields: Array<keyof ExtractionResult> = [
+    "claimNumber", "policyNumber", "homeownerName", "insuredName",
+    "adjusterName", "adjusterEmail", "adjusterPhone", "iaFirm",
+    "carrier", "vendor", "propertyAddress", "city", "state", "zipCode",
+    "dateOfLoss", "inspectionDate", "rcv", "acv", "deductible",
+    "denialReason", "initialOutcome", "finalOutcome",
+  ];
+  for (const key of textFields) {
+    const v = out[key];
+    if (typeof v === "string" && isPlaceholderValue(v)) {
+      delete (out as Record<string, unknown>)[key];
+    }
+  }
+  return out;
+}
+
+/**
+ * Returns true if the extraction contains at least one substantive field.
+ * An all-null or all-placeholder result is treated as a pipeline failure.
+ */
+function isExtractionUsable(result: ExtractionResult | null): boolean {
+  if (!result) return false;
+  const keyFields: Array<keyof ExtractionResult> = [
+    "claimNumber", "policyNumber", "homeownerName", "insuredName",
+    "carrier", "adjusterName", "propertyAddress", "dateOfLoss",
+    "rcv", "acv", "deductible",
+  ];
+  return keyFields.some(k => {
+    const v = result[k];
+    return typeof v === "string" && v.trim().length > 0;
+  });
+}
+
+/**
+ * Map non-standard LLM document-type strings to our DB enum values.
+ * The LLM may return descriptive strings like "insurance_estimate_statement_of_loss"
+ * that are not in the DB enum. This table normalises them before persistence.
+ */
+const DOC_TYPE_ALIASES: Record<string, string> = {
+  insurance_estimate: "estimate",
+  insurance_estimate_statement_of_loss: "estimate",
+  statement_of_loss: "estimate",
+  loss_statement: "estimate",
+  carrier_estimate: "estimate",
+  xactimate_estimate: "estimate",
+  xactimate: "estimate",
+  scope_of_work: "scope",
+  scope_of_loss: "scope",
+  scope_of_damage: "scope",
+  claim_denial: "denial_letter",
+  coverage_denial: "denial_letter",
+  denial: "denial_letter",
+  supplement_request: "supplement",
+  supplemental_estimate: "supplement",
+  payment_notice: "payment_letter",
+  claim_payment: "payment_letter",
+  check_issued: "payment_letter",
+  policy_declaration: "policy",
+  declarations_page: "policy",
+  email: "email_thread",
+  email_chain: "email_thread",
+};
+
 function detectFileType(fileName: string): string {
   const ext = fileName.toLowerCase().split(".").pop();
   const map: Record<string, string> = {
@@ -562,8 +699,10 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
               reText = rePdfData.text || "";
             } catch { /* silent */ }
           }
-          const reMeaningfulText = reText.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "").trim();
-          const reHasText = reMeaningfulText.length > 80;
+          const reMeaningfulText = cleanPdfText(reText);
+          const reHasText = reFileType === "pdf"
+            ? hasUsableClaimText(reMeaningfulText)
+            : reMeaningfulText.length > 80;
           const reNeedsVision = !reHasText && reFileType === "pdf";
           let reLlmExtraction: ExtractionResult | null = null;
 
@@ -573,6 +712,15 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
             const reImages = await renderPdfToImages(buffer);
             if (reImages.length > 0) {
               reLlmExtraction = await extractClaimFieldsFromImages(reImages, "unknown");
+            }
+          }
+
+          // Strip placeholder values; treat all-empty result as failure.
+          if (reLlmExtraction) {
+            reLlmExtraction = sanitizePlaceholders(reLlmExtraction);
+            if (!isExtractionUsable(reLlmExtraction)) {
+              console.warn(`[re-extract] result for "${req.file?.originalname}" has no real fields after sanitization`);
+              reLlmExtraction = null;
             }
           }
 
@@ -644,11 +792,11 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       }
     }
     
-    // Strip pdf-parse page-number artifacts (e.g. "-- 1 of 9 --") that appear
-    // when a PDF has no embedded text layer. These markers look like real content
-    // (they push the length above 80) but contain zero claim data, causing the
-    // vision fallback to be skipped and the LLM to receive useless input.
-    const meaningfulText = textContent.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "").trim();
+    // Clean raw pdf-parse output: strip page markers, bare page numbers,
+    // separator lines, and other noise that carries no claim data.
+    // For image-only PDFs this produces an empty string, correctly routing
+    // to vision OCR instead of sending junk to the LLM.
+    const meaningfulText = cleanPdfText(textContent);
 
     const classification = classifyDocument(meaningfulText || textContent);
     const entities = extractEntities(meaningfulText || textContent);
@@ -668,9 +816,13 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     // ── LLM field extraction (runs after rule-based, non-blocking on failure) ──
     let llmExtraction: ExtractionResult | null = null;
     let llmExtractionError: string | null = null;
-    // Use meaningful text (page markers stripped) so image-only PDFs correctly
-    // fall through to the vision branch instead of tripping the length threshold.
-    const hasText = meaningfulText.length > 80;
+    // For PDFs, require meaningful length AND at least one claim indicator term.
+    // This prevents image-only PDFs (page markers, separator lines) from passing
+    // the text check and blocking vision OCR. For audio/txt/eml use a simple
+    // length threshold since those don't need the insurance-term guard.
+    const hasText = fileType === "pdf"
+      ? hasUsableClaimText(meaningfulText)
+      : meaningfulText.length > 80;
     // Trust the upload's MIME type too, so image formats that detectFileType maps
     // to "other" (bmp/tiff/webp) still get the vision fallback.
     const isImageUpload = fileType === "image" || !!req.file.mimetype?.startsWith("image/");
@@ -725,20 +877,38 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
       llmExtractionError = "Document uploaded but AI structured extraction failed.";
     }
 
+    // Sanitize and validate extraction — strip placeholder fields, then check
+    // whether the result still has at least one real claim field. If not, treat
+    // it as a failure so the UI shows an honest error instead of blank/fake data.
+    if (llmExtraction) {
+      llmExtraction = sanitizePlaceholders(llmExtraction);
+      if (!isExtractionUsable(llmExtraction)) {
+        console.warn(`[ai-extraction] result for "${req.file.originalname}" has no real fields after sanitization — marked as failed`);
+        llmExtractionError = "Extraction returned no recognisable claim fields. Re-upload to trigger OCR/Vision retry.";
+        llmExtraction = null;
+      }
+    }
+
     // When rule-based classification found nothing (e.g. a scanned PDF with no
     // text layer), promote the document type identified by vision extraction.
+    // Also resolve non-standard LLM type strings (e.g. "insurance_estimate_statement_of_loss")
+    // to their canonical DB enum values via DOC_TYPE_ALIASES.
     const VALID_DOC_CATEGORIES = new Set([
       "denial_letter", "estimate", "scope", "supplement", "payment_letter",
       "invoice", "photo_report", "policy", "email_thread", "unknown",
     ]);
     let effectiveCategory = classification.category;
-    const visionDocType = llmExtraction?.documentType;
+    const rawDocType = llmExtraction?.documentType;
+    const resolvedDocType = rawDocType
+      ? (VALID_DOC_CATEGORIES.has(rawDocType) ? rawDocType : DOC_TYPE_ALIASES[rawDocType])
+      : undefined;
     if (
-      effectiveCategory === "unknown" &&
-      visionDocType && visionDocType !== "other" &&
-      VALID_DOC_CATEGORIES.has(visionDocType)
+      (effectiveCategory === "unknown" || effectiveCategory === "other") &&
+      resolvedDocType && resolvedDocType !== "other" &&
+      VALID_DOC_CATEGORIES.has(resolvedDocType)
     ) {
-      effectiveCategory = visionDocType;
+      effectiveCategory = resolvedDocType;
+      console.log(`[doc-classify] promoted category to "${effectiveCategory}" from LLM documentType "${rawDocType}"`);
     }
 
     // Pre-selected claim wins; otherwise attempt high-confidence auto-match.

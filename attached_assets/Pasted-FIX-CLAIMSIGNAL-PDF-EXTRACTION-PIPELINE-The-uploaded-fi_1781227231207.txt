@@ -1,0 +1,161 @@
+FIX CLAIMSIGNAL PDF EXTRACTION PIPELINE
+
+The uploaded file "Ogle scope.pdf" is not merely a scope document. It is an ALFA insurance estimate / statement of loss with claim, policy, coverage, financial, roof, outbuilding, and payment data.
+
+Do not classify by filename only.
+Do not treat "scope" as low-value text.
+Do not allow placeholder values into extracted fields.
+Do not return fake values.
+Do not skip OCR just because pdf-parse returns page markers.
+
+ROOT ISSUE
+
+pdf-parse is returning junk page markers like:
+
+-- 1 of 9 --
+-- 2 of 9 --
+
+Those markers exceed the current character threshold, so the system believes the PDF has real text. That blocks Vision OCR, and the LLM receives junk instead of the visible document content.
+
+REQUIRED PIPELINE FIX
+
+1. After pdf-parse, clean extracted text before checking whether it is usable.
+
+Strip:
+- page markers
+- page numbers
+- repeated headers/footers
+- empty whitespace
+- meaningless separator lines
+- filename-only text
+- OCR artifacts with no claim terms
+
+2. Replace the simple character count test with a meaningful text test.
+
+A PDF should only be treated as text-readable if the cleaned text contains insurance claim indicators such as:
+
+- claim number
+- policy number
+- insured
+- property
+- carrier
+- date of loss
+- estimate
+- replacement cost value
+- actual cash value
+- deductible
+- depreciation
+- line item
+- RCV
+- ACV
+- coverage
+- total
+- adjuster
+
+If cleaned text is less than 500 meaningful characters OR does not contain claim indicators, force OCR/Vision.
+
+3. For image-based PDFs, render pages to images and run Vision OCR/extraction.
+
+The system must extract visible data from rendered page images.
+
+4. Send the LLM either:
+- cleaned meaningful parsed text, or
+- OCR/vision text/results
+
+Never send raw pdf-parse junk.
+
+5. Add document classification after extraction, not before.
+
+For Ogle scope.pdf, classify as:
+
+insurance_estimate_statement_of_loss
+
+not merely:
+
+scope
+
+6. Required fields to extract from this document:
+
+- carrier: ALFA Insurance
+- insured/homeowner: Olen H. Goble Jr.
+- property address: 3600 Susan Moore Rd, Blountsville, AL 35031-7037
+- claim number: H0001192250
+- policy number: H0646990-AMI-HO3
+- adjuster: Michael Marbut
+- loss type: Weather
+- date of loss: 02/26/2026
+- date received: 03/02/2026
+- date entered: 03/04/2026
+- estimate name: OLEN_H_GOBLE__JR
+- roof squares: 28.48
+- ridge length: 107.45 LF
+- dwelling RCV: 18,918.28
+- dwelling ACV: 16,834.74
+- dwelling depreciation: 2,083.54
+- deductible: 2,000.00
+- dwelling net claim: 14,834.74
+- other structures RCV: 618.05
+- other structures ACV: 525.63
+- code upgrade paid when incurred: 1,601.57
+- line item total: 19,536.33
+- total ACV: 17,360.37
+
+7. Add failed extraction detection.
+
+If extraction returns:
+- zero fields
+- only placeholders
+- only nulls
+- only page markers
+- confidence below threshold
+
+then mark as extraction_failed and automatically retry using OCR/Vision.
+
+8. Add deduplication safety.
+
+If the same file SHA-256 already exists but prior extraction failed, do not return the old failed result.
+Re-run extraction and update the existing evidence record.
+
+9. Add frontend protection.
+
+The form should never show placeholder values as if they were extracted data.
+
+These must never be saved as real extracted values:
+
+- CLM-00001
+- John Doe
+- 123 Main Street
+- POL-12345
+- 555-0100
+- john@example.com
+
+If extraction fails, show:
+
+"Extraction failed. OCR/Vision retry required."
+
+Do not open the full claim form with fake placeholder data.
+
+10. Add test case.
+
+Use Ogle scope.pdf as the validation file.
+
+Pass condition:
+
+The upload must extract the actual ALFA claim data listed above and populate:
+
+- Claim Intake
+- Financial Summary
+- AI Extraction Review
+- Claim Intelligence
+- Timeline Events
+- Evidence Library status
+
+Fail condition:
+
+If Ogle scope.pdf returns blank fields, placeholders, or only page markers, the pipeline is still broken.
+
+Do not redesign the UI.
+Do not rebuild the app.
+Do not add demo data.
+Do not create fake extraction data.
+Fix the upload → parse → OCR/Vision → LLM extraction → review → claim creation pipeline.
