@@ -181,7 +181,7 @@ export default function FounderDashboardPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Founder Rate</span>
               <Badge variant="outline" className="text-xs text-primary">
-                $79/mo locked for life
+                $99/mo locked for life
               </Badge>
             </div>
           </CardContent>

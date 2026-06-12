@@ -2601,10 +2601,11 @@ export async function registerRoutes(
       const user = await storage.getUser(userId);
       if (!user) return res.status(401).json({ message: "User not found" });
 
-      const validPlans = ["founder", "individual", "pro", "team", "enterprise"];
+      const validPlans = ["founder", "individual", "pro", "team", "growth_team", "enterprise"];
       const rawPlan = validPlans.includes(req.body?.planType) ? req.body.planType : "individual";
       const planType = rawPlan === "pro" ? "individual" : rawPlan;
-      const extraSeats = planType === "team" && typeof req.body?.extraSeats === "number" ? Math.max(0, req.body.extraSeats) : 0;
+      const plansWithSeats = ["team", "growth_team"];
+      const extraSeats = plansWithSeats.includes(planType) && typeof req.body?.extraSeats === "number" ? Math.max(0, req.body.extraSeats) : 0;
 
       if (planType === "founder") {
         const founderCount = await storage.getFounderSubscriptionCount();
@@ -2615,8 +2616,8 @@ export async function registerRoutes(
 
       const result = await createCheckoutSession(orgId, userId, user.email, planType, extraSeats);
       if ("error" in result) {
-        if (result.error.includes("not configured")) {
-          return res.json({ message: result.error, fallback: true });
+        if (result.error.startsWith("STRIPE_NOT_CONFIGURED")) {
+          return res.json({ message: "Stripe is not configured. Subscription activated locally for development.", fallback: true });
         }
         return res.status(400).json({ message: result.error });
       }
@@ -4394,7 +4395,8 @@ export async function registerRoutes(
       await storage.createAuditLog({ organizationId: orgId, actorUserId: userId, actorRole: role, actionType: "INVESTOR_DASHBOARD_VIEWED", entityType: "platform", entityId: "investor-safe", ipAddress: getClientIp(req) });
 
       // Compute revenue metrics
-      const planPrice: Record<string, number> = { founder: 79, individual: 149, pro: 149, team: 299, enterprise: 0 };
+      const planPrice: Record<string, number> = { founder: 99, individual: 149, pro: 149, team: 299, growth_team: 599, enterprise: 0 };
+      const planIncludedSeats: Record<string, number> = { founder: 1, individual: 1, pro: 1, team: 3, growth_team: 10, enterprise: 0 };
       let totalRevenue = 0;
       let mrr = 0;
       let activeSubscriptions = 0;
@@ -4405,8 +4407,9 @@ export async function registerRoutes(
         const plan = b.planType || "individual";
         const price = planPrice[plan] || 0;
         const seats = b.seatCount || 1;
-        const extraSeats = Math.max(0, seats - 5);
-        const monthly = price + (extraSeats * 25);
+        const includedSeats = planIncludedSeats[plan] ?? 1;
+        const extraSeats = Math.max(0, seats - includedSeats);
+        const monthly = price + (extraSeats * 35);
         if (b.subscriptionStatus === "active") {
           totalRevenue += monthly;
           mrr += monthly;

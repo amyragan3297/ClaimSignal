@@ -1,0 +1,86 @@
+CLAIMSIGNAL PRICING IMPLEMENTATION
+
+Use this pricing structure everywhere in the app, landing page, checkout, Stripe mapping, account page, and subscription logic.
+
+APPROVED PRICING
+
+Founding Partner
+$99/month
+Locked for life
+Invitation only
+14-day founder trial with payment method required
+Founder badge
+Early access to pilot features
+
+Individual Professional
+$149/month
+Includes 1 user
+Full ClaimSignal intelligence suite
+
+Team
+$299/month
+Includes 3 users
+Team admin controls
+Shared claim library
+Team reporting
+
+Additional Seats
+$35/month per user after the 3 included Team users
+
+Growth Team
+$599/month
+Includes 10 users
+Designed for larger roofing, restoration, and claim teams
+
+Enterprise
+Custom pricing
+For 15+ users, multi-location teams, advanced data controls, onboarding, reporting, investor/legal/export needs, and custom support
+
+STRIPE SECRET NAMES
+
+Use these environment variable names:
+
+STRIPE_PRICE_FOUNDER
+STRIPE_PRICE_INDIVIDUAL
+STRIPE_PRICE_TEAM
+STRIPE_PRICE_EXTRA_SEAT
+STRIPE_PRICE_GROWTH_TEAM
+STRIPE_WEBHOOK_SECRET
+
+IMPLEMENTATION RULES
+
+1. Remove old pricing references:
+Founder $79
+Extra Seat $25
+Individual $99
+Team $199
+
+2. Do not change authentication, database tables, claim extraction, claim routes, or masking logic while updating pricing.
+
+3. Team plan includes 3 users before extra seats apply.
+
+4. Growth Team includes 10 users before custom Enterprise discussion.
+
+5. Enterprise should not go to Stripe checkout. It should route to Request Access or Contact Sales.
+
+6. Founding Partner access must be invitation only.
+
+7. Founding Partner pricing must stay locked for life after enrollment.
+
+8. Add a validation check so checkout cannot proceed unless the required Stripe Price ID exists.
+
+9. After implementation, report back every file changed and every pricing value found.
+
+FINAL TESTING
+
+Confirm:
+
+1. Pricing page shows correct pricing.
+2. Checkout sends correct Stripe Price ID.
+3. Founder checkout uses STRIPE_PRICE_FOUNDER.
+4. Individual checkout uses STRIPE_PRICE_INDIVIDUAL.
+5. Team checkout uses STRIPE_PRICE_TEAM.
+6. Growth Team checkout uses STRIPE_PRICE_GROWTH_TEAM.
+7. Extra seat billing uses STRIPE_PRICE_EXTRA_SEAT.
+8. Enterprise routes to contact/request access, not checkout.
+9. No old pricing remains anywhere in the codebase.

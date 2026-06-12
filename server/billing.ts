@@ -24,6 +24,10 @@ export async function createCheckoutSession(
   planType: string,
   extraSeats?: number
 ): Promise<{ url: string } | { error: string }> {
+  if (planType === "enterprise") {
+    return { error: "Enterprise plans require contacting sales directly." };
+  }
+
   if (planType === "founder") {
     const founderCount = await getFounderCount();
     if (founderCount >= 100) {
@@ -50,7 +54,7 @@ export async function createCheckoutSession(
         });
       }
     }
-    return { error: "Stripe is not configured. Trial activated locally for development." };
+    return { error: "STRIPE_NOT_CONFIGURED: Trial activated locally for development." };
   }
 
   const priceEnvMap: Record<string, string | undefined> = {
@@ -58,12 +62,12 @@ export async function createCheckoutSession(
     individual: process.env.STRIPE_PRICE_INDIVIDUAL,
     pro: process.env.STRIPE_PRICE_INDIVIDUAL,
     team: process.env.STRIPE_PRICE_TEAM,
-    enterprise: undefined,
+    growth_team: process.env.STRIPE_PRICE_GROWTH_TEAM,
   };
 
   const priceId = priceEnvMap[planType];
   if (!priceId) {
-    return { error: `${planType} price ID not configured` };
+    return { error: `Stripe price ID for "${planType}" is not configured. Add the ${planType.toUpperCase().replace(/-/g, "_")} price ID to your environment settings before checkout can proceed.` };
   }
 
   const appUrl = process.env.APP_URL || "https://claimsignal1.com";
@@ -85,7 +89,8 @@ export async function createCheckoutSession(
   ];
 
   const extraSeatPriceId = process.env.STRIPE_PRICE_EXTRA_SEAT;
-  const extraSeatCount = planType === "team" && extraSeats && extraSeatPriceId ? Math.max(0, extraSeats) : 0;
+  const plansWithExtraSeats = ["team", "growth_team"];
+  const extraSeatCount = plansWithExtraSeats.includes(planType) && extraSeats && extraSeatPriceId ? Math.max(0, extraSeats) : 0;
   if (extraSeatCount > 0 && extraSeatPriceId) {
     lineItems.push({ price: extraSeatPriceId, quantity: extraSeatCount });
   }
@@ -185,9 +190,10 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
       if (user) {
         const planLabelMap: Record<string, string> = {
           founder: "Founding Partner",
-          individual: "Individual",
-          pro: "Individual",
+          individual: "Individual Professional",
+          pro: "Individual Professional",
           team: "Team",
+          growth_team: "Growth Team",
           enterprise: "Enterprise",
         };
         const planLabel = planLabelMap[planType || "individual"] || "Individual";

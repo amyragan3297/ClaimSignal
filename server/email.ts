@@ -76,7 +76,7 @@ export async function sendFounderInvitationEmail(opts: {
     <div class="card">
       <p class="heading">Welcome, ${opts.fullName}</p>
       <p class="subheading">
-        Your Founding Partner application has been <strong>approved</strong>. You now have access to ClaimSignal at a lifetime locked rate of $79/month with a 14-day free trial.
+        Your Founding Partner application has been <strong>approved</strong>. You now have access to ClaimSignal at a lifetime locked rate of $99/month with a 14-day free trial.
       </p>
       <p class="subheading" style="text-align: center;">
         <a href="${setupUrl}" class="cta">Set Up Your Account</a>
@@ -100,7 +100,7 @@ export async function sendFounderInvitationEmail(opts: {
 Welcome to ClaimSignal, ${opts.fullName}!
 
 Your Founding Partner application has been approved.
-You now have access to ClaimSignal at a lifetime locked rate of $79/month with a 14-day free trial.
+You now have access to ClaimSignal at a lifetime locked rate of $99/month with a 14-day free trial.
 
 Set up your account here:
 ${setupUrl}

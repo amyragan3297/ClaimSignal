@@ -176,7 +176,7 @@ export default function FounderAccessPage() {
             <Crown className="w-5 h-5 text-amber-500" />
             <h1 className="text-2xl font-bold tracking-tight">Founder Access</h1>
           </div>
-          <p className="text-sm text-muted-foreground">Invitation Only · $79/month locked pricing</p>
+          <p className="text-sm text-muted-foreground">Invitation Only · $99/month locked pricing</p>
         </div>
 
         {mode === "info" && (
@@ -189,12 +189,12 @@ export default function FounderAccessPage() {
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   The Founder tier is a limited, invitation-only program for early adopters
-                  who want to shape the future of ClaimSignal. Lock in $79/month for life
+                  who want to shape the future of ClaimSignal. Lock in $99/month for life
                   while the subscription remains active.
                 </p>
                 <ul className="text-sm space-y-1 text-muted-foreground">
                   <li className="flex items-center gap-2">
-                    <Lock className="w-3 h-3 text-amber-500" /> $79/month locked forever
+                    <Lock className="w-3 h-3 text-amber-500" /> $99/month locked forever
                   </li>
                   <li className="flex items-center gap-2">
                     <Lock className="w-3 h-3 text-amber-500" /> 14-day trial included

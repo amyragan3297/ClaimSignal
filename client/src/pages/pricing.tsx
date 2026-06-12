@@ -11,6 +11,7 @@ const planCards = [
   PLANS.founder,
   PLANS.individual,
   PLANS.team,
+  PLANS.growth_team,
   PLANS.enterprise,
 ] as const;
 
@@ -18,6 +19,7 @@ const planCardBg: Record<string, string> = {
   founder: "border-amber-500/20",
   individual: "border-border/50",
   team: "border-border/50",
+  growth_team: "border-primary/20",
   enterprise: "border-border/50",
 };
 
@@ -63,7 +65,7 @@ export default function PricingPage() {
 
       {/* Plans */}
       <section className="pb-24 px-6">
-        <div className="max-w-6xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="max-w-7xl mx-auto grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {planCards.map((plan) => (
             <Card
               key={plan.id}
@@ -97,7 +99,7 @@ export default function PricingPage() {
                   ))}
                 </ul>
                 <Link href={plan.id === "founder" ? "/founding-partner-apply" : plan.id === "enterprise" ? "/enterprise-contact" : `/login?tab=register&plan=${plan.id}`}>
-                  <Button className="w-full" size="sm" variant={plan.id === "founder" ? "default" : "outline"} data-testid={`button-plan-${plan.id}`}>
+                  <Button className="w-full" size="sm" variant={plan.id === "founder" || plan.id === "growth_team" ? "default" : "outline"} data-testid={`button-plan-${plan.id}`}>
                     {plan.id === "enterprise" ? (
                       <>
                         Contact Sales

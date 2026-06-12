@@ -26,7 +26,7 @@ export default function BillingPage() {
 
   const planType = billing?.planType || "individual";
   const isFounder = planType === "founder";
-  const isTeam = planType === "team";
+  const isTeam = planType === "team" || planType === "growth_team";
   const isIndividual = planType === "individual" || planType === "pro";
 
   async function handleCheckout() {
@@ -113,8 +113,11 @@ export default function BillingPage() {
                 {getPlanPrice(billing?.planType)}
               </span>
             </div>
-            {isTeam && (
+            {planType === "team" && (
               <p className="text-xs text-muted-foreground">Includes {PLANS.team.seats} users · +${PLANS.team.extraSeatPrice}/user/month for additional seats</p>
+            )}
+            {planType === "growth_team" && (
+              <p className="text-xs text-muted-foreground">Includes {PLANS.growth_team.seats} users · +${PLANS.growth_team.extraSeatPrice}/user/month for additional seats</p>
             )}
             {isFounder && (
               <ul className="text-sm space-y-1 text-muted-foreground">

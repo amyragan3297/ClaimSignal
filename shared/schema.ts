@@ -6,7 +6,7 @@ import { z } from "zod";
 export const userRoleEnum = pgEnum("user_role", ["master_admin", "executive_admin", "team_admin", "team_member", "founder", "individual", "investor"]);
 export const userStatusEnum = pgEnum("user_status", ["active", "archived", "test"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["pending_billing", "trialing", "active", "past_due", "canceled"]);
-export const planTypeEnum = pgEnum("plan_type", ["founder", "pro", "team", "enterprise", "individual"]);
+export const planTypeEnum = pgEnum("plan_type", ["founder", "pro", "team", "enterprise", "individual", "growth_team"]);
 export const investorAccessStatusEnum = pgEnum("investor_access_status", ["pending", "approved", "rejected", "revoked"]);
 export const loginAttemptStatusEnum = pgEnum("login_attempt_status", ["success", "failed", "locked"]);
 export const organizationTypeEnum = pgEnum("organization_type", ["contractor", "roofing_firm", "enterprise_operator", "carrier", "tpa"]);
@@ -900,7 +900,7 @@ export const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   fullName: z.string().min(2, "Full name required"),
   orgName: z.string().min(2, "Organization name required"),
-  planType: z.enum(["founder", "individual", "team", "enterprise"]).default("individual"),
+  planType: z.enum(["founder", "individual", "team", "growth_team", "enterprise"]).default("individual"),
   organizationType: z.enum(["contractor", "roofing_firm", "enterprise_operator", "carrier", "tpa"]).default("contractor"),
   extraSeats: z.number().optional(),
 });

@@ -48,14 +48,16 @@ ClaimSignal is a full-stack monorepo with a React frontend (`client/`), an Expre
 - **Master (`super_admin`)** has full platform access, impersonation, cross-tenant data visibility, and is the only role that receives unmasked PII (enforced server-side via `MASTER_ROLE` in `server/masking.ts`).
 
 ### Billing Model
-- **Tiers:** Founding Partner ($79/mo), Individual ($149/mo), Team ($299/mo, includes 5 users, +$25/user/month for additional seats), Enterprise (contact sales).
-- **Founding Partner:** 14-day trial (card required), $79/mo locked for life while subscription remains active; rate forfeited permanently upon cancellation. Limited availability, requires legal agreement for unmasked data.
-- **Individual:** Renamed from "Pro". No trial, immediate active status.
-- **Team:** $299/mo, includes 5 users, +$25/user/month for additional seats. No trial, immediate active status.
-- **Enterprise:** Contact sales. No Stripe checkout — handled manually.
-- **Stripe Env Vars:** `STRIPE_PRICE_FOUNDER`, `STRIPE_PRICE_INDIVIDUAL`, `STRIPE_PRICE_TEAM`, `STRIPE_PRICE_EXTRA_SEAT`. (`STRIPE_PRICE_PRO` and `STRIPE_PRICE_ENTERPRISE` are retired.)
+- **Tiers:** Founding Partner ($99/mo), Individual Professional ($149/mo), Team ($299/mo, 3 users), Growth Team ($599/mo, 10 users), Enterprise (contact sales).
+- **Founding Partner:** Invitation only. 14-day trial (card required), $99/mo locked for life while subscription remains active; rate forfeited permanently upon cancellation. Limited availability.
+- **Individual Professional:** Renamed from "Pro". 1 user. No trial, immediate active status.
+- **Team:** $299/mo, includes 3 users, +$35/user/month for additional seats. No trial, immediate active status.
+- **Growth Team:** $599/mo, includes 10 users, +$35/user/month for additional seats. No trial, immediate active status.
+- **Enterprise:** Contact sales. No Stripe checkout — routes to contact/request access.
+- **Extra Seats:** $35/user/month (applies to Team and Growth Team plans).
+- **Stripe Env Vars:** `STRIPE_PRICE_FOUNDER`, `STRIPE_PRICE_INDIVIDUAL`, `STRIPE_PRICE_TEAM`, `STRIPE_PRICE_GROWTH_TEAM`, `STRIPE_PRICE_EXTRA_SEAT`. (`STRIPE_PRICE_PRO` and `STRIPE_PRICE_ENTERPRISE` are retired.)
 - **Shared Pricing Config:** All pricing constants live in `client/src/lib/pricing.ts`. No raw dollar strings in UI components.
-- **Stripe Integration:** Checkout sessions, webhook handling for subscription lifecycle.
+- **Stripe Integration:** Checkout sessions, webhook handling for subscription lifecycle. Enterprise is hard-blocked from Stripe checkout — always routes to contact sales.
 
 ### Intelligence Engines
 ClaimSignal incorporates six core intelligence engines: Friction Scoring, Inspection Integrity, Scope Delta, Lifecycle Phase, Escalation Architecture, and Outcome Migration.
