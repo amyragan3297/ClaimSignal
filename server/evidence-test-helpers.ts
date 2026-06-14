@@ -103,32 +103,98 @@ export function installStorageStubs() {
 }
 
 // ── Fake OpenAI server ────────────────────────────────────────────────────────
-// Returns a canned chat-completion so extractClaimFieldsFromText() runs for
-// real without a network call. Pass customFields to control what AI "returns".
+// Returns a canned chat-completion so AI extraction runs hermetically.
+// Handles the new sectioned pipeline: reads request body to detect which Zod
+// schema is being requested (via response_format.json_schema.name) and returns
+// a properly-shaped null-filled response for each section. Legacy monolithic
+// requests fall back to returning customFields directly.
 
 export function startFakeOpenAI(
   customFields: Record<string, unknown> = { claimNumber: "TEST-12345", confidence: 0.9 },
 ): Promise<http.Server> {
-  const server = http.createServer((_req, res) => {
-    const payload = {
-      id: "chatcmpl-test",
-      object: "chat.completion",
-      created: 0,
-      model: "gpt-5.4",
-      choices: [
-        {
-          index: 0,
-          message: {
-            role: "assistant",
-            content: JSON.stringify(customFields),
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk: Buffer | string) => { body += chunk.toString(); });
+    req.on("end", () => {
+      let reqJson: Record<string, unknown> = {};
+      try { reqJson = JSON.parse(body) as Record<string, unknown>; } catch { /* ignore */ }
+
+      const responseFormat = reqJson.response_format as Record<string, unknown> | undefined;
+      const schemaName = (responseFormat?.json_schema as Record<string, unknown> | undefined)?.name as string | undefined;
+
+      let content: Record<string, unknown>;
+
+      if (schemaName === "ClaimBasics") {
+        content = {
+          claimNumber:      customFields.claimNumber ?? null,
+          carrier:          customFields.carrier ?? null,
+          policyNumber:     customFields.policyNumber ?? null,
+          lossType:         customFields.lossType ?? null,
+          dateOfLoss:       customFields.dateOfLoss ?? null,
+          dateReported:     null,
+          denialReason:     null,
+          initialOutcome:   null,
+          finalOutcome:     null,
+          denialOverturned: null,
+        };
+      } else if (schemaName === "People") {
+        content = {
+          homeownerName:   customFields.homeownerName ?? null,
+          homeownerPhone:  null,
+          homeownerEmail:  null,
+          insuredName:     customFields.insuredName ?? null,
+          propertyAddress: customFields.propertyAddress ?? null,
+          city:            customFields.city ?? null,
+          state:           customFields.state ?? null,
+          zipCode:         customFields.zipCode ?? null,
+          adjusterName:    customFields.adjusterName ?? null,
+          adjusterPhone:   customFields.adjusterPhone ?? null,
+          adjusterEmail:   customFields.adjusterEmail ?? null,
+          iaFirm:          null,
+        };
+      } else if (schemaName === "Financials") {
+        content = {
+          rcv: null, acv: null, deductible: null, netClaim: null,
+          supplementTotal: null, depreciation: null, supplementRequested: null,
+          supplementApproved: null, approvedAmount: null, claimAmount: null,
+          finalPaid: null, recoverableDepreciation: null,
+        };
+      } else if (schemaName === "Dates") {
+        content = {
+          inspectionDate: null, estimateDate: null, denialDate: null,
+          approvalDate: null, paymentDate: null,
+        };
+      } else if (schemaName === "Vendors") {
+        content = {
+          contractor: null, engineer: null, publicAdjuster: null,
+          attorney: null, vendorName: null,
+        };
+      } else if (schemaName === "Evidence") {
+        content = {
+          photoInspectionDone: null, weatherEventConfirmed: null, scopeOfLossPresent: null,
+        };
+      } else {
+        // Legacy path: classifyDoc (returns {docType}) or extractClaimFieldsFromText (returns flat fields)
+        content = customFields;
+      }
+
+      const payload = {
+        id: "chatcmpl-test",
+        object: "chat.completion",
+        created: 0,
+        model: "gpt-5.4",
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: JSON.stringify(content) },
+            finish_reason: "stop",
           },
-          finish_reason: "stop",
-        },
-      ],
-      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-    };
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(payload));
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      };
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(payload));
+    });
   });
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
 }

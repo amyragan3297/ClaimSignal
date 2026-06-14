@@ -16,7 +16,7 @@ export function getOpenAIClient(): OpenAI {
   if (!apiKey || !baseURL) {
     throw new Error("OpenAI integration is not configured: AI_INTEGRATIONS_OPENAI_API_KEY and AI_INTEGRATIONS_OPENAI_BASE_URL must be set");
   }
-  return new OpenAI({ apiKey, baseURL });
+  return new OpenAI({ apiKey, baseURL, timeout: 120_000, maxRetries: 2 });
 }
 
 export { toFile };

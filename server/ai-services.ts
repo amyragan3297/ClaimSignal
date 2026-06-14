@@ -289,6 +289,8 @@ export interface ExtractionResult {
   claimNumber?: string;
   policyNumber?: string;
   homeownerName?: string;
+  homeownerPhone?: string;
+  homeownerEmail?: string;
   insuredName?: string;
   lossType?: string;
   adjusterName?: string;

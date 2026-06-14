@@ -4,7 +4,9 @@ import crypto from "crypto";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking, maskExtractionData } from "./masking";
-import { extractClaimFieldsFromText, extractClaimFieldsFromImages, transcribeAudio, extractAdjustersFromTranscript, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
+import { extractClaimFieldsFromImages, transcribeAudio, extractAdjustersFromTranscript, isOpenAIConfigured, recordAiError, type ExtractionResult } from "./ai-services";
+import { classifyDoc } from "./extract/route";
+import { extractAll, sectionedToExtractionResult } from "./extract/sections";
 import { extractAndLinkAdjustersForClaim, type AdjusterMention } from "./adjuster-linking";
 import { renderPdfToImages } from "./pdf-render";
 import { computeFullClaimScoring } from "./scoring";
@@ -707,7 +709,9 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
           let reLlmExtraction: ExtractionResult | null = null;
 
           if (reHasText) {
-            reLlmExtraction = await extractClaimFieldsFromText(reMeaningfulText, "unknown");
+            const reDocType = await classifyDoc(reMeaningfulText);
+            const reSections = await extractAll(reMeaningfulText, reDocType);
+            reLlmExtraction = sectionedToExtractionResult(reSections, reDocType);
           } else if (reNeedsVision) {
             const reImages = await renderPdfToImages(buffer);
             if (reImages.length > 0) {
@@ -832,14 +836,17 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
 
     if (isOpenAIConfigured() && hasText) {
       try {
-        llmExtraction = await extractClaimFieldsFromText(meaningfulText, classification.category);
-        console.log(`[ai-extraction] success for ${req.file.originalname}, confidence=${llmExtraction.confidence}`);
+        const docType = await classifyDoc(meaningfulText);
+        const sections = await extractAll(meaningfulText, docType);
+        llmExtraction = sectionedToExtractionResult(sections, docType);
+
+        console.log(`[ai-extraction] success for ${req.file.originalname}, docType=${docType}, confidence=${llmExtraction.confidence}`);
         if (debugExtraction) {
           console.log(`[extraction-debug] llm_result=${JSON.stringify(llmExtraction)}`);
         }
       } catch (aiErr) {
         llmExtractionError = (aiErr as Error)?.message ?? "unknown error";
-        recordAiError("extractClaimFieldsFromText/upload", aiErr);
+        recordAiError("extractAll/upload", aiErr);
         console.error("[ai-extraction] non-fatal:", llmExtractionError);
       }
     } else if (isOpenAIConfigured() && needsVision) {
@@ -1097,6 +1104,8 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
         adjusterName:             "adjusterName",
         adjusterPhone:            "adjusterPhone",
         adjusterEmail:            "adjusterEmail",
+        homeownerPhone:           "homeownerPhone",
+        homeownerEmail:           "homeownerEmail",
       };
       const DATE_APPLY_KEYS = new Set(["dateOfLoss", "inspectionDate"]);
       const NUMERIC_APPLY_KEYS = new Set([
@@ -1118,19 +1127,14 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
           const n = parseFloat(val.replace(/[$,\s]/g, ""));
           if (!isNaN(n)) claimUpdate[claimKey] = n;
         } else if (exKey === "propertyAddress") {
-          // Sanitize address — reject contaminated/oversized values
-          const existingVal = (matchedClaim as Record<string, unknown>)[claimKey];
-          if (existingVal == null || existingVal === "") {
-            const clean = sanitizeAddress(val);
-            if (clean) claimUpdate[claimKey] = clean;
-          }
+          // Sanitize address — reject contaminated/oversized values.
+          // last-non-null-wins: always write a valid address if extraction found one.
+          const clean = sanitizeAddress(val);
+          if (clean) claimUpdate[claimKey] = clean;
         } else {
-          // Only apply if claim field is currently blank/null — never overwrite
-          // a field the user has already filled in manually.
-          const existingVal = (matchedClaim as Record<string, unknown>)[claimKey];
-          if (existingVal == null || existingVal === "") {
-            claimUpdate[claimKey] = val;
-          }
+          // last-non-null-wins: a non-null extraction value always updates the claim.
+          // Null values are already skipped by the `continue` above so we never blank a field.
+          claimUpdate[claimKey] = val;
         }
       }
 
