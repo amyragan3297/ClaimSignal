@@ -3897,6 +3897,41 @@ export async function registerRoutes(
     } catch (err) { res.status(500).json({ message: (err as Error).message }); }
   });
 
+  // Re-run adjuster detection on an existing transcript
+  app.post("/api/audio/:id/rescan-adjusters", requireAuth, requireActiveSubscription, async (req: AuthRequest, res) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const rec = await storage.getAudioRecordingById(req.params.id as string);
+      if (!rec || rec.organizationId !== orgId) {
+        return res.status(404).json({ message: "Recording not found" });
+      }
+      if (!rec.transcriptText) {
+        return res.status(400).json({ message: "No transcript available — transcribe the recording first" });
+      }
+      if (!rec.claimId) {
+        return res.status(400).json({ message: "Recording is not linked to a claim — link it first" });
+      }
+      if (!isOpenAIConfigured()) {
+        return res.status(503).json({ message: "AI is not configured" });
+      }
+      const llmExtracted = await extractAdjustersFromTranscript(rec.transcriptText);
+      const mentions: AdjusterMention[] = llmExtracted.map(m => ({
+        name: m.name,
+        roleLabel: m.roleLabel,
+        carrier: rec.carrier ?? undefined,
+      }));
+      let newLinksCreated = 0;
+      if (mentions.length > 0) {
+        const linked = await extractAndLinkAdjustersForClaim(rec.claimId, orgId, mentions, {
+          sourceType: "transcript",
+          sourceTranscriptId: rec.id,
+        });
+        newLinksCreated = linked.length;
+      }
+      res.json({ adjustersFound: mentions.length, newLinksCreated });
+    } catch (err) { res.status(500).json({ message: (err as Error).message }); }
+  });
+
   app.delete("/api/audio/:id/permanent", requireAuth, requireMasterDelete, async (req: AuthRequest, res) => {
     try {
       const orgId = req.auth!.organizationId;

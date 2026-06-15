@@ -16,7 +16,7 @@ import { useAuth } from "@/lib/auth";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   Mic, Clock, CheckCircle, FileAudio,
-  Plus, ChevronDown, ChevronUp, MoreHorizontal, Archive, Trash2,
+  Plus, ChevronDown, ChevronUp, MoreHorizontal, Archive, Trash2, ScanSearch,
 } from "lucide-react";
 
 interface AudioLogInput {
@@ -149,6 +149,24 @@ export default function AudioPage() {
     mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/audio/${id}/permanent`); },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/audio"] }); toast({ title: "Recording permanently deleted" }); setConfirmDialog(null); },
     onError: (err: Error) => { toast({ title: "Delete failed", description: err.message, variant: "destructive" }); },
+  });
+
+  const rescanAdjustersMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/audio/${id}/rescan-adjusters`);
+      return res.json() as Promise<{ adjustersFound: number; newLinksCreated: number }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/audio"] });
+      if (data.adjustersFound === 0) {
+        toast({ title: "No adjusters found", description: "AI did not detect any adjuster names in this transcript." });
+      } else if (data.newLinksCreated === 0) {
+        toast({ title: "Already up to date", description: `${data.adjustersFound} adjuster${data.adjustersFound === 1 ? "" : "s"} detected — all already linked to this claim.` });
+      } else {
+        toast({ title: "Adjusters linked", description: `${data.newLinksCreated} new adjuster link${data.newLinksCreated === 1 ? "" : "s"} created from transcript.` });
+      }
+    },
+    onError: (err: Error) => { toast({ title: "Rescan failed", description: err.message, variant: "destructive" }); },
   });
 
   const fileToBase64 = (file: File): Promise<string> =>
@@ -360,6 +378,19 @@ export default function AudioPage() {
                         <Clock className="w-3 h-3 mr-1" />
                         Transcription Pending
                       </Badge>
+                    )}
+                    {(rec.transcriptText && rec.claimId) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5"
+                        disabled={rescanAdjustersMutation.isPending}
+                        onClick={() => rescanAdjustersMutation.mutate(rec.id)}
+                        data-testid={`button-rescan-adjusters-${rec.id}`}
+                      >
+                        <ScanSearch className="w-3 h-3" />
+                        {rescanAdjustersMutation.isPending ? "Scanning…" : "Rescan Adjusters"}
+                      </Button>
                     )}
                     {canArchive && (
                       <DropdownMenu>
