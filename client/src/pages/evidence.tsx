@@ -35,6 +35,7 @@ import {
   AlertCircle,
   Search,
   Filter,
+  UserCheck,
 } from "lucide-react";
 
 const ACCEPTED_TYPES = ".pdf,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.docx,.txt,.eml";
@@ -462,6 +463,12 @@ function QueueItemRow({
         )}
         {item.status === "error" && (
           <span className="text-xs text-destructive">{item.errorMsg || "Upload failed"}</span>
+        )}
+        {(item.status === "matched" || item.status === "created-claim") && r?.adjusterAutoLinked && r?.adjusterName && (
+          <span className="flex items-center gap-1 text-xs text-green-400" data-testid={`queue-adjuster-linked-${item.queueId}`}>
+            <UserCheck className="w-3 h-3 flex-shrink-0" />
+            {r.adjusterName}
+          </span>
         )}
         {(item.status === "matched" || item.status === "created-claim") && r?.extraction && !r.autoAppliedFields?.length && (
           <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => onReviewExtraction(r.file.id, r.matchedClaimId ?? r.createdClaim?.id)} data-testid={`queue-review-btn-${item.queueId}`}>
