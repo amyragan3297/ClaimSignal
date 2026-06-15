@@ -3914,11 +3914,12 @@ export async function registerRoutes(
       if (!isOpenAIConfigured()) {
         return res.status(503).json({ message: "AI is not configured" });
       }
+      const linkedClaim = await storage.getClaim(rec.claimId, orgId);
       const llmExtracted = await extractAdjustersFromTranscript(rec.transcriptText);
       const mentions: AdjusterMention[] = llmExtracted.map(m => ({
         name: m.name,
         roleLabel: m.roleLabel,
-        carrier: rec.carrier ?? undefined,
+        carrier: m.carrier || linkedClaim?.carrier || undefined,
       }));
       let newLinksCreated = 0;
       if (mentions.length > 0) {
