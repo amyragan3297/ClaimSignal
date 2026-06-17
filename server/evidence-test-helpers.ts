@@ -4,6 +4,7 @@
  * Exports:
  *   makeTestRunner()   – isolated pass/fail counter + check() + summary/exit
  *   buildPdf()         – generates a minimal, structurally valid PDF buffer
+ *   buildDocx()        – generates a minimal, structurally valid .docx (ZIP) buffer
  *   buildTextFile()    – returns a Buffer from a plain string (txt / eml)
  *   installStorageStubs() – replaces storage singleton methods with in-memory stubs
  *   startFakeOpenAI()  – starts a local HTTP server that returns a canned chat-completion
@@ -79,6 +80,99 @@ export function buildPdf(bodyText: string): Buffer {
   }
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
   return Buffer.from(pdf, "latin1");
+}
+
+// ── DOCX builder ──────────────────────────────────────────────────────────────
+// Builds a minimal, structurally valid .docx (ZIP with XML) buffer using only
+// Node.js built-ins — no mammoth, adm-zip, or jszip required.
+// Uses "stored" (no compression) ZIP entries so the extractor's deflate branch
+// is not exercised here; real-world DOCX files test that path in production.
+
+function _crc32Table(): Uint32Array {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c;
+  }
+  return t;
+}
+const _CRC32_TABLE = _crc32Table();
+
+function _crc32(buf: Buffer): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) crc = _CRC32_TABLE[(crc ^ buf[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function _u16(n: number): Buffer { const b = Buffer.alloc(2); b.writeUInt16LE(n, 0); return b; }
+function _u32(n: number): Buffer { const b = Buffer.alloc(4); b.writeUInt32LE(n, 0); return b; }
+
+export function buildDocx(bodyText: string): Buffer {
+  const escaped = bodyText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const xmlFiles: Array<{ name: string; content: string }> = [
+    {
+      name: "[Content_Types].xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
+    },
+    {
+      name: "_rels/.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
+    },
+    {
+      name: "word/document.xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${escaped}</w:t></w:r></w:p></w:body></w:document>`,
+    },
+    {
+      name: "word/_rels/document.xml.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`,
+    },
+  ];
+
+  interface _Entry { name: Buffer; data: Buffer; crc: number; offset: number; }
+  const entries: _Entry[] = [];
+  const localParts: Buffer[] = [];
+  let cursor = 0;
+
+  for (const f of xmlFiles) {
+    const nameBuf = Buffer.from(f.name, "utf-8");
+    const dataBuf = Buffer.from(f.content, "utf-8");
+    const crc = _crc32(dataBuf);
+    entries.push({ name: nameBuf, data: dataBuf, crc, offset: cursor });
+
+    const lfh = Buffer.concat([
+      Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+      _u16(20), _u16(0), _u16(0), _u16(0), _u16(0),
+      _u32(crc), _u32(dataBuf.length), _u32(dataBuf.length),
+      _u16(nameBuf.length), _u16(0),
+      nameBuf, dataBuf,
+    ]);
+    localParts.push(lfh);
+    cursor += lfh.length;
+  }
+
+  const cdParts: Buffer[] = [];
+  for (const e of entries) {
+    cdParts.push(Buffer.concat([
+      Buffer.from([0x50, 0x4b, 0x01, 0x02]),
+      _u16(20), _u16(20), _u16(0), _u16(0), _u16(0), _u16(0),
+      _u32(e.crc), _u32(e.data.length), _u32(e.data.length),
+      _u16(e.name.length), _u16(0), _u16(0), _u16(0), _u16(0), _u32(0),
+      _u32(e.offset), e.name,
+    ]));
+  }
+
+  const cdBuf = Buffer.concat(cdParts);
+  const eocd = Buffer.concat([
+    Buffer.from([0x50, 0x4b, 0x05, 0x06]),
+    _u16(0), _u16(0),
+    _u16(entries.length), _u16(entries.length),
+    _u32(cdBuf.length), _u32(cursor),
+    _u16(0),
+  ]);
+
+  return Buffer.concat([...localParts, cdBuf, eocd]);
 }
 
 // ── Plain-text / email builder ────────────────────────────────────────────────

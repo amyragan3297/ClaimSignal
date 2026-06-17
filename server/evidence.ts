@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import crypto from "crypto";
+import { inflateRawSync } from "zlib";
 import { storage } from "./storage";
 import { createCandidatesFromText } from "./timeline-extraction";
 import { isMaster, canViewUnmasked, applyPiiMasking, maskExtractionData } from "./masking";
@@ -224,6 +225,60 @@ const DOC_TYPE_ALIASES: Record<string, string> = {
   email: "email_thread",
   email_chain: "email_thread",
 };
+
+// ── DOCX text extractor ───────────────────────────────────────────────────────
+// Parses the ZIP structure of a .docx file without any external packages and
+// extracts the raw text from word/document.xml by stripping XML tags.
+// Handles both "stored" (method 0) and "deflated" (method 8) ZIP entries.
+function extractDocxText(buf: Buffer): string {
+  const TARGET = "word/document.xml";
+  let pos = 0;
+  while (pos + 30 <= buf.length) {
+    // Scan for local file header signature 0x04034b50
+    if (buf.readUInt32LE(pos) !== 0x04034b50) { pos++; continue; }
+    const method   = buf.readUInt16LE(pos + 8);
+    const compSize = buf.readUInt32LE(pos + 18);
+    const fnLen    = buf.readUInt16LE(pos + 26);
+    const exLen    = buf.readUInt16LE(pos + 28);
+    const dataStart = pos + 30 + fnLen + exLen;
+
+    if (dataStart > buf.length) break;
+    const fileName = buf.slice(pos + 30, pos + 30 + fnLen).toString("utf-8");
+
+    if (fileName === TARGET) {
+      // Zip-bomb guard: reject entries whose declared uncompressed size exceeds
+      // a reasonable ceiling for a word-processor XML text layer. The local file
+      // header stores uncompressed size at offset 22 (4 bytes LE).
+      const MAX_UNCOMPRESSED = 20 * 1024 * 1024; // 20 MB
+      const uncompSize = buf.readUInt32LE(pos + 22);
+      if (uncompSize > MAX_UNCOMPRESSED || compSize > MAX_UNCOMPRESSED) {
+        console.error(`[docx] entry "${fileName}" size ${uncompSize} exceeds limit — skipping`);
+        return "";
+      }
+
+      let xmlBuf: Buffer;
+      if (method === 0) {
+        // Stored — data is uncompressed
+        xmlBuf = buf.slice(dataStart, dataStart + compSize);
+      } else if (method === 8) {
+        // Deflated — decompress with raw inflate
+        try {
+          xmlBuf = inflateRawSync(buf.slice(dataStart, dataStart + compSize));
+        } catch {
+          return "";
+        }
+      } else {
+        return ""; // unsupported compression
+      }
+      // Strip XML tags and normalise whitespace to recover plain text
+      return xmlBuf.toString("utf-8").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    }
+
+    const nextPos = dataStart + compSize;
+    pos = nextPos > pos ? nextPos : pos + 1; // guard against infinite loop on zero-size entries
+  }
+  return "";
+}
 
 function detectFileType(fileName: string): string {
   const ext = fileName.toLowerCase().split(".").pop();
@@ -770,6 +825,13 @@ router.post("/upload", upload.single("file"), async (req: AuthRequest, res: Resp
     let textContent = "";
     if (fileType === "txt" || fileType === "eml") {
       textContent = buffer.toString("utf-8");
+    } else if (fileType === "docx") {
+      try {
+        textContent = extractDocxText(buffer);
+        console.log(`[docx] file="${req.file.originalname}" text_length=${textContent.length}`);
+      } catch (docxErr: unknown) {
+        console.error("[docx] failed to extract text:", (docxErr as Error)?.message);
+      }
     } else if (fileType === "pdf") {
       try {
         const { PDFParse } = await import("pdf-parse");

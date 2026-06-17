@@ -4,20 +4,24 @@
  * Run with:  npx tsx server/evidence-upload.test.ts
  *
  * Covers:
- *   PDF  — text extraction via pdf-parse, AI extraction, extractionStatus enum
- *   TXT  — direct UTF-8 read, entity extraction, AI extraction
- *   EML  — same text path as TXT (different MIME / extension)
+ *   PDF   — text extraction via pdf-parse, AI extraction, extractionStatus enum
+ *   PDF   — image-only/scanned: vision OCR fallback recovers fields
+ *   TXT   — direct UTF-8 read, entity extraction, AI extraction
+ *   EML   — same text path as TXT (different MIME / extension)
+ *   DOCX  — ZIP parse + XML strip, entity extraction, extractionStatus enum
  *
  * Guards:
  *   - ESM/CommonJS pdf-parse bug ("require is not defined")
  *   - extraction_status enum validity ("no_text" → "failed")
- *   - All three upload paths exercise the real multer + extraction pipeline.
+ *   - All upload paths exercise the real multer + extraction pipeline.
  *
  * DB and OpenAI network calls are stubbed so the test is hermetic.
  */
+import http from "http";
 import {
   makeTestRunner,
   buildPdf,
+  buildDocx,
   buildTextFile,
   installStorageStubs,
   startFakeOpenAI,
@@ -79,7 +83,7 @@ async function run() {
     );
     check("AI extraction result present in response", !!r1.json?.extraction);
 
-    // ── PDF: text-less (scanned) → vision OCR fallback ───────────────────────
+    // ── PDF: text-less (scanned) → vision OCR fallback recovers ─────────────
     console.log("\n=== 2. Text-less PDF: vision OCR fallback recovers fields ===");
     const blankPdf = buildPdf("");
     const r2 = await uploadFile(port, "blank.pdf", blankPdf, "application/pdf");
@@ -90,6 +94,36 @@ async function run() {
       r2.json?.file?.extractionStatus === "complete",
     );
     check("vision extraction result present in response", !!r2.json?.extraction);
+
+    // ── PDF: text-less (scanned) → vision OCR unavailable → "failed" ────────
+    // This is the required guard: when AI is configured but the vision call
+    // fails (service error), the status must be "failed", not a crash/exception.
+    console.log("\n=== 2b. Text-less PDF: vision OCR fails → extractionStatus 'failed' ===");
+    {
+      // Stand up a server that returns 500 for all AI requests.
+      const failServer = await new Promise<http.Server>((resolve) => {
+        const s = http.createServer((_req, res) => {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "service unavailable" }));
+        });
+        s.listen(0, "127.0.0.1", () => resolve(s));
+      });
+      const failAddr = failServer.address() as { port: number };
+      const origUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+      process.env.AI_INTEGRATIONS_OPENAI_BASE_URL = `http://127.0.0.1:${failAddr.port}/v1`;
+      try {
+        const r2b = await uploadFile(port, "scanned.pdf", buildPdf(""), "application/pdf");
+        check("scanned PDF upload returns HTTP 200 when vision fails", r2b.status === 200);
+        check("response includes the persisted file even when vision fails", !!r2b.json?.file);
+        check(
+          "extractionStatus is 'failed' when AI is configured but vision call errors",
+          r2b.json?.file?.extractionStatus === "failed",
+        );
+      } finally {
+        process.env.AI_INTEGRATIONS_OPENAI_BASE_URL = origUrl;
+        failServer.close();
+      }
+    }
 
     // ── TXT ─────────────────────────────────────────────────────────────────
     console.log("\n=== 3. TXT upload: direct UTF-8 text path ===");
@@ -136,8 +170,37 @@ async function run() {
     );
     check("AI extraction result present for EML", !!r4.json?.extraction);
 
+    // ── DOCX ────────────────────────────────────────────────────────────────
+    console.log("\n=== 5. DOCX upload: ZIP parse + XML strip text path ===");
+    const docxBuf = buildDocx(CLAIM_TEXT);
+    const r5 = await uploadFile(
+      port,
+      "denial-letter.docx",
+      docxBuf,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+    check("DOCX upload returns HTTP 200", r5.status === 200);
+    check("response includes the persisted file", !!r5.json?.file);
+    check(
+      "entities extracted from DOCX content",
+      Array.isArray(r5.json?.entities) && r5.json.entities.length > 0,
+    );
+    check(
+      "claim number entity extracted from DOCX",
+      (r5.json?.entities || []).some((e: { entityType?: string }) => e.entityType === "claim_number"),
+    );
+    check(
+      "extractionStatus is 'complete' or 'failed' (not a crash or undefined)",
+      ["complete", "failed"].includes(r5.json?.file?.extractionStatus),
+    );
+    check(
+      "extractionStatus is 'complete' when AI is configured and text was extracted",
+      r5.json?.file?.extractionStatus === "complete",
+    );
+    check("AI extraction result present for DOCX", !!r5.json?.extraction);
+
     // ── No pdf-parse ESM regression ─────────────────────────────────────────
-    console.log("\n=== 5. No pdf-parse ESM/CommonJS regression ===");
+    console.log("\n=== 6. No pdf-parse ESM/CommonJS regression ===");
     const joined = errCapture.lines.join("\n");
     check(
       "no 'require is not defined' error during extraction",
