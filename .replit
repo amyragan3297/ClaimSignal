@@ -96,7 +96,6 @@ integrations = ["javascript_openai_ai_integrations:2.0.0", "stripe:1.0.0"]
 [userenv.shared]
 
 [userenv.development]
-APP_URL = "https://claimsignal1.com"
 
 [userenv.production]
-APP_URL = "https://claimsignal1.com"
+APP_URL = "www.claimsignal1.com"
