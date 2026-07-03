@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="weather-dashboard">
+            <!-- Header -->
+            <header class="dashboard-header">
+                <h1>Weather Dashboard</h1>
+                <div class="search-section">
+                    <input 
+                        type="text" 
+                        id="cityInput" 
+                        class="city-input" 
+                        placeholder="Search for a city..."
+                        autocomplete="off"
+                    >
+                    <button id="searchBtn" class="search-btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                <button id="geoBtn" class="geo-btn" title="Get current location">
+                    <i class="fas fa-location-dot"></i>
+                </button>
+            </header>
+
+            <!-- Current Weather -->
+            <section id="currentWeather" class="current-weather">
+                <div class="loading-spinner" id="loadingSpinner">
+                    <i class="fas fa-spinner"></i> Loading...
+                </div>
+                <div id="weatherContent" class="weather-content" style="display: none;">
+                    <div class="location-info">
+                        <h2 id="cityName"></h2>
+                        <p id="lastUpdated"></p>
+                    </div>
+                    <div class="weather-main">
+                        <div class="temperature-section">
+                            <span id="temperature" class="temperature"></span>
+                            <img id="weatherIcon" class="weather-icon" alt="Weather icon">
+                        </div>
+                        <p id="weatherDescription" class="description"></p>
+                    </div>
+                    <div class="weather-details">
+                        <div class="detail-item">
+                            <i class="fas fa-droplet"></i>
+                            <span>Humidity</span>
+                            <strong id="humidity"></strong>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-wind"></i>
+                            <span>Wind Speed</span>
+                            <strong id="windSpeed"></strong>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-eye"></i>
+                            <span>Visibility</span>
+                            <strong id="visibility"></strong>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-gauge"></i>
+                            <span>Pressure</span>
+                            <strong id="pressure"></strong>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-arrow-up"></i>
+                            <span>Feels Like</span>
+                            <strong id="feelsLike"></strong>
+                        </div>
+                        <div class="detail-item">
+                            <i class="fas fa-sun"></i>
+                            <span>UV Index</span>
+                            <strong id="uvIndex"></strong>
+                        </div>
+                    </div>
+                </div>
+                <div id="errorMessage" class="error-message" style="display: none;"></div>
+            </section>
+
+            <!-- Forecast -->
+            <section class="forecast-section">
+                <h3>5-Day Forecast</h3>
+                <div id="forecastContainer" class="forecast-container">
+                    <!-- Forecast cards will be added here -->
+                </div>
+            </section>
+
+            <!-- Hourly Forecast -->
+            <section class="hourly-section">
+                <h3>Hourly Forecast</h3>
+                <div id="hourlyContainer" class="hourly-container">
+                    <!-- Hourly cards will be added here -->
+                </div>
+            </section>
+
+            <!-- Recent Searches -->
+            <section class="recent-searches">
+                <h3>Recent Searches</h3>
+                <div id="recentCities" class="recent-cities">
+                    <!-- Recent search buttons will be added here -->
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
