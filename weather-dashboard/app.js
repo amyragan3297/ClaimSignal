@@ -1,7 +1,7 @@
 // Weather Dashboard Application
 // Uses OpenWeatherMap API (free tier)
 
-const API_KEY = 'YOUR_API_KEY_HERE'; // Get free key from https://openweathermap.org/api
+const API_KEY = '82fd95fa9d878501efd5f7af0f4ea15f'; // Weather API key from OpenWeatherMap
 const BASE_URL = 'https://api.openweathermap.org/data/2.5';
 const GEO_URL = 'https://api.openweathermap.org/geo/1.0';
 
@@ -44,11 +44,6 @@ function handleSearch() {
 }
 
 function fetchWeatherByCity(city) {
-    if (!API_KEY || API_KEY === 'YOUR_API_KEY_HERE') {
-        showError('Please set your OpenWeatherMap API key in the app.js file');
-        return;
-    }
-
     showLoading();
     
     Promise.all([
@@ -74,11 +69,6 @@ function fetchWeatherByCity(city) {
 }
 
 function fetchWeatherByCoordinates(lat, lon) {
-    if (!API_KEY || API_KEY === 'YOUR_API_KEY_HERE') {
-        showError('Please set your OpenWeatherMap API key in the app.js file');
-        return;
-    }
-
     showLoading();
     
     Promise.all([
